@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <EASTL/hash_set.h>
 #include "Sample.h"
 
 namespace Urho3D
@@ -30,6 +31,7 @@ namespace Urho3D
 class Drawable;
 class Node;
 class Scene;
+class DynamicNavigationMesh;
 
 }
 
@@ -56,7 +58,7 @@ public:
 
 protected:
     /// Return XML patch instructions for screen joystick layout for a specific sample app, if any.
-    String GetScreenJoystickPatchString() const override { return
+    ea::string GetScreenJoystickPatchString() const override { return
         "<patch>"
         "    <add sel=\"/element\">"
         "        <element type=\"Button\">"
@@ -174,9 +176,9 @@ private:
     /// Streaming distance.
     int streamingDistance_{2};
     /// Tile data.
-    HashMap<IntVector2, PODVector<unsigned char> > tileData_;
+    ea::unordered_map<IntVector2, ea::vector<unsigned char> > tileData_;
     /// Added tiles.
-    HashSet<IntVector2> addedTiles_;
+    ea::hash_set<IntVector2> addedTiles_;
     /// Flag for drawing debug geometry.
     bool drawDebug_{};
     /// Instruction text UI-element.

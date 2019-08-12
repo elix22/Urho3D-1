@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -87,9 +87,9 @@ private:
     /// Render surface.
     SharedPtr<RenderSurface> renderSurface_;
     /// Memory use per layer.
-    PODVector<unsigned> layerMemoryUse_;
+    ea::vector<unsigned> layerMemoryUse_;
     /// Layer image files acquired during BeginLoad.
-    Vector<SharedPtr<Image> > loadImages_;
+    ea::vector<SharedPtr<Image> > loadImages_;
     /// Parameter file acquired during BeginLoad.
     SharedPtr<XMLFile> loadParameters_;
 };

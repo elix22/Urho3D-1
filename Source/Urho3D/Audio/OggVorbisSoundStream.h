@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,9 @@
 
 #pragma once
 
+#include <EASTL/shared_array.h>
+
 #include "../Audio/SoundStream.h"
-#include "../Container/ArrayPtr.h"
 
 namespace Urho3D
 {
@@ -49,7 +50,7 @@ protected:
     /// Decoder state.
     void* decoder_;
     /// Compressed sound data.
-    SharedArrayPtr<signed char> data_;
+    ea::shared_array<signed char> data_;
     /// Compressed sound data size in bytes.
     unsigned dataSize_;
 };

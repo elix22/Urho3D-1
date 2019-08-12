@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
+#include <EASTL/shared_array.h>
+
 #include "../Scene/Component.h"
 
 namespace Urho3D
@@ -158,7 +159,7 @@ public:
     Terrain* GetEastNeighbor() const { return east_; }
 
     /// Return raw height data.
-    SharedArrayPtr<float> GetHeightData() const { return heightData_; }
+    ea::shared_array<float> GetHeightData() const { return heightData_; }
 
     /// Return draw distance.
     float GetDrawDistance() const { return drawDistance_; }
@@ -250,15 +251,15 @@ private:
     /// Heightmap image.
     SharedPtr<Image> heightMap_;
     /// Height data.
-    SharedArrayPtr<float> heightData_;
+    ea::shared_array<float> heightData_;
     /// Source height data for smoothing.
-    SharedArrayPtr<float> sourceHeightData_;
+    ea::shared_array<float> sourceHeightData_;
     /// Material.
     SharedPtr<Material> material_;
     /// Terrain patches.
-    Vector<WeakPtr<TerrainPatch> > patches_;
+    ea::vector<WeakPtr<TerrainPatch> > patches_;
     /// Draw ranges for different LODs and stitching combinations.
-    PODVector<Pair<unsigned, unsigned> > drawRanges_;
+    ea::vector<ea::pair<unsigned, unsigned> > drawRanges_;
     /// North neighbor terrain.
     WeakPtr<Terrain> north_;
     /// South neighbor terrain.

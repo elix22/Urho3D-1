@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2018 the Urho3D project.
+# Copyright (c) 2008-2019 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,7 @@
 file (GLOB_RECURSE SOURCE_FILES *.c *.h)
 add_library (LZ4 STATIC ${SOURCE_FILES})
 if (BUILD_SHARED_LIBS)
-    target_compile_definitions(LZ4 PRIVATE -DLZ4_DLL_EXPORT=1 INTERFACE -DLZ4_DLL_IMPORT=1)
+    target_compile_definitions(LZ4 PRIVATE -DLZ4_DLL_EXPORT=1)
 endif ()
 target_include_directories(LZ4
     INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -31,3 +31,7 @@ target_include_directories(LZ4
 )
 
 install (DIRECTORY include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.h)
+
+if (NOT URHO3D_MERGE_STATIC_LIBS)
+    install(TARGETS LZ4 EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
+endif ()

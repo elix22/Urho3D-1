@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,14 +22,17 @@
 
 #pragma once
 
-#include "../Container/HashMap.h"
-#include "../Container/Ptr.h"
+#include <EASTL/unique_ptr.h>
+
+#include "../Container/Str.h"
+#include "../Core/Variant.h"
 #include "../Math/StringHash.h"
 
 namespace Urho3D
 {
 
 class Mutex;
+class StringHash;
 
 /// Helper class used for StringHash reversing.
 class URHO3D_API StringHashRegister
@@ -45,12 +48,12 @@ public:
     /// Register string for hash reverse mapping.
     StringHash RegisterString(const char* string);
     /// Return string for given StringHash. Return empty string if not found.
-    String GetStringCopy(const StringHash& hash) const;
+    ea::string GetStringCopy(const StringHash& hash) const;
     /// Return whether the string in contained in the register.
     bool Contains(const StringHash& hash) const;
 
     /// Return String for given StringHash. Return value is unsafe to use if RegisterString is called from other threads.
-    const String& GetString(const StringHash& hash) const;
+    const ea::string& GetString(const StringHash& hash) const;
     /// Return map of hashes. Return value is unsafe to use if RegisterString is called from other threads.
     const StringMap& GetInternalMap() const { return map_; }
 
@@ -58,7 +61,7 @@ private:
     /// Hash to string map.
     StringMap map_;
     /// Mutex.
-    UniquePtr<Mutex> mutex_;
+    ea::unique_ptr<Mutex> mutex_;
 };
 
 }

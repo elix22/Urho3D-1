@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,6 +25,7 @@
 #include "../Graphics/Graphics.h"
 #include "../Graphics/Material.h"
 #include "../Graphics/RenderPath.h"
+#include "../Graphics/Technique.h"
 #include "../IO/Log.h"
 #include "../Resource/XMLFile.h"
 
@@ -57,9 +58,7 @@ static const char* sortModeNames[] =
     nullptr
 };
 
-extern const char* blendModeNames[];
-
-TextureUnit ParseTextureUnitName(String name);
+TextureUnit ParseTextureUnitName(ea::string name);
 
 void RenderTargetInfo::Load(const XMLElement& element)
 {
@@ -70,7 +69,7 @@ void RenderTargetInfo::Load(const XMLElement& element)
     if (element.HasAttribute("cubemap"))
         cubemap_ = element.GetBool("cubemap");
 
-    String formatName = element.GetAttribute("format");
+    ea::string formatName = element.GetAttribute("format");
     format_ = Graphics::GetFormat(formatName);
 
     if (element.HasAttribute("filter"))
@@ -115,7 +114,7 @@ void RenderTargetInfo::Load(const XMLElement& element)
 
 void RenderPathCommand::Load(const XMLElement& element)
 {
-    type_ = (RenderCommandType)GetStringListIndex(element.GetAttributeLower("type").CString(), commandTypeNames, CMD_NONE);
+    type_ = (RenderCommandType)GetStringListIndex(element.GetAttributeLower("type").c_str(), commandTypeNames, CMD_NONE);
     tag_ = element.GetAttribute("tag");
     if (element.HasAttribute("enabled"))
         enabled_ = element.GetBool("enabled");
@@ -148,7 +147,7 @@ void RenderPathCommand::Load(const XMLElement& element)
     case CMD_SCENEPASS:
         pass_ = element.GetAttribute("pass");
         sortMode_ =
-            (RenderCommandSortMode)GetStringListIndex(element.GetAttributeLower("sort").CString(), sortModeNames, SORT_FRONTTOBACK);
+            (RenderCommandSortMode)GetStringListIndex(element.GetAttributeLower("sort").c_str(), sortModeNames, SORT_FRONTTOBACK);
         if (element.HasAttribute("marktostencil"))
             markToStencil_ = element.GetBool("marktostencil");
         if (element.HasAttribute("vertexlights"))
@@ -168,8 +167,8 @@ void RenderPathCommand::Load(const XMLElement& element)
 
         if (type_ == CMD_QUAD && element.HasAttribute("blend"))
         {
-            String blend = element.GetAttributeLower("blend");
-            blendMode_ = ((BlendMode)GetStringListIndex(blend.CString(), blendModeNames, BLEND_REPLACE));
+            ea::string blend = element.GetAttributeLower("blend");
+            blendMode_ = ((BlendMode)GetStringListIndex(blend.c_str(), blendModeNames, BLEND_REPLACE));
         }
         break;
 
@@ -182,12 +181,12 @@ void RenderPathCommand::Load(const XMLElement& element)
     }
 
     // By default use 1 output, which is the viewport
-    outputs_.Resize(1);
-    outputs_[0] = MakePair(String("viewport"), FACE_POSITIVE_X);
+    outputs_.resize(1);
+    outputs_[0] = ea::make_pair(ea::string("viewport"), FACE_POSITIVE_X);
     if (element.HasAttribute("output"))
-        outputs_[0].first_ = element.GetAttribute("output");
+        outputs_[0].first = element.GetAttribute("output");
     if (element.HasAttribute("face"))
-        outputs_[0].second_ = (CubeMapFace)element.GetInt("face");
+        outputs_[0].second = (CubeMapFace)element.GetInt("face");
     if (element.HasAttribute("depthstencil"))
         depthStencilName_ = element.GetAttribute("depthstencil");
     // Check for defining multiple outputs
@@ -197,10 +196,10 @@ void RenderPathCommand::Load(const XMLElement& element)
         unsigned index = (unsigned)outputElem.GetInt("index");
         if (index < MAX_RENDERTARGETS)
         {
-            if (index >= outputs_.Size())
-                outputs_.Resize(index + 1);
-            outputs_[index].first_ = outputElem.GetAttribute("name");
-            outputs_[index].second_ = outputElem.HasAttribute("face") ? (CubeMapFace)outputElem.GetInt("face") : FACE_POSITIVE_X;
+            if (index >= outputs_.size())
+                outputs_.resize(index + 1);
+            outputs_[index].first = outputElem.GetAttribute("name");
+            outputs_[index].second = outputElem.HasAttribute("face") ? (CubeMapFace)outputElem.GetInt("face") : FACE_POSITIVE_X;
         }
         outputElem = outputElem.GetNext("output");
     }
@@ -211,7 +210,7 @@ void RenderPathCommand::Load(const XMLElement& element)
     XMLElement parameterElem = element.GetChild("parameter");
     while (parameterElem)
     {
-        String name = parameterElem.GetAttribute("name");
+        ea::string name = parameterElem.GetAttribute("name");
         shaderParameters_[name] = Material::ParseShaderParameterValue(parameterElem.GetAttribute("value"));
         parameterElem = parameterElem.GetNext("parameter");
     }
@@ -225,7 +224,7 @@ void RenderPathCommand::Load(const XMLElement& element)
             unit = ParseTextureUnitName(textureElem.GetAttribute("unit"));
         if (unit < MAX_TEXTURE_UNITS)
         {
-            String name = textureElem.GetAttribute("name");
+            ea::string name = textureElem.GetAttribute("name");
             textureNames_[unit] = name;
         }
 
@@ -233,77 +232,77 @@ void RenderPathCommand::Load(const XMLElement& element)
     }
 }
 
-void RenderPathCommand::SetTextureName(TextureUnit unit, const String& name)
+void RenderPathCommand::SetTextureName(TextureUnit unit, const ea::string& name)
 {
     if (unit < MAX_TEXTURE_UNITS)
         textureNames_[unit] = name;
 }
 
-void RenderPathCommand::SetShaderParameter(const String& name, const Variant& value)
+void RenderPathCommand::SetShaderParameter(const ea::string& name, const Variant& value)
 {
     shaderParameters_[name] = value;
 }
 
-void RenderPathCommand::RemoveShaderParameter(const String& name)
+void RenderPathCommand::RemoveShaderParameter(const ea::string& name)
 {
-    shaderParameters_.Erase(name);
+    shaderParameters_.erase(name);
 }
 
 void RenderPathCommand::SetNumOutputs(unsigned num)
 {
     num = (unsigned)Clamp((int)num, 1, MAX_RENDERTARGETS);
-    outputs_.Resize(num);
+    outputs_.resize(num);
 }
 
-void RenderPathCommand::SetOutput(unsigned index, const String& name, CubeMapFace face)
+void RenderPathCommand::SetOutput(unsigned index, const ea::string& name, CubeMapFace face)
 {
-    if (index < outputs_.Size())
-        outputs_[index] = MakePair(name, face);
-    else if (index == outputs_.Size() && index < MAX_RENDERTARGETS)
-        outputs_.Push(MakePair(name, face));
+    if (index < outputs_.size())
+        outputs_[index] = ea::make_pair(name, face);
+    else if (index == outputs_.size() && index < MAX_RENDERTARGETS)
+        outputs_.push_back(ea::make_pair(name, face));
 }
 
-void RenderPathCommand::SetOutputName(unsigned index, const String& name)
+void RenderPathCommand::SetOutputName(unsigned index, const ea::string& name)
 {
-    if (index < outputs_.Size())
-        outputs_[index].first_ = name;
-    else if (index == outputs_.Size() && index < MAX_RENDERTARGETS)
-        outputs_.Push(MakePair(name, FACE_POSITIVE_X));
+    if (index < outputs_.size())
+        outputs_[index].first = name;
+    else if (index == outputs_.size() && index < MAX_RENDERTARGETS)
+        outputs_.push_back(ea::make_pair(name, FACE_POSITIVE_X));
 }
 
 void RenderPathCommand::SetOutputFace(unsigned index, CubeMapFace face)
 {
-    if (index < outputs_.Size())
-        outputs_[index].second_ = face;
-    else if (index == outputs_.Size() && index < MAX_RENDERTARGETS)
-        outputs_.Push(MakePair(String::EMPTY, face));
+    if (index < outputs_.size())
+        outputs_[index].second = face;
+    else if (index == outputs_.size() && index < MAX_RENDERTARGETS)
+        outputs_.push_back(ea::make_pair(EMPTY_STRING, face));
 }
 
 
-void RenderPathCommand::SetDepthStencilName(const String& name)
+void RenderPathCommand::SetDepthStencilName(const ea::string& name)
 {
     depthStencilName_ = name;
 }
 
-const String& RenderPathCommand::GetTextureName(TextureUnit unit) const
+const ea::string& RenderPathCommand::GetTextureName(TextureUnit unit) const
 {
-    return unit < MAX_TEXTURE_UNITS ? textureNames_[unit] : String::EMPTY;
+    return unit < MAX_TEXTURE_UNITS ? textureNames_[unit] : EMPTY_STRING;
 }
 
-const Variant& RenderPathCommand::GetShaderParameter(const String& name) const
+const Variant& RenderPathCommand::GetShaderParameter(const ea::string& name) const
 {
-    HashMap<StringHash, Variant>::ConstIterator i = shaderParameters_.Find(name);
-    return i != shaderParameters_.End() ? i->second_ : Variant::EMPTY;
+    auto i = shaderParameters_.find(name);
+    return i != shaderParameters_.end() ? i->second : Variant::EMPTY;
 }
 
-const String& RenderPathCommand::GetOutputName(unsigned index) const
+const ea::string& RenderPathCommand::GetOutputName(unsigned index) const
 {
-    return index < outputs_.Size() ? outputs_[index].first_ : String::EMPTY;
+    return index < outputs_.size() ? outputs_[index].first : EMPTY_STRING;
 }
 
 CubeMapFace RenderPathCommand::GetOutputFace(unsigned index) const
 {
-    return index < outputs_.Size() ? outputs_[index].second_ : FACE_POSITIVE_X;
+    return index < outputs_.size() ? outputs_[index].second : FACE_POSITIVE_X;
 }
 
 RenderPath::RenderPath() = default;
@@ -320,8 +319,8 @@ SharedPtr<RenderPath> RenderPath::Clone()
 
 bool RenderPath::Load(XMLFile* file)
 {
-    renderTargets_.Clear();
-    commands_.Clear();
+    renderTargets_.clear();
+    commands_.clear();
 
     return Append(file);
 }
@@ -340,8 +339,8 @@ bool RenderPath::Append(XMLFile* file)
     {
         RenderTargetInfo info;
         info.Load(rtElem);
-        if (!info.name_.Trimmed().Empty())
-            renderTargets_.Push(info);
+        if (!info.name_.trimmed().empty())
+            renderTargets_.push_back(info);
 
         rtElem = rtElem.GetNext("rendertarget");
     }
@@ -352,7 +351,7 @@ bool RenderPath::Append(XMLFile* file)
         RenderPathCommand cmd;
         cmd.Load(cmdElem);
         if (cmd.type_ != CMD_NONE)
-            commands_.Push(cmd);
+            commands_.push_back(cmd);
 
         cmdElem = cmdElem.GetNext("command");
     }
@@ -360,162 +359,162 @@ bool RenderPath::Append(XMLFile* file)
     return true;
 }
 
-void RenderPath::SetEnabled(const String& tag, bool active)
+void RenderPath::SetEnabled(const ea::string& tag, bool active)
 {
-    for (unsigned i = 0; i < renderTargets_.Size(); ++i)
+    for (unsigned i = 0; i < renderTargets_.size(); ++i)
     {
-        if (!renderTargets_[i].tag_.Compare(tag, false))
+        if (!renderTargets_[i].tag_.comparei(tag))
             renderTargets_[i].enabled_ = active;
     }
 
-    for (unsigned i = 0; i < commands_.Size(); ++i)
+    for (unsigned i = 0; i < commands_.size(); ++i)
     {
-        if (!commands_[i].tag_.Compare(tag, false))
+        if (!commands_[i].tag_.comparei(tag))
             commands_[i].enabled_ = active;
     }
 }
 
-bool RenderPath::IsEnabled(const String& tag) const
+bool RenderPath::IsEnabled(const ea::string& tag) const
 {
-    for (unsigned i = 0; i < renderTargets_.Size(); ++i)
+    for (unsigned i = 0; i < renderTargets_.size(); ++i)
     {
-        if (!renderTargets_[i].tag_.Compare(tag, false) && renderTargets_[i].enabled_)
+        if (!renderTargets_[i].tag_.comparei(tag) && renderTargets_[i].enabled_)
             return true;
     }
 
-    for (unsigned i = 0; i < commands_.Size(); ++i)
+    for (unsigned i = 0; i < commands_.size(); ++i)
     {
-        if (!commands_[i].tag_.Compare(tag, false) && commands_[i].enabled_)
+        if (!commands_[i].tag_.comparei(tag) && commands_[i].enabled_)
             return true;
     }
 
     return false;
 }
 
-bool RenderPath::IsAdded(const String& tag) const
+bool RenderPath::IsAdded(const ea::string& tag) const
 {
-    for (unsigned i = 0; i < renderTargets_.Size(); ++i)
+    for (unsigned i = 0; i < renderTargets_.size(); ++i)
     {
-        if (!renderTargets_[i].tag_.Compare(tag, false))
+        if (!renderTargets_[i].tag_.comparei(tag))
             return true;
     }
 
-    for (unsigned i = 0; i < commands_.Size(); ++i)
+    for (unsigned i = 0; i < commands_.size(); ++i)
     {
-        if (!commands_[i].tag_.Compare(tag, false))
+        if (!commands_[i].tag_.comparei(tag))
             return true;
     }
 
     return false;
 }
 
-void RenderPath::ToggleEnabled(const String& tag)
+void RenderPath::ToggleEnabled(const ea::string& tag)
 {
-    for (unsigned i = 0; i < renderTargets_.Size(); ++i)
+    for (unsigned i = 0; i < renderTargets_.size(); ++i)
     {
-        if (!renderTargets_[i].tag_.Compare(tag, false))
+        if (!renderTargets_[i].tag_.comparei(tag))
             renderTargets_[i].enabled_ = !renderTargets_[i].enabled_;
     }
 
-    for (unsigned i = 0; i < commands_.Size(); ++i)
+    for (unsigned i = 0; i < commands_.size(); ++i)
     {
-        if (!commands_[i].tag_.Compare(tag, false))
+        if (!commands_[i].tag_.comparei(tag))
             commands_[i].enabled_ = !commands_[i].enabled_;
     }
 }
 
 void RenderPath::SetRenderTarget(unsigned index, const RenderTargetInfo& info)
 {
-    if (index < renderTargets_.Size())
+    if (index < renderTargets_.size())
         renderTargets_[index] = info;
-    else if (index == renderTargets_.Size())
+    else if (index == renderTargets_.size())
         AddRenderTarget(info);
 }
 
 void RenderPath::AddRenderTarget(const RenderTargetInfo& info)
 {
-    renderTargets_.Push(info);
+    renderTargets_.push_back(info);
 }
 
 void RenderPath::RemoveRenderTarget(unsigned index)
 {
-    renderTargets_.Erase(index);
+    renderTargets_.erase_at(index);
 }
 
-void RenderPath::RemoveRenderTarget(const String& name)
+void RenderPath::RemoveRenderTarget(const ea::string& name)
 {
-    for (unsigned i = 0; i < renderTargets_.Size(); ++i)
+    for (unsigned i = 0; i < renderTargets_.size(); ++i)
     {
-        if (!renderTargets_[i].name_.Compare(name, false))
+        if (!renderTargets_[i].name_.comparei(name))
         {
-            renderTargets_.Erase(i);
+            renderTargets_.erase_at(i);
             return;
         }
     }
 }
 
-void RenderPath::RemoveRenderTargets(const String& tag)
+void RenderPath::RemoveRenderTargets(const ea::string& tag)
 {
-    for (unsigned i = renderTargets_.Size() - 1; i < renderTargets_.Size(); --i)
+    for (unsigned i = renderTargets_.size() - 1; i < renderTargets_.size(); --i)
     {
-        if (!renderTargets_[i].tag_.Compare(tag, false))
-            renderTargets_.Erase(i);
+        if (!renderTargets_[i].tag_.comparei(tag))
+            renderTargets_.erase_at(i);
     }
 }
 
 void RenderPath::SetCommand(unsigned index, const RenderPathCommand& command)
 {
-    if (index < commands_.Size())
+    if (index < commands_.size())
         commands_[index] = command;
-    else if (index == commands_.Size())
+    else if (index == commands_.size())
         AddCommand(command);
 }
 
 void RenderPath::AddCommand(const RenderPathCommand& command)
 {
-    commands_.Push(command);
+    commands_.push_back(command);
 }
 
 void RenderPath::InsertCommand(unsigned index, const RenderPathCommand& command)
 {
-    commands_.Insert(index, command);
+    commands_.insert_at(index, command);
 }
 
 void RenderPath::RemoveCommand(unsigned index)
 {
-    commands_.Erase(index);
+    commands_.erase_at(index);
 }
 
-void RenderPath::RemoveCommands(const String& tag)
+void RenderPath::RemoveCommands(const ea::string& tag)
 {
-    for (unsigned i = commands_.Size() - 1; i < commands_.Size(); --i)
+    for (unsigned i = commands_.size() - 1; i < commands_.size(); --i)
     {
-        if (!commands_[i].tag_.Compare(tag, false))
-            commands_.Erase(i);
+        if (!commands_[i].tag_.comparei(tag))
+            commands_.erase_at(i);
     }
 }
 
-void RenderPath::SetShaderParameter(const String& name, const Variant& value)
+void RenderPath::SetShaderParameter(const ea::string& name, const Variant& value)
 {
     StringHash nameHash(name);
 
-    for (unsigned i = 0; i < commands_.Size(); ++i)
+    for (unsigned i = 0; i < commands_.size(); ++i)
     {
-        HashMap<StringHash, Variant>::Iterator j = commands_[i].shaderParameters_.Find(nameHash);
-        if (j != commands_[i].shaderParameters_.End())
-            j->second_ = value;
+        auto j = commands_[i].shaderParameters_.find(nameHash);
+        if (j != commands_[i].shaderParameters_.end())
+            j->second = value;
     }
 }
 
-const Variant& RenderPath::GetShaderParameter(const String& name) const
+const Variant& RenderPath::GetShaderParameter(const ea::string& name) const
 {
     StringHash nameHash(name);
 
-    for (unsigned i = 0; i < commands_.Size(); ++i)
+    for (unsigned i = 0; i < commands_.size(); ++i)
     {
-        HashMap<StringHash, Variant>::ConstIterator j = commands_[i].shaderParameters_.Find(nameHash);
-        if (j != commands_[i].shaderParameters_.End())
-            return j->second_;
+        auto j = commands_[i].shaderParameters_.find(nameHash);
+        if (j != commands_[i].shaderParameters_.end())
+            return j->second;
     }
 
     return Variant::EMPTY;

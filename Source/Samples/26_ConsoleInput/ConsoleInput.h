@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -42,7 +42,7 @@ public:
 
 protected:
     /// Return XML patch instructions for screen joystick layout for a specific sample app, if any.
-    String GetScreenJoystickPatchString() const override { return
+    ea::string GetScreenJoystickPatchString() const override { return
         "<patch>"
         "    <add sel=\"/element/element[./attribute[@name='Name' and @value='Button2']]\">"
         "        <attribute name=\"Is Visible\" value=\"false\" />"
@@ -63,13 +63,13 @@ private:
     /// Print intro message and initialize the game state.
     void StartGame();
     /// Print game over message.
-    void EndGame(const String& message);
+    void EndGame(const ea::string& message);
     /// Advance the game state.
     void Advance();
     /// Handle user input either from the engine console or standard input.
-    void HandleInput(const String& input);
+    void HandleInput(const ea::string& input);
     /// Print text to the engine console and standard output.
-    void Print(const String& output);
+    void Print(const ea::string& output);
 
     /// Game on flag.
     bool gameOn_{};

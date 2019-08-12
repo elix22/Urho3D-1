@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/Vector.h"
+#include <EASTL/vector.h>
+
 #include "../Math/BoundingBox.h"
 #include "../Math/Vector3.h"
 
@@ -61,19 +62,19 @@ struct URHO3D_API NavBuildData
     /// World-space bounding box of the navigation mesh tile.
     BoundingBox worldBoundingBox_;
     /// Vertices from geometries.
-    PODVector<Vector3> vertices_;
+    ea::vector<Vector3> vertices_;
     /// Triangle indices from geometries.
-    PODVector<int> indices_;
+    ea::vector<int> indices_;
     /// Offmesh connection vertices.
-    PODVector<Vector3> offMeshVertices_;
+    ea::vector<Vector3> offMeshVertices_;
     /// Offmesh connection radii.
-    PODVector<float> offMeshRadii_;
+    ea::vector<float> offMeshRadii_;
     /// Offmesh connection flags.
-    PODVector<unsigned short> offMeshFlags_;
+    ea::vector<unsigned short> offMeshFlags_;
     /// Offmesh connection areas.
-    PODVector<unsigned char> offMeshAreas_;
+    ea::vector<unsigned char> offMeshAreas_;
     /// Offmesh connection direction.
-    PODVector<unsigned char> offMeshDir_;
+    ea::vector<unsigned char> offMeshDir_;
     /// Recast context.
     rcContext* ctx_;
     /// Recast heightfield.
@@ -81,7 +82,7 @@ struct URHO3D_API NavBuildData
     /// Recast compact heightfield.
     rcCompactHeightfield* compactHeightField_;
     /// Pretransformed navigation areas, no correlation to the geometry above.
-    PODVector<NavAreaStub> navAreas_;
+    ea::vector<NavAreaStub> navAreas_;
 };
 
 struct URHO3D_API SimpleNavBuildData : public NavBuildData

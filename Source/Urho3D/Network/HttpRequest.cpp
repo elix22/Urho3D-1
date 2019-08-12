@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -37,9 +37,9 @@ namespace Urho3D
 static const unsigned ERROR_BUFFER_SIZE = 256;
 static const unsigned READ_BUFFER_SIZE = 65536; // Must be a power of two
 
-HttpRequest::HttpRequest(const String& url, const String& verb, const Vector<String>& headers, const String& postData) :
-    url_(url.Trimmed()),
-    verb_(!verb.Empty() ? verb : "GET"),
+HttpRequest::HttpRequest(const ea::string& url, const ea::string& verb, const ea::vector<ea::string>& headers, const ea::string& postData) :
+    url_(url.trimmed()),
+    verb_(!verb.empty() ? verb : "GET"),
     headers_(headers),
     postData_(postData),
     state_(HTTP_INITIALIZING),
@@ -69,66 +69,66 @@ HttpRequest::~HttpRequest()
 
 void HttpRequest::ThreadFunction()
 {
-    String protocol = "http";
-    String host;
-    String path = "/";
+    ea::string protocol = "http";
+    ea::string host;
+    ea::string path = "/";
     int port = 80;
 
-    unsigned protocolEnd = url_.Find("://");
-    if (protocolEnd != String::NPOS)
+    unsigned protocolEnd = url_.find("://");
+    if (protocolEnd != ea::string::npos)
     {
-        protocol = url_.Substring(0, protocolEnd);
-        host = url_.Substring(protocolEnd + 3);
+        protocol = url_.substr(0, protocolEnd);
+        host = url_.substr(protocolEnd + 3);
     }
     else
         host = url_;
 
-    unsigned pathStart = host.Find('/');
-    if (pathStart != String::NPOS)
+    unsigned pathStart = host.find('/');
+    if (pathStart != ea::string::npos)
     {
-        path = host.Substring(pathStart);
-        host = host.Substring(0, pathStart);
+        path = host.substr(pathStart);
+        host = host.substr(0, pathStart);
     }
 
-    unsigned portStart = host.Find(':');
-    if (portStart != String::NPOS)
+    unsigned portStart = host.find(':');
+    if (portStart != ea::string::npos)
     {
-        port = ToInt(host.Substring(portStart + 1));
-        host = host.Substring(0, portStart);
+        port = ToInt(host.substr(portStart + 1));
+        host = host.substr(0, portStart);
     }
 
     char errorBuffer[ERROR_BUFFER_SIZE];
     memset(errorBuffer, 0, sizeof(errorBuffer));
 
-    String headersStr;
-    for (unsigned i = 0; i < headers_.Size(); ++i)
+    ea::string headersStr;
+    for (unsigned i = 0; i < headers_.size(); ++i)
     {
         // Trim and only add non-empty header strings
-        String header = headers_[i].Trimmed();
-        if (header.Length())
+        ea::string header = headers_[i].trimmed();
+        if (header.length())
             headersStr += header + "\r\n";
     }
 
     // Initiate the connection. This may block due to DNS query
     /// \todo SSL mode will not actually work unless Civetweb's SSL mode is initialized with an external SSL DLL
     mg_connection* connection = nullptr;
-    if (postData_.Empty())
+    if (postData_.empty())
     {
-        connection = mg_download(host.CString(), port, protocol.Compare("https", false) ? 0 : 1, errorBuffer, sizeof(errorBuffer),
+        connection = mg_download(host.c_str(), port, protocol.comparei("https") ? 0 : 1, errorBuffer, sizeof(errorBuffer),
             "%s %s HTTP/1.0\r\n"
             "Host: %s\r\n"
             "%s"
-            "\r\n", verb_.CString(), path.CString(), host.CString(), headersStr.CString());
+            "\r\n", verb_.c_str(), path.c_str(), host.c_str(), headersStr.c_str());
     }
     else
     {
-        connection = mg_download(host.CString(), port, protocol.Compare("https", false) ? 0 : 1, errorBuffer, sizeof(errorBuffer),
+        connection = mg_download(host.c_str(), port, protocol.comparei("https") ? 0 : 1, errorBuffer, sizeof(errorBuffer),
             "%s %s HTTP/1.0\r\n"
             "Host: %s\r\n"
             "%s"
             "Content-Length: %d\r\n"
             "\r\n"
-            "%s", verb_.CString(), path.CString(), host.CString(), headersStr.CString(), postData_.Length(), postData_.CString());
+            "%s", verb_.c_str(), path.c_str(), host.c_str(), headersStr.c_str(), postData_.length(), postData_.c_str());
     }
 
     {
@@ -138,7 +138,7 @@ void HttpRequest::ThreadFunction()
         // If no connection could be made, store the error and exit
         if (state_ == HTTP_ERROR)
         {
-            error_ = String(&errorBuffer[0]);
+            error_ = ea::string(&errorBuffer[0]);
             return;
         }
     }
@@ -147,7 +147,7 @@ void HttpRequest::ThreadFunction()
     while (shouldRun_)
     {
         // Read less than full buffer to be able to distinguish between full and empty ring buffer. Reading may block
-        int bytesRead = mg_read(connection, httpReadBuffer_.Get(), READ_BUFFER_SIZE / 4);
+        int bytesRead = mg_read(connection, httpReadBuffer_.get(), READ_BUFFER_SIZE / 4);
         if (bytesRead <= 0)
             break;
 
@@ -172,14 +172,14 @@ void HttpRequest::ThreadFunction()
         }
 
         if (writePosition_ + bytesRead <= READ_BUFFER_SIZE)
-            memcpy(readBuffer_.Get() + writePosition_, httpReadBuffer_.Get(), (size_t)bytesRead);
+            memcpy(readBuffer_.get() + writePosition_, httpReadBuffer_.get(), (size_t)bytesRead);
         else
         {
             // Handle ring buffer wrap
             unsigned part1 = READ_BUFFER_SIZE - writePosition_;
             unsigned part2 = bytesRead - part1;
-            memcpy(readBuffer_.Get() + writePosition_, httpReadBuffer_.Get(), part1);
-            memcpy(readBuffer_.Get(), httpReadBuffer_.Get() + part1, part2);
+            memcpy(readBuffer_.get() + writePosition_, httpReadBuffer_.get(), part1);
+            memcpy(readBuffer_.get(), httpReadBuffer_.get() + part1, part2);
         }
 
         writePosition_ += bytesRead;
@@ -208,12 +208,12 @@ unsigned HttpRequest::Read(void* dest, unsigned size)
 
     for (;;)
     {
-        Pair<unsigned, bool> status{};
+        ea::pair<unsigned, bool> status{};
 
         for (;;)
         {
             status = CheckAvailableSizeAndEof();
-            if (status.first_ || status.second_)
+            if (status.first || status.second)
                 break;
             // While no bytes and connection is still open, block until has some data
             mutex_.Release();
@@ -221,7 +221,7 @@ unsigned HttpRequest::Read(void* dest, unsigned size)
             mutex_.Acquire();
         }
 
-        unsigned bytesAvailable = status.first_;
+        unsigned bytesAvailable = status.first;
 
         if (bytesAvailable)
         {
@@ -229,14 +229,14 @@ unsigned HttpRequest::Read(void* dest, unsigned size)
                 bytesAvailable = sizeLeft;
 
             if (readPosition_ + bytesAvailable <= READ_BUFFER_SIZE)
-                memcpy(destPtr, readBuffer_.Get() + readPosition_, bytesAvailable);
+                memcpy(destPtr, readBuffer_.get() + readPosition_, bytesAvailable);
             else
             {
                 // Handle ring buffer wrap
                 unsigned part1 = READ_BUFFER_SIZE - readPosition_;
                 unsigned part2 = bytesAvailable - part1;
-                memcpy(destPtr, readBuffer_.Get() + readPosition_, part1);
-                memcpy(destPtr + part1, readBuffer_.Get(), part2);
+                memcpy(destPtr, readBuffer_.get() + readPosition_, part1);
+                memcpy(destPtr + part1, readBuffer_.get(), part2);
             }
 
             readPosition_ += bytesAvailable;
@@ -266,10 +266,10 @@ unsigned HttpRequest::Seek(unsigned position)
 bool HttpRequest::IsEof() const
 {
     MutexLock lock(mutex_);
-    return CheckAvailableSizeAndEof().second_;
+    return CheckAvailableSizeAndEof().second;
 }
 
-String HttpRequest::GetError() const
+ea::string HttpRequest::GetError() const
 {
     MutexLock lock(mutex_);
     return error_;
@@ -284,10 +284,10 @@ HttpRequestState HttpRequest::GetState() const
 unsigned HttpRequest::GetAvailableSize() const
 {
     MutexLock lock(mutex_);
-    return CheckAvailableSizeAndEof().first_;
+    return CheckAvailableSizeAndEof().first;
 }
 
-Pair<unsigned, bool> HttpRequest::CheckAvailableSizeAndEof() const
+ea::pair<unsigned, bool> HttpRequest::CheckAvailableSizeAndEof() const
 {
     unsigned size = (writePosition_ - readPosition_) & (READ_BUFFER_SIZE - 1);
     return {size, (state_ == HTTP_ERROR || (state_ == HTTP_CLOSED && !size))};

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -79,8 +79,8 @@ RigidBody::RigidBody(Context* context) :
     enableMassUpdate_(true),
     hasSimulated_(false)
 {
-    compoundShape_ = new btCompoundShape();
-    shiftedCompoundShape_ = new btCompoundShape();
+    compoundShape_ = ea::make_unique<btCompoundShape>();
+    shiftedCompoundShape_ = ea::make_unique<btCompoundShape>();
 }
 
 RigidBody::~RigidBody()
@@ -119,7 +119,7 @@ void RigidBody::RegisterObject(Context* context)
         AM_DEFAULT);
     URHO3D_ACCESSOR_ATTRIBUTE("CCD Radius", GetCcdRadius, SetCcdRadius, float, 0.0f, AM_DEFAULT);
     URHO3D_ACCESSOR_ATTRIBUTE("CCD Motion Threshold", GetCcdMotionThreshold, SetCcdMotionThreshold, float, 0.0f, AM_DEFAULT);
-    URHO3D_ACCESSOR_ATTRIBUTE("Network Angular Velocity", GetNetAngularVelocityAttr, SetNetAngularVelocityAttr, PODVector<unsigned char>,
+    URHO3D_ACCESSOR_ATTRIBUTE("Network Angular Velocity", GetNetAngularVelocityAttr, SetNetAngularVelocityAttr, ea::vector<unsigned char>,
         Variant::emptyBuffer, AM_NET | AM_LATESTDATA | AM_NOEDIT);
     URHO3D_ENUM_ATTRIBUTE_EX("Collision Event Mode", collisionEventMode_, MarkBodyDirty, collisionEventModeNames, COLLISION_ACTIVE, AM_DEFAULT);
     URHO3D_ACCESSOR_ATTRIBUTE("Use Gravity", GetUseGravity, SetUseGravity, bool, true, AM_DEFAULT);
@@ -201,7 +201,7 @@ void RigidBody::DrawDebugGeometry(DebugRenderer* debug, bool depthTest)
         physicsWorld_->SetDebugDepthTest(depthTest);
 
         btDiscreteDynamicsWorld* world = physicsWorld_->GetWorld();
-        world->debugDrawObject(body_->getWorldTransform(), shiftedCompoundShape_.Get(), IsActive() ? btVector3(1.0f, 1.0f, 1.0f) :
+        world->debugDrawObject(body_->getWorldTransform(), shiftedCompoundShape_.get(), IsActive() ? btVector3(1.0f, 1.0f, 1.0f) :
             btVector3(0.0f, 1.0f, 0.0f));
 
         physicsWorld_->SetDebugRenderer(nullptr);
@@ -231,7 +231,7 @@ void RigidBody::SetPosition(const Vector3& position)
         // When not inside the simulation loop, this may lead to erratic movement of parented rigidbodies
         // so skip in that case. Exception made before first simulation tick so that interpolation position
         // of e.g. instantiated prefabs will be correct from the start
-        if (!hasSimulated_ || physicsWorld_->IsSimulating())
+        if (!hasSimulated_ || (physicsWorld_ && physicsWorld_->IsSimulating()))
         {
             btTransform interpTrans = body_->getInterpolationWorldTransform();
             interpTrans.setOrigin(worldTrans.getOrigin());
@@ -253,7 +253,7 @@ void RigidBody::SetRotation(const Quaternion& rotation)
         if (!centerOfMass_.Equals(Vector3::ZERO))
             worldTrans.setOrigin(ToBtVector3(oldPosition + rotation * centerOfMass_));
 
-        if (!hasSimulated_ || physicsWorld_->IsSimulating())
+        if (!hasSimulated_ || (physicsWorld_ && physicsWorld_->IsSimulating()))
         {
             btTransform interpTrans = body_->getInterpolationWorldTransform();
             interpTrans.setRotation(worldTrans.getRotation());
@@ -277,7 +277,7 @@ void RigidBody::SetTransform(const Vector3& position, const Quaternion& rotation
         worldTrans.setRotation(ToBtQuaternion(rotation));
         worldTrans.setOrigin(ToBtVector3(position + rotation * centerOfMass_));
 
-        if (!hasSimulated_ || physicsWorld_->IsSimulating())
+        if (!hasSimulated_ || (physicsWorld_ && physicsWorld_->IsSimulating()))
         {
             btTransform interpTrans = body_->getInterpolationWorldTransform();
             interpTrans.setOrigin(worldTrans.getOrigin());
@@ -697,12 +697,12 @@ bool RigidBody::IsActive() const
     return body_ ? body_->isActive() : false;
 }
 
-void RigidBody::GetCollidingBodies(PODVector<RigidBody*>& result) const
+void RigidBody::GetCollidingBodies(ea::vector<RigidBody*>& result) const
 {
     if (physicsWorld_)
         physicsWorld_->GetCollidingBodies(result, this);
     else
-        result.Clear();
+        result.clear();
 }
 
 void RigidBody::ApplyWorldTransform(const Vector3& newWorldPosition, const Quaternion& newWorldRotation)
@@ -746,7 +746,7 @@ void RigidBody::UpdateMass()
     auto numShapes = (unsigned)compoundShape_->getNumChildShapes();
     if (numShapes)
     {
-        PODVector<float> masses(numShapes);
+        ea::vector<float> masses(numShapes);
         for (unsigned i = 0; i < numShapes; ++i)
         {
             // The actual mass does not matter, divide evenly between child shapes
@@ -779,7 +779,7 @@ void RigidBody::UpdateMass()
     }
 
     btCollisionShape* oldCollisionShape = body_->getCollisionShape();
-    body_->setCollisionShape(useCompound ? shiftedCompoundShape_.Get() : shiftedCompoundShape_->getChildShape(0));
+    body_->setCollisionShape(useCompound ? shiftedCompoundShape_.get() : shiftedCompoundShape_->getChildShape(0));
 
     // If we have one shape and this is a triangle mesh, we use a custom material callback in order to adjust internal edges
     if (!useCompound && body_->getCollisionShape()->getShapeType() == SCALED_TRIANGLE_MESH_SHAPE_PROXYTYPE &&
@@ -803,7 +803,7 @@ void RigidBody::UpdateMass()
     // Reapply constraint positions for new center of mass shift
     if (node_)
     {
-        for (PODVector<Constraint*>::Iterator i = constraints_.Begin(); i != constraints_.End(); ++i)
+        for (auto i = constraints_.begin(); i != constraints_.end(); ++i)
             (*i)->ApplyFrames();
     }
 
@@ -811,8 +811,8 @@ void RigidBody::UpdateMass()
     if (inWorld_ && body_->getCollisionShape() != oldCollisionShape && physicsWorld_)
     {
         btDiscreteDynamicsWorld* world = physicsWorld_->GetWorld();
-        world->removeRigidBody(body_.Get());
-        world->addRigidBody(body_.Get(), (short)collisionLayer_, (short)collisionMask_);
+        world->removeRigidBody(body_.get());
+        world->addRigidBody(body_.get(), (short)collisionLayer_, (short)collisionMask_);
     }
 }
 
@@ -842,14 +842,14 @@ void RigidBody::UpdateGravity()
     }
 }
 
-void RigidBody::SetNetAngularVelocityAttr(const PODVector<unsigned char>& value)
+void RigidBody::SetNetAngularVelocityAttr(const ea::vector<unsigned char>& value)
 {
     float maxVelocity = physicsWorld_ ? physicsWorld_->GetMaxNetworkAngularVelocity() : DEFAULT_MAX_NETWORK_ANGULAR_VELOCITY;
     MemoryBuffer buf(value);
     SetAngularVelocity(buf.ReadPackedVector3(maxVelocity));
 }
 
-const PODVector<unsigned char>& RigidBody::GetNetAngularVelocityAttr() const
+const ea::vector<unsigned char>& RigidBody::GetNetAngularVelocityAttr() const
 {
     float maxVelocity = physicsWorld_ ? physicsWorld_->GetMaxNetworkAngularVelocity() : DEFAULT_MAX_NETWORK_ANGULAR_VELOCITY;
     attrBuffer_.Clear();
@@ -859,12 +859,12 @@ const PODVector<unsigned char>& RigidBody::GetNetAngularVelocityAttr() const
 
 void RigidBody::AddConstraint(Constraint* constraint)
 {
-    constraints_.Push(constraint);
+    constraints_.push_back(constraint);
 }
 
 void RigidBody::RemoveConstraint(Constraint* constraint)
 {
-    constraints_.Remove(constraint);
+    constraints_.erase_first(constraint);
     // A constraint being removed should possibly cause the object to eg. start falling, so activate
     Activate();
 }
@@ -875,13 +875,13 @@ void RigidBody::ReleaseBody()
     {
         // Release all constraints which refer to this body
         // Make a copy for iteration
-        PODVector<Constraint*> constraints = constraints_;
-        for (PODVector<Constraint*>::Iterator i = constraints.Begin(); i != constraints.End(); ++i)
+        ea::vector<Constraint*> constraints = constraints_;
+        for (auto i = constraints.begin(); i != constraints.end(); ++i)
             (*i)->ReleaseConstraint();
 
         RemoveBodyFromWorld();
 
-        body_.Reset();
+        body_.reset();
     }
 }
 
@@ -962,7 +962,7 @@ void RigidBody::AddBodyToWorld()
     {
         // Correct inertia will be calculated below
         btVector3 localInertia(0.0f, 0.0f, 0.0f);
-        body_ = new btRigidBody(mass_, this, shiftedCompoundShape_.Get(), localInertia);
+        body_ = ea::make_unique<btRigidBody>(mass_, this, shiftedCompoundShape_.get(), localInertia);
         body_->setUserPointer(this);
 
         // Check for existence of the SmoothedTransform component, which should be created by now in network client mode.
@@ -976,16 +976,16 @@ void RigidBody::AddBodyToWorld()
 
         // Check if CollisionShapes already exist in the node and add them to the compound shape.
         // Do not update mass yet, but do it once all shapes have been added
-        PODVector<CollisionShape*> shapes;
+        ea::vector<CollisionShape*> shapes;
         node_->GetComponents<CollisionShape>(shapes);
-        for (PODVector<CollisionShape*>::Iterator i = shapes.Begin(); i != shapes.End(); ++i)
+        for (auto i = shapes.begin(); i != shapes.end(); ++i)
             (*i)->NotifyRigidBody(false);
 
         // Check if this node contains Constraint components that were waiting for the rigid body to be created, and signal them
         // to create themselves now
-        PODVector<Constraint*> constraints;
+        ea::vector<Constraint*> constraints;
         node_->GetComponents<Constraint>(constraints);
-        for (PODVector<Constraint*>::Iterator i = constraints.Begin(); i != constraints.End(); ++i)
+        for (auto i = constraints.begin(); i != constraints.end(); ++i)
             (*i)->CreateConstraint();
     }
 
@@ -1008,7 +1008,7 @@ void RigidBody::AddBodyToWorld()
         return;
 
     btDiscreteDynamicsWorld* world = physicsWorld_->GetWorld();
-    world->addRigidBody(body_.Get(), (short)collisionLayer_, (short)collisionMask_);
+    world->addRigidBody(body_.get(), (short)collisionLayer_, (short)collisionMask_);
     inWorld_ = true;
     readdBody_ = false;
     hasSimulated_ = false;
@@ -1027,7 +1027,7 @@ void RigidBody::RemoveBodyFromWorld()
     if (physicsWorld_ && body_ && inWorld_)
     {
         btDiscreteDynamicsWorld* world = physicsWorld_->GetWorld();
-        world->removeRigidBody(body_.Get());
+        world->removeRigidBody(body_.get());
         inWorld_ = false;
     }
 }

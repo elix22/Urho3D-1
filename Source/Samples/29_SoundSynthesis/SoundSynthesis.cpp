@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,8 @@
 // THE SOFTWARE.
 //
 
+#include <EASTL/unique_ptr.h>
+
 #include <Urho3D/Audio/BufferedSoundStream.h>
 #include <Urho3D/Audio/SoundSource.h>
 #include <Urho3D/Core/CoreEvents.h>
@@ -36,7 +38,6 @@
 #include <Urho3D/DebugNew.h>
 
 // Expands to this example's entry-point
-URHO3D_DEFINE_APPLICATION_MAIN(SoundSynthesis)
 
 SoundSynthesis::SoundSynthesis(Context* context) :
     Sample(context),
@@ -50,8 +51,6 @@ SoundSynthesis::SoundSynthesis(Context* context) :
 void SoundSynthesis::Setup()
 {
     // Modify engine startup parameters
-    Sample::Setup();
-    engineParameters_[EP_SOUND] = true;
 }
 
 void SoundSynthesis::Start()
@@ -101,7 +100,7 @@ void SoundSynthesis::UpdateSound()
 
     // Allocate a new buffer and fill it with a simple two-oscillator algorithm. The sound is over-amplified
     // (distorted), clamped to the 16-bit range, and finally lowpass-filtered according to the coefficient
-    SharedArrayPtr<signed short> newData(new signed short[numSamples]);
+    ea::shared_array<signed short> newData(new signed short[numSamples]);
     for (unsigned i = 0; i < numSamples; ++i)
     {
         osc1_ = fmodf(osc1_ + 1.0f, 360.0f);
@@ -155,7 +154,7 @@ void SoundSynthesis::HandleUpdate(StringHash eventType, VariantMap& eventData)
     filter_ = Clamp(filter_, 0.01f, 1.0f);
 
     instructionText_->SetText("Use cursor up and down to control sound filtering\n"
-        "Coefficient: " + String(filter_));
+        "Coefficient: " + ea::to_string(filter_));
 
     UpdateSound();
 }

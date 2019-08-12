@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,6 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
 #include "../Graphics/GraphicsDefs.h"
 #include "../Resource/Resource.h"
 
@@ -50,32 +49,32 @@ public:
     bool EndLoad() override;
 
     /// Return a variation with defines. Separate multiple defines with spaces.
-    ShaderVariation* GetVariation(ShaderType type, const String& defines);
+    ShaderVariation* GetVariation(ShaderType type, const ea::string& defines);
     /// Return a variation with defines. Separate multiple defines with spaces.
     ShaderVariation* GetVariation(ShaderType type, const char* defines);
 
     /// Return either vertex or pixel shader source code.
-    const String& GetSourceCode(ShaderType type) const { return type == VS ? vsSourceCode_ : psSourceCode_; }
+    const ea::string& GetSourceCode(ShaderType type) const { return type == VS ? vsSourceCode_ : psSourceCode_; }
 
     /// Return the latest timestamp of the shader code and its includes.
     unsigned GetTimeStamp() const { return timeStamp_; }
 
 private:
     /// Process source code and include files. Return true if successful.
-    bool ProcessSource(String& code, Deserializer& source);
+    bool ProcessSource(ea::string& code, Deserializer& source);
     /// Sort the defines and strip extra spaces to prevent creation of unnecessary duplicate shader variations.
-    String NormalizeDefines(const String& defines);
+    ea::string NormalizeDefines(const ea::string& defines);
     /// Recalculate the memory used by the shader.
     void RefreshMemoryUse();
 
     /// Source code adapted for vertex shader.
-    String vsSourceCode_;
+    ea::string vsSourceCode_;
     /// Source code adapted for pixel shader.
-    String psSourceCode_;
+    ea::string psSourceCode_;
     /// Vertex shader variations.
-    HashMap<StringHash, SharedPtr<ShaderVariation> > vsVariations_;
+    ea::unordered_map<StringHash, SharedPtr<ShaderVariation> > vsVariations_;
     /// Pixel shader variations.
-    HashMap<StringHash, SharedPtr<ShaderVariation> > psVariations_;
+    ea::unordered_map<StringHash, SharedPtr<ShaderVariation> > psVariations_;
     /// Source code timestamp.
     unsigned timeStamp_;
     /// Number of unique variations so far.

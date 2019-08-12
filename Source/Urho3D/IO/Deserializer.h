@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -29,6 +29,8 @@
 namespace Urho3D
 {
 
+class Context;
+
 /// Abstract stream for reading.
 class URHO3D_API Deserializer
 {
@@ -45,7 +47,7 @@ public:
     /// Set position from the beginning of the stream. Return actual new position.
     virtual unsigned Seek(unsigned position) = 0;
     /// Return name of the stream.
-    virtual const String& GetName() const;
+    virtual const ea::string& GetName() const;
     /// Return a checksum if applicable.
     virtual unsigned GetChecksum();
     /// Return whether the end of stream has been reached.
@@ -114,21 +116,21 @@ public:
     /// Read a bounding box.
     BoundingBox ReadBoundingBox();
     /// Read a null-terminated string.
-    String ReadString();
+    ea::string ReadString();
     /// Read a four-letter file ID.
-    String ReadFileID();
+    ea::string ReadFileID();
     /// Read a 32-bit StringHash.
     StringHash ReadStringHash();
     /// Read a buffer with size encoded as VLE.
-    PODVector<unsigned char> ReadBuffer();
+    ea::vector<unsigned char> ReadBuffer();
     /// Read a resource reference.
     ResourceRef ReadResourceRef();
     /// Read a resource reference list.
     ResourceRefList ReadResourceRefList();
     /// Read a variant.
     Variant ReadVariant();
-    /// Read a variant whose type is already known.
-    Variant ReadVariant(VariantType type);
+    /// Read a variant whose type is already known. Context is required for SharedPtr<Serializable>.
+    Variant ReadVariant(VariantType type, Context* context = nullptr);
     /// Read a variant vector.
     VariantVector ReadVariantVector();
     /// Read a string vector.
@@ -140,7 +142,7 @@ public:
     /// Read a 24-bit network object ID.
     unsigned ReadNetID();
     /// Read a text line.
-    String ReadLine();
+    ea::string ReadLine();
 
 protected:
     /// Stream position.

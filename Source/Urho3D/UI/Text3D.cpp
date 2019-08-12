@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -51,7 +51,7 @@ static const float DEFAULT_EFFECT_DEPTH_BIAS = 0.1f;
 Text3D::Text3D(Context* context) :
     Drawable(context, DRAWABLE_GEOMETRY),
     text_(context),
-    vertexBuffer_(new VertexBuffer(context_)),
+    vertexBuffer_(context_->CreateObject<VertexBuffer>()),
     customWorldTransform_(Matrix3x4::IDENTITY),
     faceCameraMode_(FC_NONE),
     minAngle_(0.0f),
@@ -75,7 +75,7 @@ void Text3D::RegisterObject(Context* context)
     URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Material", GetMaterialAttr, SetMaterialAttr, ResourceRef, ResourceRef(Material::GetTypeStatic()),
         AM_DEFAULT);
     URHO3D_ATTRIBUTE("Font Size", float, text_.fontSize_, DEFAULT_FONT_SIZE, AM_DEFAULT);
-    URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Text", GetTextAttr, SetTextAttr, String, String::EMPTY, AM_DEFAULT);
+    URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Text", GetTextAttr, SetTextAttr, ea::string, EMPTY_STRING, AM_DEFAULT);
     URHO3D_ENUM_ATTRIBUTE("Text Alignment", text_.textAlignment_, horizontalAlignments, HA_LEFT, AM_DEFAULT);
     URHO3D_ATTRIBUTE("Row Spacing", float, text_.rowSpacing_, 1.0f, AM_DEFAULT);
     URHO3D_ATTRIBUTE("Word Wrap", bool, text_.wordWrap_, false, AM_DEFAULT);
@@ -119,13 +119,13 @@ void Text3D::UpdateBatches(const FrameInfo& frame)
     if (faceCameraMode_ != FC_NONE || fixedScreenSize_)
         CalculateFixedScreenSize(frame);
 
-    for (unsigned i = 0; i < batches_.Size(); ++i)
+    for (unsigned i = 0; i < batches_.size(); ++i)
     {
         batches_[i].distance_ = distance_;
         batches_[i].worldTransform_ = faceCameraMode_ != FC_NONE ? &customWorldTransform_ : &node_->GetWorldTransform();
     }
 
-    for (unsigned i = 0; i < uiBatches_.Size(); ++i)
+    for (unsigned i = 0; i < uiBatches_.size(); ++i)
     {
         if (uiBatches_[i].texture_ && uiBatches_[i].texture_->IsDataLost())
         {
@@ -151,7 +151,7 @@ void Text3D::UpdateGeometry(const FrameInfo& frame)
 
     if (geometryDirty_)
     {
-        for (unsigned i = 0; i < batches_.Size() && i < uiBatches_.Size(); ++i)
+        for (unsigned i = 0; i < batches_.size() && i < uiBatches_.size(); ++i)
         {
             Geometry* geometry = geometries_[i];
             geometry->SetDrawRange(TRIANGLE_LIST, 0, 0, uiBatches_[i].vertexStart_ / UI_VERTEX_SIZE,
@@ -159,9 +159,9 @@ void Text3D::UpdateGeometry(const FrameInfo& frame)
         }
     }
 
-    if ((geometryDirty_ || vertexBuffer_->IsDataLost()) && uiVertexData_.Size())
+    if ((geometryDirty_ || vertexBuffer_->IsDataLost()) && uiVertexData_.size())
     {
-        unsigned vertexCount = uiVertexData_.Size() / UI_VERTEX_SIZE;
+        unsigned vertexCount = uiVertexData_.size() / UI_VERTEX_SIZE;
         if (vertexBuffer_->GetVertexCount() != vertexCount)
             vertexBuffer_->SetSize(vertexCount, MASK_POSITION | MASK_COLOR | MASK_TEXCOORD1);
         vertexBuffer_->SetData(&uiVertexData_[0]);
@@ -185,7 +185,7 @@ void Text3D::SetMaterial(Material* material)
     UpdateTextMaterials(true);
 }
 
-bool Text3D::SetFont(const String& fontName, float size)
+bool Text3D::SetFont(const ea::string& fontName, float size)
 {
     bool success = text_.SetFont(fontName, size);
 
@@ -220,7 +220,7 @@ bool Text3D::SetFontSize(float size)
     return success;
 }
 
-void Text3D::SetText(const String& text)
+void Text3D::SetText(const ea::string& text)
 {
     text_.SetText(text);
 
@@ -395,7 +395,7 @@ float Text3D::GetFontSize() const
     return text_.GetFontSize();
 }
 
-const String& Text3D::GetText() const
+const ea::string& Text3D::GetText() const
 {
     return text_.GetText();
 }
@@ -548,12 +548,12 @@ void Text3D::SetFontAttr(const ResourceRef& value)
     text_.font_ = cache->GetResource<Font>(value.name_);
 }
 
-void Text3D::SetTextAttr(const String& value)
+void Text3D::SetTextAttr(const ea::string& value)
 {
     text_.SetTextAttr(value);
 }
 
-String Text3D::GetTextAttr() const
+ea::string Text3D::GetTextAttr() const
 {
     return text_.GetTextAttr();
 }
@@ -570,8 +570,8 @@ ResourceRef Text3D::GetFontAttr() const
 
 void Text3D::UpdateTextBatches()
 {
-    uiBatches_.Clear();
-    uiVertexData_.Clear();
+    uiBatches_.clear();
+    uiVertexData_.clear();
 
     text_.GetBatches(uiBatches_, uiVertexData_, IntRect::ZERO);
 
@@ -605,11 +605,11 @@ void Text3D::UpdateTextBatches()
         break;
     }
 
-    if (uiVertexData_.Size())
+    if (uiVertexData_.size())
     {
         boundingBox_.Clear();
 
-        for (unsigned i = 0; i < uiVertexData_.Size(); i += UI_VERTEX_SIZE)
+        for (unsigned i = 0; i < uiVertexData_.size(); i += UI_VERTEX_SIZE)
         {
             Vector3& position = *(reinterpret_cast<Vector3*>(&uiVertexData_[i]));
             position += offset;
@@ -630,14 +630,14 @@ void Text3D::UpdateTextMaterials(bool forceUpdate)
     Font* font = GetFont();
     bool isSDFFont = font ? font->IsSDFFont() : false;
 
-    batches_.Resize(uiBatches_.Size());
-    geometries_.Resize(uiBatches_.Size());
+    batches_.resize(uiBatches_.size());
+    geometries_.resize(uiBatches_.size());
 
-    for (unsigned i = 0; i < batches_.Size(); ++i)
+    for (unsigned i = 0; i < batches_.size(); ++i)
     {
         if (!geometries_[i])
         {
-            auto* geometry = new Geometry(context_);
+            auto geometry = context_->CreateObject<Geometry>();
             geometry->SetVertexBuffer(0, vertexBuffer_);
             batches_[i].geometry_ = geometries_[i] = geometry;
         }
@@ -647,8 +647,8 @@ void Text3D::UpdateTextMaterials(bool forceUpdate)
             // If material not defined, create a reasonable default from scratch
             if (!material_)
             {
-                auto* material = new Material(context_);
-                auto* tech = new Technique(context_);
+                auto material = context_->CreateObject<Material>();
+                auto tech = context_->CreateObject<Technique>();
                 Pass* pass = tech->CreatePass("alpha");
                 pass->SetVertexShader("Text");
                 pass->SetPixelShader("Text");

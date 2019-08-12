@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -80,8 +80,11 @@ Object::Object(Context* context) :
 
 Object::~Object()
 {
-    UnsubscribeFromAllEvents();
-    context_->RemoveEventSender(this);
+    if (!context_.Expired())
+    {
+        UnsubscribeFromAllEvents();
+        context_->RemoveEventSender(this);
+    }
 }
 
 void Object::OnEvent(Object* sender, StringHash eventType, VariantMap& eventData)
@@ -94,20 +97,18 @@ void Object::OnEvent(Object* sender, StringHash eventType, VariantMap& eventData
     EventHandler* specific = nullptr;
     EventHandler* nonSpecific = nullptr;
 
-    EventHandler* handler = eventHandlers_.First();
-    while (handler)
+    for (auto& handler : eventHandlers_)
     {
-        if (handler->GetEventType() == eventType)
+        if (handler.GetEventType() == eventType)
         {
-            if (!handler->GetSender())
-                nonSpecific = handler;
-            else if (handler->GetSender() == sender)
+            if (!handler.GetSender())
+                nonSpecific = &handler;
+            else if (handler.GetSender() == sender)
             {
-                specific = handler;
+                specific = &handler;
                 break;
             }
         }
-        handler = eventHandlers_.Next(handler);
     }
 
     // Specific event handlers have priority, so if found, invoke first
@@ -144,16 +145,15 @@ void Object::SubscribeToEvent(StringHash eventType, EventHandler* handler)
 
     handler->SetSenderAndEventType(nullptr, eventType);
     // Remove old event handler first
-    EventHandler* previous;
-    EventHandler* oldHandler = FindSpecificEventHandler(nullptr, eventType, &previous);
-    if (oldHandler)
+    auto oldHandler = FindSpecificEventHandler(nullptr, eventType);
+    if (oldHandler != eventHandlers_.end())
     {
-        eventHandlers_.Erase(oldHandler, previous);
-        eventHandlers_.InsertFront(handler);
+        EraseEventHandler(oldHandler);
+        eventHandlers_.insert(eventHandlers_.begin(), *handler);
     }
     else
     {
-        eventHandlers_.InsertFront(handler);
+        eventHandlers_.insert(eventHandlers_.begin(), *handler);
         context_->AddEventReceiver(this, eventType);
     }
 }
@@ -169,16 +169,15 @@ void Object::SubscribeToEvent(Object* sender, StringHash eventType, EventHandler
 
     handler->SetSenderAndEventType(sender, eventType);
     // Remove old event handler first
-    EventHandler* previous;
-    EventHandler* oldHandler = FindSpecificEventHandler(sender, eventType, &previous);
-    if (oldHandler)
+    auto oldHandler = FindSpecificEventHandler(sender, eventType);
+    if (oldHandler != eventHandlers_.end())
     {
-        eventHandlers_.Erase(oldHandler, previous);
-        eventHandlers_.InsertFront(handler);
+        EraseEventHandler(oldHandler);
+        eventHandlers_.insert(eventHandlers_.begin(), *handler);
     }
     else
     {
-        eventHandlers_.InsertFront(handler);
+        eventHandlers_.insert(eventHandlers_.begin(), *handler);
         context_->AddEventReceiver(this, sender, eventType);
     }
 }
@@ -197,15 +196,14 @@ void Object::UnsubscribeFromEvent(StringHash eventType)
 {
     for (;;)
     {
-        EventHandler* previous;
-        EventHandler* handler = FindEventHandler(eventType, &previous);
-        if (handler)
+        auto handler = FindEventHandler(eventType);
+        if (handler != eventHandlers_.end())
         {
             if (handler->GetSender())
                 context_->RemoveEventReceiver(this, handler->GetSender(), eventType);
             else
                 context_->RemoveEventReceiver(this, eventType);
-            eventHandlers_.Erase(handler, previous);
+            EraseEventHandler(handler);
         }
         else
             break;
@@ -217,12 +215,11 @@ void Object::UnsubscribeFromEvent(Object* sender, StringHash eventType)
     if (!sender)
         return;
 
-    EventHandler* previous;
-    EventHandler* handler = FindSpecificEventHandler(sender, eventType, &previous);
-    if (handler)
+    auto handler = FindSpecificEventHandler(sender, eventType);
+    if (handler != eventHandlers_.end())
     {
         context_->RemoveEventReceiver(this, handler->GetSender(), eventType);
-        eventHandlers_.Erase(handler, previous);
+        EraseEventHandler(handler);
     }
 }
 
@@ -233,12 +230,11 @@ void Object::UnsubscribeFromEvents(Object* sender)
 
     for (;;)
     {
-        EventHandler* previous;
-        EventHandler* handler = FindSpecificEventHandler(sender, &previous);
-        if (handler)
+        auto handler = FindSpecificEventHandler(sender);
+        if (handler != eventHandlers_.end())
         {
             context_->RemoveEventReceiver(this, handler->GetSender(), handler->GetEventType());
-            eventHandlers_.Erase(handler, previous);
+            EraseEventHandler(handler);
         }
         else
             break;
@@ -249,42 +245,35 @@ void Object::UnsubscribeFromAllEvents()
 {
     for (;;)
     {
-        EventHandler* handler = eventHandlers_.First();
-        if (handler)
+        auto handler = eventHandlers_.begin();
+        if (handler != eventHandlers_.end())
         {
             if (handler->GetSender())
                 context_->RemoveEventReceiver(this, handler->GetSender(), handler->GetEventType());
             else
                 context_->RemoveEventReceiver(this, handler->GetEventType());
-            eventHandlers_.Erase(handler);
+            EraseEventHandler(handler);
         }
         else
             break;
     }
 }
 
-void Object::UnsubscribeFromAllEventsExcept(const PODVector<StringHash>& exceptions, bool onlyUserData)
+void Object::UnsubscribeFromAllEventsExcept(const ea::vector<StringHash>& exceptions, bool onlyUserData)
 {
-    EventHandler* handler = eventHandlers_.First();
-    EventHandler* previous = nullptr;
-
-    while (handler)
+    for (auto handler = eventHandlers_.begin(); handler != eventHandlers_.end(); )
     {
-        EventHandler* next = eventHandlers_.Next(handler);
-
-        if ((!onlyUserData || handler->GetUserData()) && !exceptions.Contains(handler->GetEventType()))
+        if ((!onlyUserData || handler->GetUserData()) && !exceptions.contains(handler->GetEventType()))
         {
             if (handler->GetSender())
                 context_->RemoveEventReceiver(this, handler->GetSender(), handler->GetEventType());
             else
                 context_->RemoveEventReceiver(this, handler->GetEventType());
 
-            eventHandlers_.Erase(handler, previous);
+            handler = EraseEventHandler(handler);
         }
         else
-            previous = handler;
-
-        handler = next;
+            ++handler;
     }
 }
 
@@ -309,13 +298,12 @@ void Object::SendEvent(StringHash eventType, VariantMap& eventData)
 #if URHO3D_PROFILING
     URHO3D_PROFILE_C("SendEvent", PROFILER_COLOR_EVENTS);
     const auto& eventName = GetEventNameRegister().GetString(eventType);
-    URHO3D_PROFILE_ZONENAME(eventName.CString(), eventName.Length());
+    URHO3D_PROFILE_ZONENAME(eventName.c_str(), eventName.length());
 #endif
 
     // Make a weak pointer to self to check for destruction during event handling
     WeakPtr<Object> self(this);
     Context* context = context_;
-    HashSet<Object*> processed;
 
     context->BeginSendEvent(this, eventType);
 
@@ -326,7 +314,7 @@ void Object::SendEvent(StringHash eventType, VariantMap& eventData)
     {
         group->BeginSendEvent();
 
-        const unsigned numReceivers = group->receivers_.Size();
+        const unsigned numReceivers = group->receivers_.size();
         for (unsigned i = 0; i < numReceivers; ++i)
         {
             Object* receiver = group->receivers_[i];
@@ -343,60 +331,36 @@ void Object::SendEvent(StringHash eventType, VariantMap& eventData)
                 context->EndSendEvent();
                 return;
             }
-
-            processed.Insert(receiver);
         }
 
         group->EndSendEvent();
     }
 
     // Then the non-specific receivers
-    group = context->GetEventReceivers(eventType);
-    if (group)
+    SharedPtr<EventReceiverGroup> groupNonSpec(context->GetEventReceivers(eventType));
+    if (groupNonSpec)
     {
-        group->BeginSendEvent();
+        groupNonSpec->BeginSendEvent();
 
-        if (processed.Empty())
+        const unsigned numReceivers = groupNonSpec->receivers_.size();
+        for (unsigned i = 0; i < numReceivers; ++i)
         {
-            const unsigned numReceivers = group->receivers_.Size();
-            for (unsigned i = 0; i < numReceivers; ++i)
-            {
-                Object* receiver = group->receivers_[i];
-                if (!receiver)
-                    continue;
-
-                receiver->OnEvent(this, eventType, eventData);
-
-                if (self.Expired())
-                {
-                    group->EndSendEvent();
-                    context->EndSendEvent();
-                    return;
-                }
-            }
-        }
-        else
-        {
+            Object* receiver = groupNonSpec->receivers_[i];
             // If there were specific receivers, check that the event is not sent doubly to them
-            const unsigned numReceivers = group->receivers_.Size();
-            for (unsigned i = 0; i < numReceivers; ++i)
+            if (!receiver || (group && group->receivers_.contains(receiver)))
+                continue;
+
+            receiver->OnEvent(this, eventType, eventData);
+
+            if (self.Expired())
             {
-                Object* receiver = group->receivers_[i];
-                if (!receiver || processed.Contains(receiver))
-                    continue;
-
-                receiver->OnEvent(this, eventType, eventData);
-
-                if (self.Expired())
-                {
-                    group->EndSendEvent();
-                    context->EndSendEvent();
-                    return;
-                }
+                groupNonSpec->EndSendEvent();
+                context->EndSendEvent();
+                return;
             }
         }
 
-        group->EndSendEvent();
+        groupNonSpec->EndSendEvent();
     }
 
     context->EndSendEvent();
@@ -439,7 +403,7 @@ EventHandler* Object::GetEventHandler() const
 
 bool Object::HasSubscribedToEvent(StringHash eventType) const
 {
-    return FindEventHandler(eventType) != nullptr;
+    return FindEventHandler(eventType) != eventHandlers_.end();
 }
 
 bool Object::HasSubscribedToEvent(Object* sender, StringHash eventType) const
@@ -447,93 +411,59 @@ bool Object::HasSubscribedToEvent(Object* sender, StringHash eventType) const
     if (!sender)
         return false;
     else
-        return FindSpecificEventHandler(sender, eventType) != nullptr;
+        return FindSpecificEventHandler(sender, eventType) != eventHandlers_.end();
 }
 
-const String& Object::GetCategory() const
+const ea::string& Object::GetCategory() const
 {
-    const HashMap<String, PODVector<StringHash> >& objectCategories = context_->GetObjectCategories();
-    for (HashMap<String, PODVector<StringHash> >::ConstIterator i = objectCategories.Begin(); i != objectCategories.End(); ++i)
+    const ea::unordered_map<ea::string, ea::vector<StringHash> >& objectCategories = context_->GetObjectCategories();
+    for (auto i = objectCategories.begin(); i != objectCategories.end(); ++i)
     {
-        if (i->second_.Contains(GetType()))
-            return i->first_;
+        if (i->second.contains(GetType()))
+            return i->first;
     }
 
-    return String::EMPTY;
+    return EMPTY_STRING;
 }
 
-EventHandler* Object::FindEventHandler(StringHash eventType, EventHandler** previous) const
+ea::intrusive_list<EventHandler>::iterator Object::FindEventHandler(StringHash eventType)
 {
-    EventHandler* handler = eventHandlers_.First();
-    if (previous)
-        *previous = nullptr;
-
-    while (handler)
-    {
-        if (handler->GetEventType() == eventType)
-            return handler;
-        if (previous)
-            *previous = handler;
-        handler = eventHandlers_.Next(handler);
-    }
-
-    return nullptr;
+    return ea::find_if(eventHandlers_.begin(), eventHandlers_.end(), [eventType](const EventHandler& e) {
+        return e.GetEventType() == eventType;
+    });
 }
 
-EventHandler* Object::FindSpecificEventHandler(Object* sender, EventHandler** previous) const
+ea::intrusive_list<EventHandler>::iterator Object::FindSpecificEventHandler(Object* sender)
 {
-    EventHandler* handler = eventHandlers_.First();
-    if (previous)
-        *previous = nullptr;
-
-    while (handler)
-    {
-        if (handler->GetSender() == sender)
-            return handler;
-        if (previous)
-            *previous = handler;
-        handler = eventHandlers_.Next(handler);
-    }
-
-    return nullptr;
+    return ea::find_if(eventHandlers_.begin(), eventHandlers_.end(), [sender](const EventHandler& e) {
+        return e.GetSender() == sender;
+    });
 }
 
-EventHandler* Object::FindSpecificEventHandler(Object* sender, StringHash eventType, EventHandler** previous) const
+ea::intrusive_list<EventHandler>::iterator Object::FindSpecificEventHandler(Object* sender, StringHash eventType)
 {
-    EventHandler* handler = eventHandlers_.First();
-    if (previous)
-        *previous = nullptr;
+    return ea::find_if(eventHandlers_.begin(), eventHandlers_.end(), [sender, eventType](const EventHandler& e) {
+        return e.GetSender() == sender && e.GetEventType() == eventType;
+    });
+}
 
-    while (handler)
-    {
-        if (handler->GetSender() == sender && handler->GetEventType() == eventType)
-            return handler;
-        if (previous)
-            *previous = handler;
-        handler = eventHandlers_.Next(handler);
-    }
-
-    return nullptr;
+ea::intrusive_list<EventHandler>::iterator Object::EraseEventHandler(ea::intrusive_list<EventHandler>::iterator handlerIter)
+{
+    assert(handlerIter != eventHandlers_.end());
+    EventHandler* handler = &*handlerIter;
+    auto nextIter = eventHandlers_.erase(handlerIter);
+    delete handler;
+    return nextIter;
 }
 
 void Object::RemoveEventSender(Object* sender)
 {
-    EventHandler* handler = eventHandlers_.First();
-    EventHandler* previous = nullptr;
-
-    while (handler)
+    for (auto handler = eventHandlers_.begin(); handler != eventHandlers_.end(); )
     {
         if (handler->GetSender() == sender)
-        {
-            EventHandler* next = eventHandlers_.Next(handler);
-            eventHandlers_.Erase(handler, previous);
-            handler = next;
-        }
+            handler = EraseEventHandler(handler);
         else
-        {
-            previous = handler;
-            handler = eventHandlers_.Next(handler);
-        }
+            ++handler;
     }
 }
 
@@ -617,12 +547,6 @@ template <> Renderer* Object::GetSubsystem<Renderer>() const
 {
     return context_->renderer_;
 }
-#if URHO3D_TASKS
-template <> Tasks* Object::GetSubsystem<Tasks>() const
-{
-    return context_->tasks_;
-}
-#endif
 Engine* Object::GetEngine() const
 {
     return context_->engine_;
@@ -690,10 +614,5 @@ Renderer* Object::GetRenderer() const
 {
     return context_->renderer_;
 }
-#if URHO3D_TASKS
-Tasks* Object::GetTasks() const
-{
-    return context_->tasks_;
-}
-#endif
+
 }

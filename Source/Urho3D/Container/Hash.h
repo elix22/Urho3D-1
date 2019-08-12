@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,86 +23,72 @@
 #pragma once
 
 #include <cstddef>
+#include <type_traits>
+
+#include <EASTL/utility.h>
+#include <EASTL/weak_ptr.h>
 
 namespace Urho3D
 {
 
-/// Pointer hash function.
-template <class T> unsigned MakeHash(T* value)
+/// Combine hash into result.
+inline void CombineHash(unsigned& result, unsigned hash)
 {
-    return (unsigned)((size_t)value / sizeof(T));
+    result ^= hash + 0x9e3779b9 + (result << 6) + (result >> 2);
 }
 
-/// Const pointer hash function.
-template <class T> unsigned MakeHash(const T* value)
+/// Make hash template helper.
+template <class T>
+inline unsigned MakeHash(const T& value)
 {
-    return (unsigned)((size_t)value / sizeof(T));
+    return ea::hash<T>{}(value);
 }
 
-/// Generic hash function.
-template <class T> unsigned MakeHash(const T& value)
-{
-    return value.ToHash();
 }
 
-/// Void pointer hash function.
-template <> inline unsigned MakeHash(void* value)
+namespace eastl
 {
-    return (unsigned)(size_t)value;
+
+template <class T, class Enabled> struct hash;
+
+namespace detail
+{
+template<typename T, typename = void> struct is_hashable : std::false_type { };
+template<typename T> struct is_hashable<T, decltype(void(&T::ToHash))> : std::true_type { };
 }
 
-/// Const void pointer hash function.
-template <> inline unsigned MakeHash(const void* value)
+template <typename T>
+struct hash<T, typename enable_if<detail::is_hashable<T>::value>::type>
 {
-    return (unsigned)(size_t)value;
-}
+    size_t operator()(const T& value) const
+    {
+        return value.ToHash();
+    }
+};
 
-/// Long long hash function.
-template <> inline unsigned MakeHash(const long long& value)
+template <class T, class U, class Enabled> struct hash<pair<T, U>, Enabled>
 {
-    return (unsigned)((value >> 32u) | (value & 0xffffffffu));
-}
+    size_t operator()(const pair<T, U>& s) const
+    {
+        return hash<T>()(s.first) ^ hash<U>()(s.second) * 16777619;
+    }
+};
 
-/// Unsigned long long hash function.
-template <> inline unsigned MakeHash(const unsigned long long& value)
+template <class U>
+struct hash<weak_ptr<U>>
 {
-    return (unsigned)((value >> 32u) | (value & 0xffffffffu));
-}
+    size_t operator()(const weak_ptr<U>& value) const
+    {
+        return (size_t)(void*)value.Get();
+    }
+};
 
-/// Int hash function.
-template <> inline unsigned MakeHash(const int& value)
+template <class T, class U> struct hash<pair<T, U>>
 {
-    return (unsigned)value;
-}
-
-/// Unsigned hash function.
-template <> inline unsigned MakeHash(const unsigned& value)
+size_t operator()(const pair<T, U>& s) const
 {
-    return value;
+    return hash<T>()(s.first) ^ hash<U>()(s.second) * 16777619;
 }
-
-/// Short hash function.
-template <> inline unsigned MakeHash(const short& value)
-{
-    return (unsigned)value;
-}
-
-/// Unsigned short hash function.
-template <> inline unsigned MakeHash(const unsigned short& value)
-{
-    return value;
-}
-
-/// Char hash function.
-template <> inline unsigned MakeHash(const char& value)
-{
-    return (unsigned)value;
-}
-
-/// Unsigned char hash function.
-template <> inline unsigned MakeHash(const unsigned char& value)
-{
-    return value;
-}
+};
 
 }

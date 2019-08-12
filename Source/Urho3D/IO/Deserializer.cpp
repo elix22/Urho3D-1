@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,10 @@
 
 #include "../Precompiled.h"
 
+#include "../Core/Context.h"
 #include "../IO/Deserializer.h"
+#include "../IO/Log.h"
+#include "../Scene/Serializable.h"
 
 #include "../DebugNew.h"
 
@@ -50,9 +53,9 @@ unsigned Deserializer::SeekRelative(int delta)
     return Seek(GetPosition() + delta);
 }
 
-const String& Deserializer::GetName() const
+const ea::string& Deserializer::GetName() const
 {
-    return String::EMPTY;
+    return EMPTY_STRING;
 }
 
 unsigned Deserializer::GetChecksum()
@@ -244,9 +247,9 @@ BoundingBox Deserializer::ReadBoundingBox()
     return BoundingBox(Vector3(&data[0]), Vector3(&data[3]));
 }
 
-String Deserializer::ReadString()
+ea::string Deserializer::ReadString()
 {
-    String ret;
+    ea::string ret;
 
     while (!IsEof())
     {
@@ -260,10 +263,10 @@ String Deserializer::ReadString()
     return ret;
 }
 
-String Deserializer::ReadFileID()
+ea::string Deserializer::ReadFileID()
 {
-    String ret;
-    ret.Resize(4);
+    ea::string ret;
+    ret.resize(4);
     Read(&ret[0], 4);
     return ret;
 }
@@ -273,11 +276,11 @@ StringHash Deserializer::ReadStringHash()
     return StringHash(ReadUInt());
 }
 
-PODVector<unsigned char> Deserializer::ReadBuffer()
+ea::vector<unsigned char> Deserializer::ReadBuffer()
 {
-    PODVector<unsigned char> ret(ReadVLE());
-    if (ret.Size())
-        Read(&ret[0], ret.Size());
+    ea::vector<unsigned char> ret(ReadVLE());
+    if (ret.size())
+        Read(&ret[0], ret.size());
     return ret;
 }
 
@@ -293,8 +296,8 @@ ResourceRefList Deserializer::ReadResourceRefList()
 {
     ResourceRefList ret;
     ret.type_ = ReadStringHash();
-    ret.names_.Resize(ReadVLE());
-    for (unsigned i = 0; i < ret.names_.Size(); ++i)
+    ret.names_.resize(ReadVLE());
+    for (unsigned i = 0; i < ret.names_.size(); ++i)
         ret.names_[i] = ReadString();
     return ret;
 }
@@ -305,7 +308,7 @@ Variant Deserializer::ReadVariant()
     return ReadVariant(type);
 }
 
-Variant Deserializer::ReadVariant(VariantType type)
+Variant Deserializer::ReadVariant(VariantType type, Context* context)
 {
     switch (type)
     {
@@ -360,6 +363,9 @@ Variant Deserializer::ReadVariant(VariantType type)
     case VAR_STRINGVECTOR:
         return Variant(ReadStringVector());
 
+    case VAR_RECT:
+        return Variant(ReadRect());
+
     case VAR_VARIANTMAP:
         return Variant(ReadVariantMap());
 
@@ -384,11 +390,35 @@ Variant Deserializer::ReadVariant(VariantType type)
     case VAR_DOUBLE:
         return Variant(ReadDouble());
 
-        // Deserializing custom values is not supported. Return empty
-    case VAR_CUSTOM_HEAP:
-    case VAR_CUSTOM_STACK:
-        ReadUInt();
+    case VAR_CUSTOM:
+    {
+        StringHash typeName(ReadUInt());
+        if (!typeName)
+            return Variant::EMPTY;
+
+        if (!context)
+        {
+            URHO3D_LOGERROR("Context must not be null for SharedPtr<Serializable>");
+            return Variant::EMPTY;
+        }
+
+        SharedPtr<Serializable> object;
+        object.StaticCast(context->CreateObject(typeName));
+
+        if (!object)
+        {
+            URHO3D_LOGERROR("Creation of type '{:08X}' failed because it has no factory registered", typeName.Value());
+            return Variant::EMPTY;
+        }
+
+        // Restore proper refcount.
+        if (object->Load(*this))
+            return Variant(MakeCustomValue(object));
+        else
+            URHO3D_LOGERROR("Deserialization of '{:08X}' failed", typeName.Value());
+
         return Variant::EMPTY;
+    }
 
     default:
         return Variant::EMPTY;
@@ -398,7 +428,7 @@ Variant Deserializer::ReadVariant(VariantType type)
 VariantVector Deserializer::ReadVariantVector()
 {
     VariantVector ret(ReadVLE());
-    for (unsigned i = 0; i < ret.Size(); ++i)
+    for (unsigned i = 0; i < ret.size(); ++i)
         ret[i] = ReadVariant();
     return ret;
 }
@@ -406,7 +436,7 @@ VariantVector Deserializer::ReadVariantVector()
 StringVector Deserializer::ReadStringVector()
 {
     StringVector ret(ReadVLE());
-    for (unsigned i = 0; i < ret.Size(); ++i)
+    for (unsigned i = 0; i < ret.size(); ++i)
         ret[i] = ReadString();
     return ret;
 }
@@ -457,9 +487,9 @@ unsigned Deserializer::ReadNetID()
     return ret;
 }
 
-String Deserializer::ReadLine()
+ea::string Deserializer::ReadLine()
 {
-    String ret;
+    ea::string ret;
 
     while (!IsEof())
     {

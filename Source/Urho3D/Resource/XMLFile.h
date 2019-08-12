@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -55,23 +55,23 @@ public:
     /// Save resource with default indentation (one tab). Return true if successful.
     bool Save(Serializer& dest) const override;
     /// Save resource with user-defined indentation. Return true if successful.
-    bool Save(Serializer& dest, const String& indentation) const;
+    bool Save(Serializer& dest, const ea::string& indentation) const;
 
     /// Deserialize from a string. Return true if successful.
-    bool FromString(const String& source);
+    bool FromString(const ea::string& source);
     /// Clear the document and create a root element.
-    XMLElement CreateRoot(const String& name);
+    XMLElement CreateRoot(const ea::string& name);
     /// Get the root element if it has matching name, otherwise create it and clear the document.
-    XMLElement GetOrCreateRoot(const String& name);
+    XMLElement GetOrCreateRoot(const ea::string& name);
 
     /// Return the root element, with optionally specified name. Return null element if not found.
-    XMLElement GetRoot(const String& name = String::EMPTY);
+    XMLElement GetRoot(const ea::string& name = EMPTY_STRING);
 
     /// Return the pugixml document.
-    pugi::xml_document* GetDocument() const { return document_.Get(); }
+    pugi::xml_document* GetDocument() const { return document_.get(); }
 
     /// Serialize the XML content to a string.
-    String ToString(const String& indentation = "\t") const;
+    ea::string ToString(const ea::string& indentation = "\t") const;
 
     /// Patch the XMLFile with another XMLFile. Based on RFC 5261.
     void Patch(XMLFile* patchFile);
@@ -94,7 +94,7 @@ private:
     bool CombineText(const pugi::xml_node& patch, const pugi::xml_node& original, bool prepend) const;
 
     /// Pugixml document.
-    UniquePtr<pugi::xml_document> document_;
+    ea::unique_ptr<pugi::xml_document> document_;
 };
 
 }

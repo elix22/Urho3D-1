@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -43,11 +43,55 @@ class JSONFile;
 
 static const unsigned char DEFAULT_RENDER_ORDER = 128;
 
+static const char* textureUnitNames[] =
+{
+    "diffuse",
+    "normal",
+    "specular",
+    "emissive",
+    "environment",
+#ifdef DESKTOP_GRAPHICS
+    "volume",
+    "custom1",
+    "custom2",
+    "lightramp",
+    "lightshape",
+    "shadowmap",
+    "faceselect",
+    "indirection",
+    "depth",
+    "light",
+    "zone",
+    nullptr
+#else
+    "lightramp",
+    "lightshape",
+    "shadowmap",
+    nullptr
+#endif
+};
+
+static const char* cullModeNames[] =
+{
+    "none",
+    "ccw",
+    "cw",
+    nullptr
+};
+
+static const char* fillModeNames[] =
+{
+    "solid",
+    "wireframe",
+    "point",
+    nullptr
+};
+
 /// %Material's shader parameter definition.
 struct MaterialShaderParameter
 {
     /// Name.
-    String name_;
+    ea::string name_;
     /// Value.
     Variant value_;
 };
@@ -90,14 +134,14 @@ class URHO3D_API ShaderParameterAnimationInfo : public ValueAnimationInfo
 public:
     /// Construct.
     ShaderParameterAnimationInfo
-        (Material* material, const String& name, ValueAnimation* attributeAnimation, WrapMode wrapMode, float speed);
+        (Material* material, const ea::string& name, ValueAnimation* attributeAnimation, WrapMode wrapMode, float speed);
     /// Copy construct.
     ShaderParameterAnimationInfo(const ShaderParameterAnimationInfo& other);
     /// Destruct.
     ~ShaderParameterAnimationInfo() override;
 
     /// Return shader parameter name.
-    const String& GetName() const { return name_; }
+    const ea::string& GetName() const { return name_; }
 
 protected:
     /// Apply new animation value to the target object. Called by Update().
@@ -105,14 +149,8 @@ protected:
 
 private:
     /// Shader parameter name.
-    String name_;
+    ea::string name_;
 };
-
-/// TextureUnit hash function.
-template <> inline unsigned MakeHash(const TextureUnit& value)
-{
-    return (unsigned)value;
-}
 
 /// Describes how to render 3D geometries.
 class URHO3D_API Material : public Resource
@@ -149,18 +187,18 @@ public:
     /// Set technique.
     void SetTechnique(unsigned index, Technique* tech, MaterialQuality qualityLevel = QUALITY_LOW, float lodDistance = 0.0f);
     /// Set additional vertex shader defines. Separate multiple defines with spaces. Setting defines at the material level causes technique(s) to be cloned as necessary.
-    void SetVertexShaderDefines(const String& defines);
+    void SetVertexShaderDefines(const ea::string& defines);
     /// Set additional pixel shader defines. Separate multiple defines with spaces. Setting defines at the material level causes technique(s) to be cloned as necessary.
-    void SetPixelShaderDefines(const String& defines);
+    void SetPixelShaderDefines(const ea::string& defines);
     /// Set shader parameter.
-    void SetShaderParameter(const String& name, const Variant& value);
+    void SetShaderParameter(const ea::string& name, const Variant& value);
     /// Set shader parameter animation.
     void
-        SetShaderParameterAnimation(const String& name, ValueAnimation* animation, WrapMode wrapMode = WM_LOOP, float speed = 1.0f);
+        SetShaderParameterAnimation(const ea::string& name, ValueAnimation* animation, WrapMode wrapMode = WM_LOOP, float speed = 1.0f);
     /// Set shader parameter animation wrap mode.
-    void SetShaderParameterAnimationWrapMode(const String& name, WrapMode wrapMode);
+    void SetShaderParameterAnimationWrapMode(const ea::string& name, WrapMode wrapMode);
     /// Set shader parameter animation speed.
-    void SetShaderParameterAnimationSpeed(const String& name, float speed);
+    void SetShaderParameterAnimationSpeed(const ea::string& name, float speed);
     /// Set texture.
     void SetTexture(TextureUnit unit, Texture* texture);
     /// Set texture coordinate transform.
@@ -186,50 +224,50 @@ public:
     /// Associate the material with a scene to ensure that shader parameter animation happens in sync with scene update, respecting the scene time scale. If no scene is set, the global update events will be used.
     void SetScene(Scene* scene);
     /// Remove shader parameter.
-    void RemoveShaderParameter(const String& name);
+    void RemoveShaderParameter(const ea::string& name);
     /// Reset all shader pointers.
     void ReleaseShaders();
     /// Clone the material.
-    SharedPtr<Material> Clone(const String& cloneName = String::EMPTY) const;
+    SharedPtr<Material> Clone(const ea::string& cloneName = EMPTY_STRING) const;
     /// Ensure that material techniques are listed in correct order.
     void SortTechniques();
     /// Mark material for auxiliary view rendering.
     void MarkForAuxView(unsigned frameNumber);
 
     /// Return number of techniques.
-    unsigned GetNumTechniques() const { return techniques_.Size(); }
+    unsigned GetNumTechniques() const { return techniques_.size(); }
 
     /// Return all techniques.
-    const Vector<TechniqueEntry>& GetTechniques() const { return techniques_; }
+    const ea::vector<TechniqueEntry>& GetTechniques() const { return techniques_; }
 
     /// Return technique entry by index.
     const TechniqueEntry& GetTechniqueEntry(unsigned index) const;
     /// Return technique by index.
     Technique* GetTechnique(unsigned index) const;
     /// Return pass by technique index and pass name.
-    Pass* GetPass(unsigned index, const String& passName) const;
+    Pass* GetPass(unsigned index, const ea::string& passName) const;
     /// Return texture by unit.
     Texture* GetTexture(TextureUnit unit) const;
 
     /// Return all textures.
-    const HashMap<TextureUnit, SharedPtr<Texture> >& GetTextures() const { return textures_; }
+    const ea::unordered_map<TextureUnit, SharedPtr<Texture> >& GetTextures() const { return textures_; }
 
     /// Return additional vertex shader defines.
-    const String& GetVertexShaderDefines() const { return vertexShaderDefines_; }
+    const ea::string& GetVertexShaderDefines() const { return vertexShaderDefines_; }
     /// Return additional pixel shader defines.
-    const String& GetPixelShaderDefines() const { return pixelShaderDefines_; }
+    const ea::string& GetPixelShaderDefines() const { return pixelShaderDefines_; }
 
     /// Return shader parameter.
-    const Variant& GetShaderParameter(const String& name) const;
+    const Variant& GetShaderParameter(const ea::string& name) const;
     /// Return shader parameter animation.
-    ValueAnimation* GetShaderParameterAnimation(const String& name) const;
+    ValueAnimation* GetShaderParameterAnimation(const ea::string& name) const;
     /// Return shader parameter animation wrap mode.
-    WrapMode GetShaderParameterAnimationWrapMode(const String& name) const;
+    WrapMode GetShaderParameterAnimationWrapMode(const ea::string& name) const;
     /// Return shader parameter animation speed.
-    float GetShaderParameterAnimationSpeed(const String& name) const;
+    float GetShaderParameterAnimationSpeed(const ea::string& name) const;
 
     /// Return all shader parameters.
-    const HashMap<StringHash, MaterialShaderParameter>& GetShaderParameters() const { return shaderParameters_; }
+    const ea::unordered_map<StringHash, MaterialShaderParameter>& GetShaderParameters() const { return shaderParameters_; }
 
     /// Return normal culling mode.
     CullMode GetCullMode() const { return cullMode_; }
@@ -261,6 +299,9 @@ public:
     /// Return whether should render specular.
     bool GetSpecular() const { return specular_; }
 
+    /// Set whether should render specular.
+    void SetSpecular(bool specular) { specular_ = specular; }
+
     /// Return the scene associated with the material for shader parameter animation updates.
     Scene* GetScene() const;
 
@@ -268,9 +309,9 @@ public:
     unsigned GetShaderParameterHash() const { return shaderParameterHash_; }
 
     /// Return name for texture unit.
-    static String GetTextureUnitName(TextureUnit unit);
+    static ea::string GetTextureUnitName(TextureUnit unit);
     /// Parse a shader parameter value from a string. Retunrs either a bool, a float, or a 2 to 4-component vector.
-    static Variant ParseShaderParameterValue(const String& value);
+    static Variant ParseShaderParameterValue(const ea::string& value);
 
 private:
     /// Helper function for loading JSON files.
@@ -287,24 +328,24 @@ private:
     /// Reapply shader defines to technique index. By default reapply all.
     void ApplyShaderDefines(unsigned index = M_MAX_UNSIGNED);
     /// Return shader parameter animation info.
-    ShaderParameterAnimationInfo* GetShaderParameterAnimationInfo(const String& name) const;
+    ShaderParameterAnimationInfo* GetShaderParameterAnimationInfo(const ea::string& name) const;
     /// Update whether should be subscribed to scene or global update events for shader parameter animation.
     void UpdateEventSubscription();
     /// Update shader parameter animations.
     void HandleAttributeAnimationUpdate(StringHash eventType, VariantMap& eventData);
 
     /// Techniques.
-    Vector<TechniqueEntry> techniques_;
+    ea::vector<TechniqueEntry> techniques_;
     /// Textures.
-    HashMap<TextureUnit, SharedPtr<Texture> > textures_;
+    ea::unordered_map<TextureUnit, SharedPtr<Texture> > textures_;
     /// %Shader parameters.
-    HashMap<StringHash, MaterialShaderParameter> shaderParameters_;
+    ea::unordered_map<StringHash, MaterialShaderParameter> shaderParameters_;
     /// %Shader parameters animation infos.
-    HashMap<StringHash, SharedPtr<ShaderParameterAnimationInfo> > shaderParameterAnimationInfos_;
+    ea::unordered_map<StringHash, SharedPtr<ShaderParameterAnimationInfo> > shaderParameterAnimationInfos_;
     /// Vertex shader defines.
-    String vertexShaderDefines_;
+    ea::string vertexShaderDefines_;
     /// Pixel shader defines.
-    String pixelShaderDefines_;
+    ea::string pixelShaderDefines_;
     /// Normal culling mode.
     CullMode cullMode_{};
     /// Culling mode for shadow rendering.

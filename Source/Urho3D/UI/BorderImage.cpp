@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@
 
 #include "../Core/Context.h"
 #include "../Graphics/Texture2D.h"
+#include "../Graphics/Technique.h"
 #include "../Resource/ResourceCache.h"
 #include "../UI/BorderImage.h"
 
@@ -32,7 +33,6 @@
 namespace Urho3D
 {
 
-extern const char* blendModeNames[];
 extern const char* UI_CATEGORY;
 
 BorderImage::BorderImage(Context* context) :
@@ -63,7 +63,7 @@ void BorderImage::RegisterObject(Context* context)
     URHO3D_ENUM_ACCESSOR_ATTRIBUTE("Blend Mode", GetBlendMode, SetBlendMode, BlendMode, blendModeNames, 0, AM_FILE);
 }
 
-void BorderImage::GetBatches(PODVector<UIBatch>& batches, PODVector<float>& vertexData, const IntRect& currentScissor)
+void BorderImage::GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, const IntRect& currentScissor)
 {
     GetBatches(batches, vertexData, currentScissor, hovering_ || selected_ || HasFocus() ? hoverOffset_ : IntVector2::ZERO);
 }
@@ -123,7 +123,7 @@ void BorderImage::SetTiled(bool enable)
     tiled_ = enable;
 }
 
-void BorderImage::GetBatches(PODVector<UIBatch>& batches, PODVector<float>& vertexData, const IntRect& currentScissor,
+void BorderImage::GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, const IntRect& currentScissor,
     const IntVector2& offset)
 {
     bool allOpaque = true;

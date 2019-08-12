@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -376,7 +376,7 @@ void RigidBody2D::CreateBody()
     body_ = physicsWorld_->GetWorld()->CreateBody(&bodyDef_);
     body_->SetUserData(this);
 
-    for (unsigned i = 0; i < collisionShapes_.Size(); ++i)
+    for (unsigned i = 0; i < collisionShapes_.size(); ++i)
     {
         if (collisionShapes_[i])
             collisionShapes_[i]->CreateFixture();
@@ -385,7 +385,7 @@ void RigidBody2D::CreateBody()
     if (!useFixtureMass_)
         body_->SetMassData(&massData_);
 
-    for (unsigned i = 0; i < constraints_.Size(); ++i)
+    for (unsigned i = 0; i < constraints_.size(); ++i)
     {
         if (constraints_[i])
             constraints_[i]->CreateJoint();
@@ -401,14 +401,14 @@ void RigidBody2D::ReleaseBody()
         return;
 
     // Make a copy for iteration
-    Vector<WeakPtr<Constraint2D> > constraints = constraints_;
-    for (unsigned i = 0; i < constraints.Size(); ++i)
+    ea::vector<WeakPtr<Constraint2D> > constraints = constraints_;
+    for (unsigned i = 0; i < constraints.size(); ++i)
     {
         if (constraints[i])
             constraints[i]->ReleaseJoint();
     }
 
-    for (unsigned i = 0; i < collisionShapes_.Size(); ++i)
+    for (unsigned i = 0; i < collisionShapes_.size(); ++i)
     {
         if (collisionShapes_[i])
             collisionShapes_[i]->ReleaseFixture();
@@ -471,10 +471,10 @@ void RigidBody2D::AddCollisionShape2D(CollisionShape2D* collisionShape)
         return;
 
     WeakPtr<CollisionShape2D> collisionShapePtr(collisionShape);
-    if (collisionShapes_.Contains(collisionShapePtr))
+    if (collisionShapes_.contains(collisionShapePtr))
         return;
 
-    collisionShapes_.Push(collisionShapePtr);
+    collisionShapes_.push_back(collisionShapePtr);
 }
 
 void RigidBody2D::RemoveCollisionShape2D(CollisionShape2D* collisionShape)
@@ -483,7 +483,7 @@ void RigidBody2D::RemoveCollisionShape2D(CollisionShape2D* collisionShape)
         return;
 
     WeakPtr<CollisionShape2D> collisionShapePtr(collisionShape);
-    collisionShapes_.Remove(collisionShapePtr);
+    collisionShapes_.erase_first(collisionShapePtr);
 }
 
 void RigidBody2D::AddConstraint2D(Constraint2D* constraint)
@@ -492,9 +492,9 @@ void RigidBody2D::AddConstraint2D(Constraint2D* constraint)
         return;
 
     WeakPtr<Constraint2D> constraintPtr(constraint);
-    if (constraints_.Contains(constraintPtr))
+    if (constraints_.contains(constraintPtr))
         return;
-    constraints_.Push(constraintPtr);
+    constraints_.push_back(constraintPtr);
 }
 
 void RigidBody2D::RemoveConstraint2D(Constraint2D* constraint)
@@ -503,7 +503,7 @@ void RigidBody2D::RemoveConstraint2D(Constraint2D* constraint)
         return;
 
     WeakPtr<Constraint2D> constraintPtr(constraint);
-    constraints_.Remove(constraintPtr);
+    constraints_.erase_first(constraintPtr);
 }
 
 float RigidBody2D::GetMass() const
@@ -551,10 +551,10 @@ void RigidBody2D::OnNodeSet(Node* node)
     {
         node->AddListener(this);
 
-        PODVector<CollisionShape2D*> shapes;
+        ea::vector<CollisionShape2D*> shapes;
         node_->GetDerivedComponents<CollisionShape2D>(shapes);
 
-        for (PODVector<CollisionShape2D*>::Iterator i = shapes.Begin(); i != shapes.End(); ++i)
+        for (auto i = shapes.begin(); i != shapes.end(); ++i)
         {
             (*i)->CreateFixture();
             AddCollisionShape2D(*i);

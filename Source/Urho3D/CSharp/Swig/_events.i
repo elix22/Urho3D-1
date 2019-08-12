@@ -329,7 +329,9 @@ public static class E
         private StringHash _event = new StringHash("LogMessage");
 
         public StringHash Message = new StringHash("Message");
+        public StringHash Logger = new StringHash("Logger");
         public StringHash Level = new StringHash("Level");
+        public StringHash Time = new StringHash("Time");
         public LogMessageEvent() { }
         public static implicit operator StringHash(LogMessageEvent e) { return e._event; }
     }
@@ -937,6 +939,53 @@ public static class E
     }
     public static RemoteEventDataEvent RemoteEventData = new RemoteEventDataEvent();
 
+    public class NetworkBannedEvent {
+        private StringHash _event = new StringHash("NetworkBanned");
+
+        public NetworkBannedEvent() { }
+        public static implicit operator StringHash(NetworkBannedEvent e) { return e._event; }
+    }
+    public static NetworkBannedEvent NetworkBanned = new NetworkBannedEvent();
+
+    public class NetworkInvalidPasswordEvent {
+        private StringHash _event = new StringHash("NetworkInvalidPassword");
+
+        public NetworkInvalidPasswordEvent() { }
+        public static implicit operator StringHash(NetworkInvalidPasswordEvent e) { return e._event; }
+    }
+    public static NetworkInvalidPasswordEvent NetworkInvalidPassword = new NetworkInvalidPasswordEvent();
+
+    public class NetworkHostDiscoveredEvent {
+        private StringHash _event = new StringHash("NetworkHostDiscovered");
+
+        public StringHash Address = new StringHash("Address");
+        public StringHash Port = new StringHash("Port");
+        public StringHash Beacon = new StringHash("Beacon");
+        public NetworkHostDiscoveredEvent() { }
+        public static implicit operator StringHash(NetworkHostDiscoveredEvent e) { return e._event; }
+    }
+    public static NetworkHostDiscoveredEvent NetworkHostDiscovered = new NetworkHostDiscoveredEvent();
+
+    public class NetworkNatPunchtroughSucceededEvent {
+        private StringHash _event = new StringHash("NetworkNatPunchtroughSucceeded");
+
+        public StringHash Address = new StringHash("Address");
+        public StringHash Port = new StringHash("Port");
+        public NetworkNatPunchtroughSucceededEvent() { }
+        public static implicit operator StringHash(NetworkNatPunchtroughSucceededEvent e) { return e._event; }
+    }
+    public static NetworkNatPunchtroughSucceededEvent NetworkNatPunchtroughSucceeded = new NetworkNatPunchtroughSucceededEvent();
+
+    public class NetworkNatPunchtroughFailedEvent {
+        private StringHash _event = new StringHash("NetworkNatPunchtroughFailed");
+
+        public StringHash Address = new StringHash("Address");
+        public StringHash Port = new StringHash("Port");
+        public NetworkNatPunchtroughFailedEvent() { }
+        public static implicit operator StringHash(NetworkNatPunchtroughFailedEvent e) { return e._event; }
+    }
+    public static NetworkNatPunchtroughFailedEvent NetworkNatPunchtroughFailed = new NetworkNatPunchtroughFailedEvent();
+
     public class PhysicsPreStepEvent {
         private StringHash _event = new StringHash("PhysicsPreStep");
 
@@ -1128,6 +1177,18 @@ public static class E
         public static implicit operator StringHash(ResourceRenamedEvent e) { return e._event; }
     }
     public static ResourceRenamedEvent ResourceRenamed = new ResourceRenamedEvent();
+
+    public class CameraViewportResizedEvent {
+        private StringHash _event = new StringHash("CameraViewportResized");
+
+        public StringHash Camera = new StringHash("Camera");
+        public StringHash Viewport = new StringHash("Viewport");
+        public StringHash SizeNorm = new StringHash("SizeNorm");
+        public StringHash Size = new StringHash("Size");
+        public CameraViewportResizedEvent() { }
+        public static implicit operator StringHash(CameraViewportResizedEvent e) { return e._event; }
+    }
+    public static CameraViewportResizedEvent CameraViewportResized = new CameraViewportResizedEvent();
 
     public class SceneUpdateEvent {
         private StringHash _event = new StringHash("SceneUpdate");
@@ -1372,6 +1433,24 @@ public static class E
         public static implicit operator StringHash(InterceptNetworkUpdateEvent e) { return e._event; }
     }
     public static InterceptNetworkUpdateEvent InterceptNetworkUpdate = new InterceptNetworkUpdateEvent();
+
+    public class SceneActivatedEvent {
+        private StringHash _event = new StringHash("SceneActivated");
+
+        public StringHash OldScene = new StringHash("OldScene");
+        public StringHash NewScene = new StringHash("NewScene");
+        public SceneActivatedEvent() { }
+        public static implicit operator StringHash(SceneActivatedEvent e) { return e._event; }
+    }
+    public static SceneActivatedEvent SceneActivated = new SceneActivatedEvent();
+
+    public class EndRenderingSystemUIEvent {
+        private StringHash _event = new StringHash("EndRenderingSystemUI");
+
+        public EndRenderingSystemUIEvent() { }
+        public static implicit operator StringHash(EndRenderingSystemUIEvent e) { return e._event; }
+    }
+    public static EndRenderingSystemUIEvent EndRenderingSystemUI = new EndRenderingSystemUIEvent();
 
     public class ConsoleClosedEvent {
         private StringHash _event = new StringHash("ConsoleClosed");
@@ -1807,7 +1886,7 @@ public static class E
 
         public StringHash FileName = new StringHash("FileName");
         public StringHash Filter = new StringHash("Filter");
-        public StringHash Ok = new StringHash("Ok");
+        public StringHash Ok = new StringHash("OK");
         public FileSelectedEvent() { }
         public static implicit operator StringHash(FileSelectedEvent e) { return e._event; }
     }
@@ -1816,7 +1895,7 @@ public static class E
     public class MessageACKEvent {
         private StringHash _event = new StringHash("MessageACK");
 
-        public StringHash Ok = new StringHash("Ok");
+        public StringHash Ok = new StringHash("OK");
         public MessageACKEvent() { }
         public static implicit operator StringHash(MessageACKEvent e) { return e._event; }
     }
@@ -1941,6 +2020,118 @@ public static class E
         public static implicit operator StringHash(UIDropFileEvent e) { return e._event; }
     }
     public static UIDropFileEvent UIDropFile = new UIDropFileEvent();
+
+    public class PhysicsUpdateContact2DEvent {
+        private StringHash _event = new StringHash("PhysicsUpdateContact2D");
+
+        public StringHash World = new StringHash("World");
+        public StringHash BodyA = new StringHash("BodyA");
+        public StringHash BodyB = new StringHash("BodyB");
+        public StringHash NodeA = new StringHash("NodeA");
+        public StringHash NodeB = new StringHash("NodeB");
+        public StringHash Contacts = new StringHash("Contacts");
+        public StringHash ShapeA = new StringHash("ShapeA");
+        public StringHash ShapeB = new StringHash("ShapeB");
+        public StringHash Enabled = new StringHash("Enabled");
+        public PhysicsUpdateContact2DEvent() { }
+        public static implicit operator StringHash(PhysicsUpdateContact2DEvent e) { return e._event; }
+    }
+    public static PhysicsUpdateContact2DEvent PhysicsUpdateContact2D = new PhysicsUpdateContact2DEvent();
+
+    public class PhysicsBeginContact2DEvent {
+        private StringHash _event = new StringHash("PhysicsBeginContact2D");
+
+        public StringHash World = new StringHash("World");
+        public StringHash BodyA = new StringHash("BodyA");
+        public StringHash BodyB = new StringHash("BodyB");
+        public StringHash NodeA = new StringHash("NodeA");
+        public StringHash NodeB = new StringHash("NodeB");
+        public StringHash Contacts = new StringHash("Contacts");
+        public StringHash ShapeA = new StringHash("ShapeA");
+        public StringHash ShapeB = new StringHash("ShapeB");
+        public PhysicsBeginContact2DEvent() { }
+        public static implicit operator StringHash(PhysicsBeginContact2DEvent e) { return e._event; }
+    }
+    public static PhysicsBeginContact2DEvent PhysicsBeginContact2D = new PhysicsBeginContact2DEvent();
+
+    public class PhysicsEndContact2DEvent {
+        private StringHash _event = new StringHash("PhysicsEndContact2D");
+
+        public StringHash World = new StringHash("World");
+        public StringHash BodyA = new StringHash("BodyA");
+        public StringHash BodyB = new StringHash("BodyB");
+        public StringHash NodeA = new StringHash("NodeA");
+        public StringHash NodeB = new StringHash("NodeB");
+        public StringHash Contacts = new StringHash("Contacts");
+        public StringHash ShapeA = new StringHash("ShapeA");
+        public StringHash ShapeB = new StringHash("ShapeB");
+        public PhysicsEndContact2DEvent() { }
+        public static implicit operator StringHash(PhysicsEndContact2DEvent e) { return e._event; }
+    }
+    public static PhysicsEndContact2DEvent PhysicsEndContact2D = new PhysicsEndContact2DEvent();
+
+    public class NodeUpdateContact2DEvent {
+        private StringHash _event = new StringHash("NodeUpdateContact2D");
+
+        public StringHash Body = new StringHash("Body");
+        public StringHash OtherNode = new StringHash("OtherNode");
+        public StringHash OtherBody = new StringHash("OtherBody");
+        public StringHash Contacts = new StringHash("Contacts");
+        public StringHash Shape = new StringHash("Shape");
+        public StringHash OtherShape = new StringHash("OtherShape");
+        public StringHash Enabled = new StringHash("Enabled");
+        public NodeUpdateContact2DEvent() { }
+        public static implicit operator StringHash(NodeUpdateContact2DEvent e) { return e._event; }
+    }
+    public static NodeUpdateContact2DEvent NodeUpdateContact2D = new NodeUpdateContact2DEvent();
+
+    public class NodeBeginContact2DEvent {
+        private StringHash _event = new StringHash("NodeBeginContact2D");
+
+        public StringHash Body = new StringHash("Body");
+        public StringHash OtherNode = new StringHash("OtherNode");
+        public StringHash OtherBody = new StringHash("OtherBody");
+        public StringHash Contacts = new StringHash("Contacts");
+        public StringHash Shape = new StringHash("Shape");
+        public StringHash OtherShape = new StringHash("OtherShape");
+        public NodeBeginContact2DEvent() { }
+        public static implicit operator StringHash(NodeBeginContact2DEvent e) { return e._event; }
+    }
+    public static NodeBeginContact2DEvent NodeBeginContact2D = new NodeBeginContact2DEvent();
+
+    public class NodeEndContact2DEvent {
+        private StringHash _event = new StringHash("NodeEndContact2D");
+
+        public StringHash Body = new StringHash("Body");
+        public StringHash OtherNode = new StringHash("OtherNode");
+        public StringHash OtherBody = new StringHash("OtherBody");
+        public StringHash Contacts = new StringHash("Contacts");
+        public StringHash Shape = new StringHash("Shape");
+        public StringHash OtherShape = new StringHash("OtherShape");
+        public NodeEndContact2DEvent() { }
+        public static implicit operator StringHash(NodeEndContact2DEvent e) { return e._event; }
+    }
+    public static NodeEndContact2DEvent NodeEndContact2D = new NodeEndContact2DEvent();
+
+    public class ParticlesEndEvent {
+        private StringHash _event = new StringHash("ParticlesEnd");
+
+        public StringHash Node = new StringHash("Node");
+        public StringHash Effect = new StringHash("Effect");
+        public ParticlesEndEvent() { }
+        public static implicit operator StringHash(ParticlesEndEvent e) { return e._event; }
+    }
+    public static ParticlesEndEvent ParticlesEnd = new ParticlesEndEvent();
+
+    public class ParticlesDurationEvent {
+        private StringHash _event = new StringHash("ParticlesDuration");
+
+        public StringHash Node = new StringHash("Node");
+        public StringHash Effect = new StringHash("Effect");
+        public ParticlesDurationEvent() { }
+        public static implicit operator StringHash(ParticlesDurationEvent e) { return e._event; }
+    }
+    public static ParticlesDurationEvent ParticlesDuration = new ParticlesDurationEvent();
 
 }
 %}

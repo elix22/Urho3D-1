@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -47,10 +47,10 @@ extern const char* GEOMETRY_CATEGORY;
 
 TerrainPatch::TerrainPatch(Context* context) :
     Drawable(context, DRAWABLE_GEOMETRY),
-    geometry_(new Geometry(context)),
-    maxLodGeometry_(new Geometry(context)),
-    occlusionGeometry_(new Geometry(context)),
-    vertexBuffer_(new VertexBuffer(context)),
+    geometry_(context->CreateObject<Geometry>()),
+    maxLodGeometry_(context->CreateObject<Geometry>()),
+    occlusionGeometry_(context->CreateObject<Geometry>()),
+    vertexBuffer_(context->CreateObject<VertexBuffer>()),
     coordinates_(IntVector2::ZERO),
     lodLevel_(0)
 {
@@ -58,7 +58,7 @@ TerrainPatch::TerrainPatch(Context* context) :
     maxLodGeometry_->SetVertexBuffer(0, vertexBuffer_);
     occlusionGeometry_->SetVertexBuffer(0, vertexBuffer_);
 
-    batches_.Resize(1);
+    batches_.resize(1);
     batches_[0].geometry_ = geometry_;
     batches_[0].geometryType_ = GEOM_STATIC_NOINSTANCING;
 }
@@ -70,7 +70,7 @@ void TerrainPatch::RegisterObject(Context* context)
     context->RegisterFactory<TerrainPatch>();
 }
 
-void TerrainPatch::ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryResult>& results)
+void TerrainPatch::ProcessRayQuery(const RayOctreeQuery& query, ea::vector<RayQueryResult>& results)
 {
     RayQueryLevel level = query.level_;
 
@@ -104,7 +104,7 @@ void TerrainPatch::ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQue
                 result.drawable_ = this;
                 result.node_ = node_;
                 result.subObject_ = M_MAX_UNSIGNED;
-                results.Push(result);
+                results.push_back(result);
             }
         }
         break;
@@ -127,7 +127,7 @@ void TerrainPatch::UpdateBatches(const FrameInfo& frame)
     batches_[0].worldTransform_ = &worldTransform;
 
     unsigned newLodLevel = 0;
-    for (unsigned i = 0; i < lodErrors_.Size(); ++i)
+    for (unsigned i = 0; i < lodErrors_.size(); ++i)
     {
         if (lodErrors_[i] / lodDistance_ > LOD_CONSTANT)
             break;
@@ -194,7 +194,7 @@ bool TerrainPatch::DrawOcclusion(OcclusionBuffer* buffer)
     unsigned vertexSize;
     const unsigned char* indexData;
     unsigned indexSize;
-    const PODVector<VertexElement>* elements;
+    const ea::vector<VertexElement>* elements;
 
     occlusionGeometry_->GetRawData(vertexData, vertexSize, indexData, indexSize, elements);
     // Check for valid geometry data

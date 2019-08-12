@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -41,11 +41,6 @@ URHO3D_EVENT(E_EDITORUSERCODERELOADSTART, EditorUserCodeReloadStart)
 
 /// Event sent right after reloading user components.
 URHO3D_EVENT(E_EDITORUSERCODERELOADEND, EditorUserCodeReloadEnd)
-{
-}
-
-/// Event sent when editor is about to load a new project.
-URHO3D_EVENT(E_EDITORPROJECTLOADINGSTART, EditorProjectLoadingStart)
 {
 }
 

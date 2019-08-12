@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,9 +26,10 @@
 #include <array>
 
 #include "ToolboxAPI.h"
-#include "AutoColumn.h"
-#include <Urho3D/Core/Object.h>
 #include <Urho3D/Core/Context.h>
+#include <Urho3D/Core/Object.h>
+#include <Urho3D/Core/Variant.h>
+#include <Urho3D/SystemUI/SystemUI.h>
 
 
 namespace Urho3D
@@ -36,75 +37,97 @@ namespace Urho3D
 
 class Viewport;
 
+enum class AttributeInspectorModified : unsigned
+{
+    NO_CHANGE = 0,
+    SET_BY_USER = 1,
+    SET_DEFAULT = 1u << 1u,
+    SET_INHERITED = 1u << 2u,
+    RESET = SET_DEFAULT | SET_INHERITED
+};
+URHO3D_FLAGSET(AttributeInspectorModified, AttributeInspectorModifiedFlags);
+
 URHO3D_EVENT(E_INSPECTORLOCATERESOURCE, InspectorLocateResource)
 {
     URHO3D_PARAM(P_NAME, ResourceName);                                         // String
 }
 
+URHO3D_EVENT(E_INSPECTORRENDERSTART, InspectorRenderStart)
+{
+    URHO3D_PARAM(P_SERIALIZABLE, Serializable);                                 // Serializable*
+}
+
+URHO3D_EVENT(E_INSPECTORRENDEREND, InspectorRenderEnd)
+{
+}
+
+URHO3D_EVENT(E_INSPECTORRENDERATTRIBUTE, InspectorRenderAttribute)
+{
+    URHO3D_PARAM(P_ATTRIBUTEINFO, AttributeInfo);                               // void*
+    URHO3D_PARAM(P_SERIALIZABLE, Serializable);                                 // RefCounted*
+    URHO3D_PARAM(P_HANDLED, Handled);                                           // bool
+    URHO3D_PARAM(P_MODIFIED, Modified);                                         // unsigned (AttributeInspectorModifiedFlags)
+}
+
+/// Automate tracking of initial values that are modified by ImGui widget.
+template<typename TValue, typename MValue>
+struct ModifiedStateTracker
+{
+    MValue TrackModification(MValue modified, std::function<TValue()> getInitial)
+    {
+        if (modified)
+        {
+            if (!lastModified_)
+            {
+                initial_ = getInitial();
+                lastModified_ = modified;
+            }
+            return {};
+        }
+        else if (!ui::IsAnyItemActive() && lastModified_)
+        {
+            auto result = lastModified_;
+            lastModified_ = MValue{};
+            return result;
+        }
+
+        return {};
+    }
+
+    MValue TrackModification(MValue modified, const TValue& initialValue)
+    {
+        std::function<TValue()> fn = [&]() { return initialValue; };
+        return TrackModification(modified, fn);
+    }
+
+    const TValue& GetInitialValue() { return initial_; }
+
+protected:
+    /// Initial value.
+    TValue initial_{};
+    /// Flag indicating if value was modified on previous frame.
+    MValue lastModified_{};
+};
+
+/// A dummy object used as namespace for subscribing to events.
 class URHO3D_TOOLBOX_API AttributeInspector : public Object
 {
     URHO3D_OBJECT(AttributeInspector, Object);
 public:
-    /// Construct.
-    explicit AttributeInspector(Context* context);
-
-    /// Render attribute inspector widgets of multiple items.
-    void RenderAttributes(const PODVector<Serializable*>& items);
-    /// Render attribute inspector widgets.
-    void RenderAttributes(Serializable* item);
-
-protected:
-    /// Render value widget of single attribute.
-    /// \returns true if value was modified.
-    bool RenderSingleAttribute(const AttributeInfo& info, Variant& value);
-    /// Render ui for single resource ref attribute.
-    bool RenderResourceRef(StringHash type, const String& name, String& result);
-
-    /// A filter value. Attributes whose titles do not contain substring sored in this variable will not be rendered.
-    std::array<char, 0x100> filter_{};
-    /// Name of attribute that was modified on last frame.
-    const char* modifiedLastFrame_ = nullptr;
-    /// Value of attribute before modifying it started.
-    Variant originalValue_;
-    /// Object keeping track of automatic width of first column.
-    AutoColumn autoColumn_;
+    explicit AttributeInspector(Context* context) : Object(context) { }
 };
 
-class URHO3D_TOOLBOX_API AttributeInspectorWindow : public AttributeInspector
+/// Render attribute inspector of `item`.
+/// If `filter` is not null then only attributes containing this substring will be rendered.
+/// If `eventNamespace` is not null then this object will be used to send events.
+URHO3D_TOOLBOX_API bool RenderAttributes(Serializable* item, const char* filter=nullptr, Object* eventNamespace=nullptr);
+URHO3D_TOOLBOX_API bool RenderSingleAttribute(Variant& value);
+
+}
+
+namespace ImGui
 {
-    URHO3D_OBJECT(AttributeInspectorWindow, Object);
-public:
-    /// Construct.
-    explicit AttributeInspectorWindow(Context* context);
 
-    /// Enable or disable rendering of attribute inspector window.
-    void SetEnabled(bool enabled);
-    /// Returns true if attribute inspector window is enabled.
-    bool IsEnabled() const;
-    /// Set serializable whose attributes should be rendered.
-    void SetSerializable(Serializable* item);
-    /// Return serializable whose attributes are being rendered.
-    Serializable* GetSerializable() const { return currentSerializable_; }
-
-protected:
-    /// Render attribute inspector UI.
-    virtual void RenderUi();
-
-    /// Enable or disable rendering of attribute inspector window.
-    bool enabled_ = false;
-    /// Current Serializable whose attributes are rendered.
-    WeakPtr<Serializable> currentSerializable_;
-};
-
-class URHO3D_TOOLBOX_API AttributeInspectorDockWindow : public AttributeInspectorWindow
-{
-    URHO3D_OBJECT(AttributeInspectorDockWindow, Object);
-public:
-    /// Construct.
-    explicit AttributeInspectorDockWindow(Context* context);
-
-    /// Render attribute inspector UI.
-    void RenderUi() override;
-};
+URHO3D_TOOLBOX_API void SameLine(Urho3D::VariantType type);
 
 }

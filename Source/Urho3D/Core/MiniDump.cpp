@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -55,17 +55,17 @@ URHO3D_API int WriteMiniDump(const char* applicationName, void* exceptionPointer
     static time_t sysTime;
     time(&sysTime);
     const char* dateTime = ctime(&sysTime);
-    String dateTimeStr = String(dateTime);
-    dateTimeStr.Replace("\n", "");
-    dateTimeStr.Replace(":", "");
-    dateTimeStr.Replace("/", "");
-    dateTimeStr.Replace(' ', '_');
+    ea::string dateTimeStr = ea::string(dateTime);
+    dateTimeStr.replace("\n", "");
+    dateTimeStr.replace(":", "");
+    dateTimeStr.replace("/", "");
+    dateTimeStr.replace(' ', '_');
 
-    String miniDumpDir = GetMiniDumpDir();
-    String miniDumpName = miniDumpDir + String(applicationName) + "_" + dateTimeStr + ".dmp";
+    ea::string miniDumpDir = GetMiniDumpDir();
+    ea::string miniDumpName = miniDumpDir + ea::string(applicationName) + "_" + dateTimeStr + ".dmp";
 
-    CreateDirectoryW(WString(miniDumpDir).CString(), nullptr);
-    HANDLE file = CreateFileW(WString(miniDumpName).CString(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE | FILE_SHARE_READ,
+    CreateDirectoryW(MultiByteToWide(miniDumpDir).c_str(), nullptr);
+    HANDLE file = CreateFileW(MultiByteToWide(miniDumpName).c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_WRITE | FILE_SHARE_READ,
         nullptr, CREATE_ALWAYS, 0, nullptr);
 
     BOOL success = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, MiniDumpWithDataSegs, &info, nullptr, nullptr);

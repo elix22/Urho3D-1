@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@ namespace Urho3D
 {
 
 const Variant Variant::EMPTY { };
-const PODVector<unsigned char> Variant::emptyBuffer { };
+const ea::vector<unsigned char> Variant::emptyBuffer { };
 const ResourceRef Variant::emptyResourceRef { };
 const ResourceRefList Variant::emptyResourceRefList { };
 const VariantMap Variant::emptyVariantMap;
@@ -67,8 +67,7 @@ static const char* typeNames[] =
     "Rect",
     "IntVector3",
     "Int64",
-    "CustomHeap",
-    "CustomStack",
+    "Custom",
     nullptr
 };
 
@@ -77,7 +76,7 @@ static_assert(sizeof(typeNames) / sizeof(const char*) == (size_t)MAX_VAR_TYPES +
 Variant& Variant::operator =(const Variant& rhs)
 {
     // Handle custom types separately
-    if (rhs.IsCustom())
+    if (rhs.GetType() == VAR_CUSTOM)
     {
         SetCustomVariantValue(*rhs.GetCustomVariantValuePtr());
         return *this;
@@ -113,7 +112,7 @@ Variant& Variant::operator =(const Variant& rhs)
         break;
 
     case VAR_VARIANTMAP:
-        value_.variantMap_ = rhs.value_.variantMap_;
+        *value_.variantMap_ = *rhs.value_.variantMap_;
         break;
 
     case VAR_PTR:
@@ -151,7 +150,7 @@ bool Variant::operator ==(const Variant& rhs) const
 {
     if (type_ == VAR_VOIDPTR || type_ == VAR_PTR)
         return GetVoidPtr() == rhs.GetVoidPtr();
-    else if (IsCustom() && rhs.IsCustom())
+    else if (type_ == VAR_CUSTOM && rhs.type_ == VAR_CUSTOM)
         return GetCustomVariantValuePtr()->Compare(*rhs.GetCustomVariantValuePtr());
     else if (type_ != rhs.type_)
         return false;
@@ -204,7 +203,7 @@ bool Variant::operator ==(const Variant& rhs) const
         return value_.stringVector_ == rhs.value_.stringVector_;
 
     case VAR_VARIANTMAP:
-        return value_.variantMap_ == rhs.value_.variantMap_;
+        return *value_.variantMap_ == *rhs.value_.variantMap_;
 
     case VAR_INTRECT:
         return value_.intRect_ == rhs.value_.intRect_;
@@ -235,26 +234,116 @@ bool Variant::operator ==(const Variant& rhs) const
     }
 }
 
-bool Variant::operator ==(const PODVector<unsigned char>& rhs) const
+bool Variant::operator ==(const ea::vector<unsigned char>& rhs) const
 {
-    // Use strncmp() instead of PODVector<unsigned char>::operator ==()
-    const PODVector<unsigned char>& buffer = value_.buffer_;
-    return type_ == VAR_BUFFER && buffer.Size() == rhs.Size() ?
-        strncmp(reinterpret_cast<const char*>(&buffer[0]), reinterpret_cast<const char*>(&rhs[0]), buffer.Size()) == 0 :
+    // Use strncmp() instead of ea::vector<unsigned char>::operator ==()
+    const ea::vector<unsigned char>& buffer = value_.buffer_;
+    return type_ == VAR_BUFFER && buffer.size() == rhs.size() ?
+        strncmp(reinterpret_cast<const char*>(&buffer[0]), reinterpret_cast<const char*>(&rhs[0]), buffer.size()) == 0 :
         false;
 }
 
 bool Variant::operator ==(const VectorBuffer& rhs) const
 {
-    const PODVector<unsigned char>& buffer = value_.buffer_;
-    return type_ == VAR_BUFFER && buffer.Size() == rhs.GetSize() ?
-        strncmp(reinterpret_cast<const char*>(&buffer[0]), reinterpret_cast<const char*>(rhs.GetData()), buffer.Size()) == 0 :
+    const ea::vector<unsigned char>& buffer = value_.buffer_;
+    return type_ == VAR_BUFFER && buffer.size() == rhs.GetSize() ?
+        strncmp(reinterpret_cast<const char*>(&buffer[0]), reinterpret_cast<const char*>(rhs.GetData()), buffer.size()) == 0 :
         false;
 }
 
-void Variant::FromString(const String& type, const String& value)
+Variant::Variant(VariantType type)
 {
-    return FromString(GetTypeFromName(type), value.CString());
+    SetType(type);
+    switch (type)
+    {
+    case VAR_INT:
+        *this = 0;
+        break;
+
+    case VAR_INT64:
+        *this = 0LL;
+        break;
+
+    case VAR_BOOL:
+        *this = false;
+        break;
+
+    case VAR_FLOAT:
+        *this = 0.0f;
+        break;
+
+    case VAR_VECTOR2:
+        *this = Vector2::ZERO;
+        break;
+
+    case VAR_VECTOR3:
+        *this = Vector3::ZERO;
+        break;
+
+    case VAR_VECTOR4:
+        *this = Vector4::ZERO;
+        break;
+
+    case VAR_QUATERNION:
+        *this = Quaternion::IDENTITY;
+        break;
+
+    case VAR_COLOR:
+        *this = Color::BLACK;
+        break;
+
+    case VAR_STRING:
+        *this = EMPTY_STRING;
+        break;
+
+    case VAR_VOIDPTR:
+        *this = (void*)nullptr;
+        break;
+
+    case VAR_INTRECT:
+        *this = IntRect::ZERO;
+        break;
+
+    case VAR_INTVECTOR2:
+        *this = IntVector2::ZERO;
+        break;
+
+    case VAR_INTVECTOR3:
+        *this = IntVector3::ZERO;
+        break;
+
+    case VAR_PTR:
+        *this = (RefCounted*)nullptr;
+        break;
+
+    case VAR_MATRIX3:
+        *this = Matrix3::ZERO;
+        break;
+
+    case VAR_MATRIX3X4:
+        *this = Matrix3x4::ZERO;
+        break;
+
+    case VAR_MATRIX4:
+        *this = Matrix4::ZERO;
+        break;
+
+    case VAR_DOUBLE:
+        *this = 0.0;
+        break;
+
+    case VAR_RECT:
+        *this = Rect::ZERO;
+        break;
+
+    default:
+        SetType(VAR_NONE);
+    }
+}
+
+void Variant::FromString(const ea::string& type, const ea::string& value)
+{
+    return FromString(GetTypeFromName(type), value.c_str());
 }
 
 void Variant::FromString(const char* type, const char* value)
@@ -262,9 +351,9 @@ void Variant::FromString(const char* type, const char* value)
     return FromString(GetTypeFromName(type), value);
 }
 
-void Variant::FromString(VariantType type, const String& value)
+void Variant::FromString(VariantType type, const ea::string& value)
 {
-    return FromString(type, value.CString());
+    return FromString(type, value.c_str());
 }
 
 void Variant::FromString(VariantType type, const char* value)
@@ -323,8 +412,8 @@ void Variant::FromString(VariantType type, const char* value)
 
     case VAR_RESOURCEREF:
     {
-        StringVector values = String::Split(value, ';');
-        if (values.Size() == 2)
+        StringVector values = ea::string::split(value, ';');
+        if (values.size() == 2)
         {
             SetType(VAR_RESOURCEREF);
             value_.resourceRef_.type_ = values[0];
@@ -335,13 +424,13 @@ void Variant::FromString(VariantType type, const char* value)
 
     case VAR_RESOURCEREFLIST:
     {
-        StringVector values = String::Split(value, ';', true);
-        if (values.Size() >= 1)
+        StringVector values = ea::string::split(value, ';', true);
+        if (values.size() >= 1)
         {
             SetType(VAR_RESOURCEREFLIST);
             value_.resourceRefList_.type_ = values[0];
-            value_.resourceRefList_.names_.Resize(values.Size() - 1);
-            for (unsigned i = 1; i < values.Size(); ++i)
+            value_.resourceRefList_.names_.resize(values.size() - 1);
+            for (unsigned i = 1; i < values.size(); ++i)
                 value_.resourceRefList_.names_[i - 1] = values[i];
         }
         break;
@@ -395,36 +484,26 @@ void Variant::SetBuffer(const void* data, unsigned size)
         size = 0;
 
     SetType(VAR_BUFFER);
-    PODVector<unsigned char>& buffer = value_.buffer_;
-    buffer.Resize(size);
+    ea::vector<unsigned char>& buffer = value_.buffer_;
+    buffer.resize(size);
     if (size)
         memcpy(&buffer[0], data, size);
 }
 
 void Variant::SetCustomVariantValue(const CustomVariantValue& value)
 {
+    assert(value.GetSize() <= VARIANT_VALUE_SIZE);
+
     // Assign value if destination is already initialized
-    if (CustomVariantValue* custom = GetCustomVariantValuePtr())
+    if (CustomVariantValue* thisValueWrapped = GetCustomVariantValuePtr())
     {
-        if (custom->GetTypeInfo() == value.GetTypeInfo())
-        {
-            custom->Assign(value);
+        if (value.CopyTo(*thisValueWrapped))
             return;
-        }
     }
 
-    if (value.GetSize() <= VARIANT_VALUE_SIZE)
-    {
-        SetType(VAR_CUSTOM_STACK);
-        value_.customValueStack_.~CustomVariantValue();
-        value.Clone(&value_.customValueStack_);
-    }
-    else
-    {
-        SetType(VAR_CUSTOM_HEAP);
-        delete value_.customValueHeap_;
-        value_.customValueHeap_ = value.Clone();
-    }
+    SetType(VAR_CUSTOM);
+    value_.AsCustomValue().~CustomVariantValue();
+    value.CloneTo(value_.storage_);
 }
 
 VectorBuffer Variant::GetVectorBuffer() const
@@ -432,26 +511,26 @@ VectorBuffer Variant::GetVectorBuffer() const
     return VectorBuffer(type_ == VAR_BUFFER ? value_.buffer_ : emptyBuffer);
 }
 
-String Variant::GetTypeName() const
+ea::string Variant::GetTypeName() const
 {
     return typeNames[type_];
 }
 
-String Variant::ToString() const
+ea::string Variant::ToString() const
 {
     switch (type_)
     {
     case VAR_INT:
-        return String(value_.int_);
+        return ea::to_string(value_.int_);
 
     case VAR_INT64:
-        return String(value_.int64_);
+        return ea::to_string(value_.int64_);
 
     case VAR_BOOL:
-        return String(value_.bool_);
+        return ea::to_string(value_.bool_);
 
     case VAR_FLOAT:
-        return String(value_.float_);
+        return ea::to_string(value_.float_);
 
     case VAR_VECTOR2:
         return value_.vector2_.ToString();
@@ -473,16 +552,16 @@ String Variant::ToString() const
 
     case VAR_BUFFER:
         {
-            const PODVector<unsigned char>& buffer = value_.buffer_;
-            String ret;
-            BufferToString(ret, buffer.Begin().ptr_, buffer.Size());
+            const ea::vector<unsigned char>& buffer = value_.buffer_;
+            ea::string ret;
+            BufferToString(ret, buffer.data(), buffer.size());
             return ret;
         }
 
     case VAR_VOIDPTR:
     case VAR_PTR:
         // Pointer serialization not supported (convert to null)
-        return String(0);
+        return ea::string();
 
     case VAR_INTRECT:
         return value_.intRect_.ToString();
@@ -503,20 +582,19 @@ String Variant::ToString() const
         return value_.matrix4_->ToString();
 
     case VAR_DOUBLE:
-        return String(value_.double_);
+        return ea::to_string(value_.double_);
 
     case VAR_RECT:
         return value_.rect_.ToString();
 
-    case VAR_CUSTOM_HEAP:
-    case VAR_CUSTOM_STACK:
+    case VAR_CUSTOM:
         return GetCustomVariantValuePtr()->ToString();
 
     default:
         // VAR_RESOURCEREF, VAR_RESOURCEREFLIST, VAR_VARIANTVECTOR, VAR_STRINGVECTOR, VAR_VARIANTMAP
         // Reference string serialization requires typehash-to-name mapping from the context. Can not support here
         // Also variant map or vector string serialization is not supported. XML or binary save should be used instead
-        return String::EMPTY;
+        return EMPTY_STRING;
     }
 }
 
@@ -553,36 +631,36 @@ bool Variant::IsZero() const
         return value_.color_ == Color::WHITE;
 
     case VAR_STRING:
-        return value_.string_.Empty();
+        return value_.string_.empty();
 
     case VAR_BUFFER:
-        return value_.buffer_.Empty();
+        return value_.buffer_.empty();
 
     case VAR_VOIDPTR:
         return value_.voidPtr_ == nullptr;
 
     case VAR_RESOURCEREF:
-        return value_.resourceRef_.name_.Empty();
+        return value_.resourceRef_.name_.empty();
 
     case VAR_RESOURCEREFLIST:
     {
         const StringVector& names = value_.resourceRefList_.names_;
-        for (StringVector::ConstIterator i = names.Begin(); i != names.End(); ++i)
+        for (auto i = names.begin(); i != names.end(); ++i)
         {
-            if (!i->Empty())
+            if (!i->empty())
                 return false;
         }
         return true;
     }
 
     case VAR_VARIANTVECTOR:
-        return value_.variantVector_.Empty();
+        return value_.variantVector_.empty();
 
     case VAR_STRINGVECTOR:
-        return value_.stringVector_.Empty();
+        return value_.stringVector_.empty();
 
     case VAR_VARIANTMAP:
-        return value_.variantMap_.Empty();
+        return value_.variantMap_->empty();
 
     case VAR_INTRECT:
         return value_.intRect_ == IntRect::ZERO;
@@ -594,7 +672,7 @@ bool Variant::IsZero() const
         return value_.intVector3_ == IntVector3::ZERO;
 
     case VAR_PTR:
-        return value_.weakPtr_ == (RefCounted*)nullptr;
+        return value_.weakPtr_ == nullptr;
 
     case VAR_MATRIX3:
         return *value_.matrix3_ == Matrix3::IDENTITY;
@@ -611,8 +689,7 @@ bool Variant::IsZero() const
     case VAR_RECT:
         return value_.rect_ == Rect::ZERO;
 
-    case VAR_CUSTOM_HEAP:
-    case VAR_CUSTOM_STACK:
+    case VAR_CUSTOM:
         return GetCustomVariantValuePtr()->IsZero();
 
     default:
@@ -628,11 +705,11 @@ void Variant::SetType(VariantType newType)
     switch (type_)
     {
     case VAR_STRING:
-        value_.string_.~String();
+        value_.string_.~basic_string<char>();
         break;
 
     case VAR_BUFFER:
-        value_.buffer_.~PODVector<unsigned char>();
+        value_.buffer_.~vector<unsigned char>();
         break;
 
     case VAR_RESOURCEREF:
@@ -652,7 +729,7 @@ void Variant::SetType(VariantType newType)
         break;
 
     case VAR_VARIANTMAP:
-        value_.variantMap_.~VariantMap();
+        delete value_.variantMap_;
         break;
 
     case VAR_PTR:
@@ -671,12 +748,8 @@ void Variant::SetType(VariantType newType)
         delete value_.matrix4_;
         break;
 
-    case VAR_CUSTOM_HEAP:
-        delete value_.customValueHeap_;
-        break;
-
-    case VAR_CUSTOM_STACK:
-        value_.customValueStack_.~CustomVariantValue();
+    case VAR_CUSTOM:
+        value_.AsCustomValue().~CustomVariantValue();
         break;
 
     default:
@@ -688,11 +761,11 @@ void Variant::SetType(VariantType newType)
     switch (type_)
     {
     case VAR_STRING:
-        new(&value_.string_) String();
+        new(&value_.string_) ea::string();
         break;
 
     case VAR_BUFFER:
-        new(&value_.buffer_) PODVector<unsigned char>();
+        new(&value_.buffer_) ea::vector<unsigned char>();
         break;
 
     case VAR_RESOURCEREF:
@@ -712,7 +785,7 @@ void Variant::SetType(VariantType newType)
         break;
 
     case VAR_VARIANTMAP:
-        new(&value_.variantMap_) VariantMap();
+        value_.variantMap_ = new VariantMap();
         break;
 
     case VAR_PTR:
@@ -731,14 +804,9 @@ void Variant::SetType(VariantType newType)
         value_.matrix4_ = new Matrix4();
         break;
 
-    case VAR_CUSTOM_HEAP:
-        // Must be initialized later
-        value_.customValueHeap_ = nullptr;
-        break;
-
-    case VAR_CUSTOM_STACK:
-        // Initialize virtual table with void custom object
-        new (&value_.customValueStack_) CustomVariantValue();
+    case VAR_CUSTOM:
+        // Initialize virtual table with void dummy custom object
+        new (&value_.storage_) CustomVariantValue();
         break;
 
     default:
@@ -811,7 +879,7 @@ template <> const Color& Variant::Get<const Color&>() const
     return GetColor();
 }
 
-template <> const String& Variant::Get<const String&>() const
+template <> const ea::string& Variant::Get<const ea::string&>() const
 {
     return GetString();
 }
@@ -836,7 +904,7 @@ template <> const IntVector3& Variant::Get<const IntVector3&>() const
     return GetIntVector3();
 }
 
-template <> const PODVector<unsigned char>& Variant::Get<const PODVector<unsigned char>&>() const
+template <> const ea::vector<unsigned char>& Variant::Get<const ea::vector<unsigned char>&>() const
 {
     return GetBuffer();
 }
@@ -916,7 +984,7 @@ template <> Color Variant::Get<Color>() const
     return GetColor();
 }
 
-template <> String Variant::Get<String>() const
+template <> ea::string Variant::Get<ea::string>() const
 {
     return GetString();
 }
@@ -941,7 +1009,7 @@ template <> IntVector3 Variant::Get<IntVector3>() const
     return GetIntVector3();
 }
 
-template <> PODVector<unsigned char> Variant::Get<PODVector<unsigned char> >() const
+template <> ea::vector<unsigned char> Variant::Get<ea::vector<unsigned char> >() const
 {
     return GetBuffer();
 }
@@ -961,14 +1029,14 @@ template <> Matrix4 Variant::Get<Matrix4>() const
     return GetMatrix4();
 }
 
-String Variant::GetTypeName(VariantType type)
+ea::string Variant::GetTypeName(VariantType type)
 {
     return typeNames[type];
 }
 
-VariantType Variant::GetTypeFromName(const String& typeName)
+VariantType Variant::GetTypeFromName(const ea::string& typeName)
 {
-    return GetTypeFromName(typeName.CString());
+    return GetTypeFromName(typeName.c_str());
 }
 
 VariantType Variant::GetTypeFromName(const char* typeName)

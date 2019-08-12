@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -80,7 +80,7 @@ public:
     /// Set selection.
     void SetSelection(unsigned index);
     /// Set multiple selected items. If multiselect disabled, sets only the first.
-    void SetSelections(const PODVector<unsigned>& indices);
+    void SetSelections(const ea::vector<unsigned>& indices);
     /// Add item to the selection, multiselect mode only.
     void AddSelection(unsigned index);
     /// Remove item from the selection.
@@ -115,22 +115,22 @@ public:
     /// Return item at index.
     UIElement* GetItem(unsigned index) const;
     /// Return all items.
-    PODVector<UIElement*> GetItems() const;
+    ea::vector<UIElement*> GetItems() const;
     /// Return index of item, or M_MAX_UNSIGNED If not found.
     unsigned FindItem(UIElement* item) const;
     /// Return first selected index, or M_MAX_UNSIGNED if none selected.
     unsigned GetSelection() const;
 
     /// Return all selected indices.
-    const PODVector<unsigned>& GetSelections() const { return selections_; }
+    const ea::vector<unsigned>& GetSelections() const { return selections_; }
 
     /// Copy selected items to system clipboard. Currently only applicable to Text items.
     void CopySelectedItemsToClipboard() const;
     /// Return first selected item, or null if none selected.
     UIElement* GetSelectedItem() const;
     /// Return all selected items.
-    PODVector<UIElement*> GetSelectedItems() const;
-    /// Return whether an item at index is seleccted.
+    ea::vector<UIElement*> GetSelectedItems() const;
+    /// Return whether an item at index is selected.
     bool IsSelected(unsigned index) const;
     /// Return whether an item at index has its children expanded (in hierarchy mode only).
     bool IsExpanded(unsigned index) const;
@@ -165,7 +165,7 @@ protected:
     void UpdateSelectionEffect();
 
     /// Current selection.
-    PODVector<unsigned> selections_;
+    ea::vector<unsigned> selections_;
     /// Highlight mode.
     HighlightMode highlightMode_;
     /// Multiselect flag.

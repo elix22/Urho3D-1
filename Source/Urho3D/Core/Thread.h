@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,6 +35,8 @@ using ThreadID = pthread_t;
 using ThreadID = unsigned;
 #endif
 
+#include "../Container/Str.h"
+
 namespace Urho3D
 {
 
@@ -43,7 +45,7 @@ class URHO3D_API Thread
 {
 public:
     /// Construct. Does not start the thread yet.
-    Thread();
+    Thread(const ea::string& name=EMPTY_STRING);
     /// Destruct. If running, stop and wait for thread to finish.
     virtual ~Thread();
 
@@ -59,6 +61,8 @@ public:
 
     /// Return whether thread exists.
     bool IsStarted() const { return handle_ != nullptr; }
+    /// Set name of the platform thread on supported platforms. Must be called before Run().
+    void SetName(const ea::string& name);
 
     /// Set the current thread as the main thread.
     static void SetMainThread();
@@ -68,6 +72,14 @@ public:
     static bool IsMainThread();
 
 protected:
+    /// Helper that executes Thread::ThreadFunction().
+#if _WIN32
+    static unsigned long __stdcall ThreadFunctionStatic(void* data);
+#else
+    static void* ThreadFunctionStatic(void* data);
+#endif
+    /// Name of the thread. It will be propagated to underlying OS thread if possible.
+    ea::string name_{};
     /// Thread handle.
     void* handle_;
     /// Running flag.

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@
 namespace Urho3D
 {
 
-enum FileType
+enum FileType : unsigned
 {
     FTYPE_FILE,
     FTYPE_ARCHIVE,
@@ -47,7 +47,7 @@ enum FileType
     FTYPE_EXCEL,
 };
 
-enum ContentType
+enum ContentType : unsigned
 {
     CTYPE_UNKNOWN,
     CTYPE_SCENE,
@@ -62,14 +62,15 @@ enum ContentType
     CTYPE_SOUND,
     CTYPE_TEXTURE,
     CTYPE_TEXTUREXML,
+    CTYPE_FOLDER,
 };
 
 /// Return file type based on extension of file name.
-URHO3D_TOOLBOX_API FileType GetFileType(const String& fileName);
+URHO3D_TOOLBOX_API FileType GetFileType(const ea::string& fileName);
 /// Return icon from icon font based on extension of file name.
-URHO3D_TOOLBOX_API String GetFileIcon(const String& fileName);
+URHO3D_TOOLBOX_API ea::string GetFileIcon(const ea::string& fileName);
 
 /// Return content type by inspecting file contents.
-URHO3D_TOOLBOX_API ContentType GetContentType(const String& resourcePath);
+URHO3D_TOOLBOX_API ContentType GetContentType(Context* context, const ea::string& resourcePath);
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -70,9 +70,9 @@ public:
     /// Set animation set.
     void SetAnimationSet(AnimationSet2D* animationSet);
     /// Set entity name (skin name for spine, entity name for spriter).
-    void SetEntity(const String& entity);
+    void SetEntity(const ea::string& entity);
     /// Set animation by name and loop mode.
-    void SetAnimation(const String& name, LoopMode2D loopMode = LM_DEFAULT);
+    void SetAnimation(const ea::string& name, LoopMode2D loopMode = LM_DEFAULT);
     /// Set loop mode.
     void SetLoopMode(LoopMode2D loopMode);
     /// Set speed.
@@ -81,9 +81,9 @@ public:
     /// Return animation.
     AnimationSet2D* GetAnimationSet() const;
     /// Return entity name.
-    const String& GetEntity() const { return entity_; }
+    const ea::string& GetEntity() const { return entity_; }
     /// Return animation name.
-    const String& GetAnimation() const { return animationName_; }
+    const ea::string& GetAnimation() const { return animationName_; }
     /// Return loop mode.
     LoopMode2D GetLoopMode() const { return loopMode_; }
     /// Return speed.
@@ -94,7 +94,7 @@ public:
     /// Return animation set attribute.
     ResourceRef GetAnimationSetAttr() const;
     /// Set animation by name.
-    void SetAnimationAttr(const String& name);
+    void SetAnimationAttr(const ea::string& name);
 
 protected:
     /// Handle scene being assigned.
@@ -125,11 +125,11 @@ protected:
     /// Speed.
     float speed_;
     /// Entity name.
-    String entity_;
+    ea::string entity_;
     /// Animation set.
     SharedPtr<AnimationSet2D> animationSet_;
     /// Animation name.
-    String animationName_;
+    ea::string animationName_;
     /// Loop mode.
     LoopMode2D loopMode_;
 
@@ -143,7 +143,7 @@ protected:
 #endif
 
     /// Spriter instance.
-    UniquePtr<Spriter::SpriterInstance> spriterInstance_;
+    ea::unique_ptr<Spriter::SpriterInstance> spriterInstance_;
 };
 
 }

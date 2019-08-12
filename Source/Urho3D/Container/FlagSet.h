@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -43,6 +43,16 @@ template <typename T> struct IsFlagSet
 #define URHO3D_FLAGSET(enumName, flagsetName) \
     URHO3D_ENABLE_FLAGSET(enumName); \
     using flagsetName = FlagSet<enumName>
+
+/// Enable enum for using in FlagSet and declare FlagSet specialization for enums in custom namespaces. Shall be called within global namespace.
+#define URHO3D_FLAGSET_EX(nameSpace, enumName, flagsetName)                             \
+    namespace Urho3D { URHO3D_ENABLE_FLAGSET(nameSpace::enumName); }                    \
+    namespace nameSpace { using flagsetName = Urho3D::FlagSet<nameSpace::enumName>; }   \
+
+/// Enable enum for using in FlagSet and declare FlagSet specialization for enums in global namespace. Shall be called within global namespace.
+#define URHO3D_FLAGSET_GLOBAL(enumName, flagsetName)                                    \
+    namespace Urho3D { URHO3D_ENABLE_FLAGSET(::enumName); }                             \
+    using flagsetName = Urho3D::FlagSet<::enumName>;                                    \
 
 /// A set of flags defined by an Enum.
 template <class E, class = typename std::enable_if<IsFlagSet<E>::value_>::type>
@@ -230,6 +240,9 @@ public:
 
     /// Return underlying integer (non-constant).
     Integer& AsInteger() { return value_; }
+
+    /// Return hash value.
+    unsigned ToHash() const { return (unsigned)value_; }
 
 protected:
     /// Value

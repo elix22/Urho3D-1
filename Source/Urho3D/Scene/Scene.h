@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/HashSet.h"
+#include <EASTL/unique_ptr.h>
+
 #include "../Core/Mutex.h"
 #include "../Resource/XMLElement.h"
 #include "../Resource/JSONFile.h"
@@ -70,7 +71,7 @@ struct AsyncProgress
     /// Current load mode.
     LoadMode mode_;
     /// Resource name hashes left to load.
-    HashSet<StringHash> resources_;
+    ea::hash_set<StringHash> resources_;
     /// Loaded resources.
     unsigned loadedResources_;
     /// Total resources.
@@ -116,11 +117,9 @@ public:
     /// Load from a JSON file. Return true if successful.
     bool LoadJSON(Deserializer& source);
     /// Save to an XML file. Return true if successful.
-    bool SaveXML(Serializer& dest, const String& indentation = "\t") const;
+    bool SaveXML(Serializer& dest, const ea::string& indentation = "\t") const;
     /// Save to a JSON file. Return true if successful.
-    bool SaveJSON(Serializer& dest, const String& indentation = "\t") const;
-    /// Save to a YAML file. Return true if successful.
-    bool SaveYAML(Serializer& dest, int indentation = 2) const;
+    bool SaveJSON(Serializer& dest, const ea::string& indentation = "\t") const;
     /// Load from a binary file asynchronously. Return true if started successfully. The LOAD_RESOURCES_ONLY mode can also be used to preload resources from object prefab files.
     bool LoadAsync(File* file, LoadMode mode = LOAD_SCENE_AND_RESOURCES);
     /// Load from an XML file asynchronously. Return true if started successfully. The LOAD_RESOURCES_ONLY mode can also be used to preload resources from object prefab files.
@@ -161,9 +160,9 @@ public:
     /// Clear required package files.
     void ClearRequiredPackageFiles();
     /// Register a node user variable hash reverse mapping (for editing.)
-    void RegisterVar(const String& name);
+    void RegisterVar(const ea::string& name);
     /// Unregister a node user variable hash reverse mapping.
-    void UnregisterVar(const String& name);
+    void UnregisterVar(const ea::string& name);
     /// Clear all registered node user variable hash reverse mappings.
     void UnregisterAllVars();
 
@@ -172,7 +171,7 @@ public:
     /// Return component from the whole scene by ID, or null if not found.
     Component* GetComponent(unsigned id) const;
     /// Get nodes with specific tag from the whole scene, return false if empty.
-    bool GetNodesWithTag(PODVector<Node*>& dest, const String& tag)  const;
+    bool GetNodesWithTag(ea::vector<Node*>& dest, const ea::string& tag)  const;
 
     /// Return whether updates are enabled.
     bool IsUpdateEnabled() const { return updateEnabled_; }
@@ -187,7 +186,7 @@ public:
     LoadMode GetAsyncLoadMode() const { return asyncProgress_.mode_; }
 
     /// Return source file name.
-    const String& GetFileName() const { return fileName_; }
+    const ea::string& GetFileName() const { return fileName_; }
 
     /// Return source file checksum.
     unsigned GetChecksum() const { return checksum_; }
@@ -208,10 +207,10 @@ public:
     int GetAsyncLoadingMs() const { return asyncLoadingMs_; }
 
     /// Return required package files.
-    const Vector<SharedPtr<PackageFile> >& GetRequiredPackageFiles() const { return requiredPackageFiles_; }
+    const ea::vector<SharedPtr<PackageFile> >& GetRequiredPackageFiles() const { return requiredPackageFiles_; }
 
     /// Return a node user variable name, or empty if not registered.
-    const String& GetVarName(StringHash hash) const;
+    const ea::string& GetVarName(StringHash hash) const;
 
     /// Update scene. Called by HandleUpdate.
     void Update(float timeStep);
@@ -233,9 +232,9 @@ public:
     static bool IsReplicatedID(unsigned id) { return id < FIRST_LOCAL_ID; }
 
     /// Cache node by tag if tag not zero, no checking if already added. Used internaly in Node::AddTag.
-    void NodeTagAdded(Node* node, const String& tag);
+    void NodeTagAdded(Node* node, const ea::string& tag);
     /// Cache node by tag if tag not zero.
-    void NodeTagRemoved(Node* node, const String& tag);
+    void NodeTagRemoved(Node* node, const ea::string& tag);
 
     /// Node added. Assign scene pointer and add to ID map.
     void NodeAdded(Node* node);
@@ -246,9 +245,9 @@ public:
     /// Component removed. Remove from ID map.
     void ComponentRemoved(Component* component);
     /// Set node user variable reverse mappings.
-    void SetVarNamesAttr(const String& value);
+    void SetVarNamesAttr(const ea::string& value);
     /// Return node user variable reverse mappings.
-    String GetVarNamesAttr() const;
+    ea::string GetVarNamesAttr() const;
     /// Prepare network update by comparing attributes and marking replication states dirty as necessary.
     void PrepareNetworkUpdate();
     /// Clean up all references to a network connection that is about to be removed.
@@ -281,31 +280,31 @@ private:
     void PreloadResourcesJSON(const JSONValue& value);
 
     /// Replicated scene nodes by ID.
-    HashMap<unsigned, Node*> replicatedNodes_;
+    ea::unordered_map<unsigned, Node*> replicatedNodes_;
     /// Local scene nodes by ID.
-    HashMap<unsigned, Node*> localNodes_;
+    ea::unordered_map<unsigned, Node*> localNodes_;
     /// Replicated components by ID.
-    HashMap<unsigned, Component*> replicatedComponents_;
+    ea::unordered_map<unsigned, Component*> replicatedComponents_;
     /// Local components by ID.
-    HashMap<unsigned, Component*> localComponents_;
+    ea::unordered_map<unsigned, Component*> localComponents_;
     /// Cached tagged nodes by tag.
-    HashMap<StringHash, PODVector<Node*> > taggedNodes_;
+    ea::unordered_map<StringHash, ea::vector<Node*> > taggedNodes_;
     /// Asynchronous loading progress.
     AsyncProgress asyncProgress_;
     /// Node and component ID resolver for asynchronous loading.
     SceneResolver resolver_;
     /// Source file name.
-    mutable String fileName_;
+    mutable ea::string fileName_;
     /// Required package files for networking.
-    Vector<SharedPtr<PackageFile> > requiredPackageFiles_;
+    ea::vector<SharedPtr<PackageFile> > requiredPackageFiles_;
     /// Registered node user variable reverse mappings.
-    HashMap<StringHash, String> varNames_;
+    ea::unordered_map<StringHash, ea::string> varNames_;
     /// Nodes to check for attribute changes on the next network update.
-    HashSet<unsigned> networkUpdateNodes_;
+    ea::hash_set<unsigned> networkUpdateNodes_;
     /// Components to check for attribute changes on the next network update.
-    HashSet<unsigned> networkUpdateComponents_;
+    ea::hash_set<unsigned> networkUpdateComponents_;
     /// Delayed dirty notification queue for components.
-    PODVector<Component*> delayedDirtyComponents_;
+    ea::vector<Component*> delayedDirtyComponents_;
     /// Mutex for the delayed dirty notification queue.
     Mutex sceneMutex_;
     /// Preallocated event data map for smoothing update events.

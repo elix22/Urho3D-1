@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -28,7 +28,7 @@
 
 #include <Urho3D/DebugNew.h>
 
-Mover::Mover(Context* context) :
+Mover3D::Mover3D(Context* context) :
     LogicComponent(context),
     moveSpeed_(0.0f),
     rotationSpeed_(0.0f)
@@ -37,14 +37,14 @@ Mover::Mover(Context* context) :
     SetUpdateEventMask(USE_UPDATE);
 }
 
-void Mover::SetParameters(float moveSpeed, float rotationSpeed, const BoundingBox& bounds)
+void Mover3D::SetParameters(float moveSpeed, float rotationSpeed, const BoundingBox& bounds)
 {
     moveSpeed_ = moveSpeed;
     rotationSpeed_ = rotationSpeed;
     bounds_ = bounds;
 }
 
-void Mover::Update(float timeStep)
+void Mover3D::Update(float timeStep)
 {
     node_->Translate(Vector3::FORWARD * moveSpeed_ * timeStep);
 

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -147,7 +147,7 @@ public:
     const int* Data() const { return &x_; }
 
     /// Return as string.
-    String ToString() const;
+    ea::string ToString() const;
 
     /// Return hash value for HashSet & HashMap.
     unsigned ToHash() const { return (unsigned)x_ * 31 * 31 + (unsigned)y_ * 31 + (unsigned)z_; }
@@ -416,6 +416,10 @@ public:
     /// Return whether is NaN.
     bool IsNaN() const { return Urho3D::IsNaN(x_) || Urho3D::IsNaN(y_) || Urho3D::IsNaN(z_); }
 
+    /// Return whether is Inf.
+    bool IsInf() const { return Urho3D::IsInf(x_) || Urho3D::IsInf(y_) || Urho3D::IsInf(z_); }
+
+
     /// Return normalized to unit length.
     Vector3 Normalized() const
     {
@@ -429,11 +433,21 @@ public:
             return *this;
     }
 
+    /// Return normalized to unit length or zero if length is too small.
+    Vector3 NormalizedOrZero(float eps = M_LARGE_EPSILON) const
+    {
+        float lenSquared = LengthSquared();
+        if (lenSquared > eps * eps)
+            return *this / sqrtf(lenSquared);
+        else
+            return Vector3::ZERO;
+    }
+
     /// Return float data.
     const float* Data() const { return &x_; }
 
     /// Return as string.
-    String ToString() const;
+    ea::string ToString() const;
 
     /// Return hash value for HashSet & HashMap.
     unsigned ToHash() const

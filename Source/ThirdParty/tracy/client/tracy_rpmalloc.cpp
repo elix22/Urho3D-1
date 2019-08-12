@@ -101,6 +101,9 @@
 #    include <pthread.h>
 #  endif
 #  define ALIGNED_STRUCT(name, alignment) struct __attribute__((__aligned__(alignment))) name
+#  ifdef FORCEINLINE
+#    undef FORCEINLINE
+#  endif
 #  define FORCEINLINE inline __attribute__((__always_inline__))
 #  ifdef __arm__
 #    define atomic_thread_fence_acquire() __asm volatile("dmb ish" ::: "memory")
@@ -1692,7 +1695,7 @@ rpmalloc_finalize(void) {
 }
 
 //! Initialize thread, assign heap
-void
+TRACY_API void
 rpmalloc_thread_initialize(void) {
 	if (!get_thread_heap()) {
 		atomic_incr32(&_memory_active_heaps);
@@ -1902,8 +1905,8 @@ _memory_guard_block(void* block) {
 #endif
 
 // Extern interface
-// Urho3D change
-DLL_EXPORT RPMALLOC_RESTRICT void*
+
+TRACY_API RPMALLOC_RESTRICT void*
 rpmalloc(size_t size) {
 #if ENABLE_VALIDATE_ARGS
 	if (size >= MAX_ALLOC_SIZE) {
@@ -1916,8 +1919,8 @@ rpmalloc(size_t size) {
 	_memory_guard_post_alloc(block, size);
 	return block;
 }
-// Urho3D change
-DLL_EXPORT void
+
+TRACY_API void
 rpfree(void* ptr) {
 	_memory_guard_validate(ptr);
 	_memory_deallocate(ptr);

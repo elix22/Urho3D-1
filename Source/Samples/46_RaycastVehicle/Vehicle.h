@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -46,15 +46,15 @@ const float MAX_WHEEL_ANGLE = 22.5f;
 
 // Vehicle component, responsible for physical movement according to controls.
 // Encapsulates RaycastVehicle
-class Vehicle : public LogicComponent
+class Vehicle2 : public LogicComponent
 {
-    URHO3D_OBJECT(Vehicle, LogicComponent)
+    URHO3D_OBJECT(Vehicle2, LogicComponent)
 
 public :
     /// Construct.
-    explicit Vehicle(Context* context);
+    explicit Vehicle2(Context* context);
     /// Destruct.
-    ~Vehicle() override;
+    ~Vehicle2() override;
 
     /// Register object factory and attributes.
     static void RegisterObject(Context* context);
@@ -116,7 +116,7 @@ private:
     /// Wheel roll influence (how much car will turn sidewise)
     float rollInfluence_;
     /// Emitter data for saving.
-    Vector<Node*> particleEmitterNodeList_;
+    ea::vector<Node*> particleEmitterNodeList_;
     /// Value to calculate acceleration.
     Vector3 prevVelocity_;
     /// Storing points for emitters

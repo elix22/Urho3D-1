@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +35,7 @@
 namespace Urho3D
 {
 
-ShaderPrecache::ShaderPrecache(Context* context, const String& fileName) :
+ShaderPrecache::ShaderPrecache(Context* context, const ea::string& fileName) :
     Object(context),
     fileName_(fileName),
     xmlFile_(context)
@@ -49,9 +49,9 @@ ShaderPrecache::ShaderPrecache(Context* context, const String& fileName) :
         XMLElement shader = xmlFile_.GetRoot().GetChild("shader");
         while (shader)
         {
-            String oldCombination = shader.GetAttribute("vs") + " " + shader.GetAttribute("vsdefines") + " " +
+            ea::string oldCombination = shader.GetAttribute("vs") + " " + shader.GetAttribute("vsdefines") + " " +
                                     shader.GetAttribute("ps") + " " + shader.GetAttribute("psdefines");
-            usedCombinations_.Insert(oldCombination);
+            usedCombinations_.insert(oldCombination);
 
             shader = shader.GetNext("shader");
         }
@@ -68,7 +68,7 @@ ShaderPrecache::~ShaderPrecache()
 {
     URHO3D_LOGINFO("End dumping shaders");
 
-    if (usedCombinations_.Empty())
+    if (usedCombinations_.empty())
         return;
 
     File dest(context_, fileName_, FILE_WRITE);
@@ -81,21 +81,21 @@ void ShaderPrecache::StoreShaders(ShaderVariation* vs, ShaderVariation* ps)
         return;
 
     // Check for duplicate using pointers first (fast)
-    Pair<ShaderVariation*, ShaderVariation*> shaderPair = MakePair(vs, ps);
-    if (usedPtrCombinations_.Contains(shaderPair))
+    ea::pair<ShaderVariation*, ShaderVariation*> shaderPair = ea::make_pair(vs, ps);
+    if (usedPtrCombinations_.contains(shaderPair))
         return;
-    usedPtrCombinations_.Insert(shaderPair);
+    usedPtrCombinations_.insert(shaderPair);
 
-    String vsName = vs->GetName();
-    String psName = ps->GetName();
-    const String& vsDefines = vs->GetDefines();
-    const String& psDefines = ps->GetDefines();
+    ea::string vsName = vs->GetName();
+    ea::string psName = ps->GetName();
+    const ea::string& vsDefines = vs->GetDefines();
+    const ea::string& psDefines = ps->GetDefines();
 
     // Check for duplicate using strings (needed for combinations loaded from existing file)
-    String newCombination = vsName + " " + vsDefines + " " + psName + " " + psDefines;
-    if (usedCombinations_.Contains(newCombination))
+    ea::string newCombination = vsName + " " + vsDefines + " " + psName + " " + psDefines;
+    if (usedCombinations_.contains(newCombination))
         return;
-    usedCombinations_.Insert(newCombination);
+    usedCombinations_.insert(newCombination);
 
     XMLElement shaderElem = xmlFile_.GetRoot().CreateChild("shader");
     shaderElem.SetAttribute("vs", vsName);
@@ -114,16 +114,16 @@ void ShaderPrecache::LoadShaders(Graphics* graphics, Deserializer& source)
     XMLElement shader = xmlFile.GetRoot().GetChild("shader");
     while (shader)
     {
-        String vsDefines = shader.GetAttribute("vsdefines");
-        String psDefines = shader.GetAttribute("psdefines");
+        ea::string vsDefines = shader.GetAttribute("vsdefines");
+        ea::string psDefines = shader.GetAttribute("psdefines");
 
         // Check for illegal variations on OpenGL ES and skip them
 #ifdef GL_ES_VERSION_2_0
         if (
 #ifndef __EMSCRIPTEN__
-            vsDefines.Contains("INSTANCED") ||
+            vsDefines.contains("INSTANCED") ||
 #endif
-            (psDefines.Contains("POINTLIGHT") && psDefines.Contains("SHADOW")))
+            (psDefines.contains("POINTLIGHT") && psDefines.contains("SHADOW")))
         {
             shader = shader.GetNext("shader");
             continue;

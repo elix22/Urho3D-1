@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/HashSet.h"
+#include <EASTL/hash_set.h>
+
 #include "../Core/Object.h"
 #include "../Resource/XMLFile.h"
 
@@ -39,7 +40,7 @@ class URHO3D_API ShaderPrecache : public Object
 
 public:
     /// Construct and begin collecting shader combinations. Load existing combinations from XML if the file exists.
-    ShaderPrecache(Context* context, const String& fileName);
+    ShaderPrecache(Context* context, const ea::string& fileName);
     /// Destruct. Write the collected shaders to XML.
     ~ShaderPrecache() override;
 
@@ -51,13 +52,13 @@ public:
 
 private:
     /// XML file name.
-    String fileName_;
+    ea::string fileName_;
     /// XML file.
     XMLFile xmlFile_;
     /// Already encountered shader combinations, pointer version for fast queries.
-    HashSet<Pair<ShaderVariation*, ShaderVariation*> > usedPtrCombinations_;
+    ea::hash_set<ea::pair<ShaderVariation*, ShaderVariation*> > usedPtrCombinations_;
     /// Already encountered shader combinations.
-    HashSet<String> usedCombinations_;
+    ea::hash_set<ea::string> usedCombinations_;
 };
 
 }

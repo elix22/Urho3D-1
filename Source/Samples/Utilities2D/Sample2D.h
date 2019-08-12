@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -29,10 +29,17 @@ namespace Urho3D
 
 class Node;
 class Scene;
+class TileMapLayer2D;
+class CollisionBox2D;
+class CollisionCircle2D;
+class CollisionPolygon2D;
+class CollisionChain2D;
+class TileMapObject2D;
+class TileMapInfo2D;
 
 }
 
-class Character2D;
+class CharacterIsometric;
 
 // All Urho3D classes reside in namespace Urho3D
 using namespace Urho3D;
@@ -91,28 +98,28 @@ public:
     /// Read input and zoom the camera.
     float Zoom(Camera* camera);
     /// Create path from tmx object's points.
-    PODVector<Vector2> CreatePathFromPoints(TileMapObject2D* object, Vector2 offset);
+    ea::vector<Vector2> CreatePathFromPoints(TileMapObject2D* object, Vector2 offset);
     /// Create the UI content.
-    void CreateUIContent(const String& demoTitle, int remainingLifes, int remainingCoins);
+    void CreateUIContent(const ea::string& demoTitle, int remainingLifes, int remainingCoins);
     /// Handle 'EXIT' button released event.
     void HandleExitButton(StringHash eventType, VariantMap& eventData);
     /// Save the scene.
     void SaveScene(bool initial);
     /// Create a background 2D sprite, optionally rotated by a ValueAnimation object.
-    void CreateBackgroundSprite(TileMapInfo2D info, float scale, const String& texture, bool animate);
+    void CreateBackgroundSprite(TileMapInfo2D info, float scale, const ea::string& texture, bool animate);
     /// Create a particle emitter attached to the given node.
     void SpawnEffect(Node* node);
     /// Play a non-looping sound effect.
-    void PlaySoundEffect(const String& soundName);
+    void PlaySoundEffect(const ea::string& soundName);
 
     /// Filename used in load/save functions.
-    String demoFilename_;
+    ea::string demoFilename_;
     /// The scene.
     Scene* scene_{};
 
 protected:
     /// Return XML patch instructions for screen joystick layout.
-    virtual String GetScreenJoystickPatchString() const { return
+    virtual ea::string GetScreenJoystickPatchString() const { return
         "<patch>"
         "    <remove sel=\"/element/element[./attribute[@name='Name' and @value='Button0']]/attribute[@name='Is Visible']\" />"
         "    <replace sel=\"/element/element[./attribute[@name='Name' and @value='Button0']]/element[./attribute[@name='Name' and @value='Label']]/attribute[@name='Text']/@value\">Fight</replace>"

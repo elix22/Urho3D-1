@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,11 @@
 
 #pragma once
 
+#include <EASTL/intrusive_list.h>
+
 #include "../Container/Allocator.h"
-#include "../Container/LinkedList.h"
+#include "../Core/Mutex.h"
+#include "../Core/Profiler.h"
 #include "../Core/StringHashRegister.h"
 #include "../Core/Variant.h"
 #include <functional>
@@ -57,9 +60,6 @@ class SystemUI;
 #endif
 class Graphics;
 class Renderer;
-#if URHO3D_TASKS
-class Tasks;
-#endif
 #if URHO3D_CSHARP
 class ScriptSubsystem;
 #endif
@@ -83,7 +83,7 @@ public:
     /// Return type.
     StringHash GetType() const { return type_; }
     /// Return type name.
-    const String& GetTypeName() const { return typeName_;}
+    const ea::string& GetTypeName() const { return typeName_;}
     /// Return base type info.
     const TypeInfo* GetBaseTypeInfo() const { return baseTypeInfo_; }
 
@@ -91,7 +91,7 @@ private:
     /// Type.
     StringHash type_;
     /// Type name.
-    String typeName_;
+    ea::string typeName_;
     /// Base class type info.
     const TypeInfo* baseTypeInfo_;
 };
@@ -101,10 +101,10 @@ private:
         using ClassName = typeName; \
         using BaseClassName = baseTypeName; \
         virtual Urho3D::StringHash GetType() const override { return GetTypeInfoStatic()->GetType(); } \
-        virtual const Urho3D::String& GetTypeName() const override { return GetTypeInfoStatic()->GetTypeName(); } \
+        virtual const ea::string& GetTypeName() const override { return GetTypeInfoStatic()->GetTypeName(); } \
         virtual const Urho3D::TypeInfo* GetTypeInfo() const override { return GetTypeInfoStatic(); } \
         static Urho3D::StringHash GetTypeStatic() { return GetTypeInfoStatic()->GetType(); } \
-        static const Urho3D::String& GetTypeNameStatic() { return GetTypeInfoStatic()->GetTypeName(); } \
+        static const ea::string& GetTypeNameStatic() { return GetTypeInfoStatic()->GetTypeName(); } \
         static const Urho3D::TypeInfo* GetTypeInfoStatic() { static const Urho3D::TypeInfo typeInfoStatic(#typeName, BaseClassName::GetTypeInfoStatic()); return &typeInfoStatic; } \
 
 /// Base class for objects with type identification, subsystem access and event sending/receiving capability.
@@ -121,7 +121,7 @@ public:
     /// Return type hash.
     virtual StringHash GetType() const = 0;
     /// Return type name.
-    virtual const String& GetTypeName() const = 0;
+    virtual const ea::string& GetTypeName() const = 0;
     /// Return type info.
     virtual const TypeInfo* GetTypeInfo() const = 0;
     /// Handle event.
@@ -157,7 +157,7 @@ public:
     /// Unsubscribe from all events.
     void UnsubscribeFromAllEvents();
     /// Unsubscribe from all events except those listed, and optionally only those with userdata (script registered events.)
-    void UnsubscribeFromAllEventsExcept(const PODVector<StringHash>& exceptions, bool onlyUserData);
+    void UnsubscribeFromAllEventsExcept(const ea::vector<StringHash>& exceptions, bool onlyUserData);
     /// Send event to all subscribers.
     void SendEvent(StringHash eventType);
     /// Send event with parameters to all subscribers.
@@ -167,7 +167,7 @@ public:
     /// Send event with variadic parameter pairs to all subscribers. The parameter pairs is a list of paramID and paramValue separated by comma, one pair after another.
     template <typename... Args> void SendEvent(StringHash eventType, Args... args)
     {
-        SendEvent(eventType, GetEventDataMap().Populate(args...));
+        SendEvent(eventType, GetEventDataMap().populate(args...));
     }
 
     /// Return execution context.
@@ -190,12 +190,12 @@ public:
     bool HasSubscribedToEvent(Object* sender, StringHash eventType) const;
 
     /// Return whether has subscribed to any event.
-    bool HasEventHandlers() const { return !eventHandlers_.Empty(); }
+    bool HasEventHandlers() const { return !eventHandlers_.empty(); }
 
     /// Template version of returning a subsystem.
     template <class T> T* GetSubsystem() const;
     /// Return object category. Categories are (optionally) registered along with the object factory. Return an empty string if the object category is not registered.
-    const String& GetCategory() const;
+    const ea::string& GetCategory() const;
 
     /// Send event with parameters to all subscribers.
     void SendEvent(StringHash eventType, const VariantMap& eventData);
@@ -238,27 +238,31 @@ public:
     Graphics* GetGraphics() const;
     /// Return renderer subsystem.
     Renderer* GetRenderer() const;
-#if URHO3D_TASKS
-    /// Return tasks subsystem.
-    Tasks* GetTasks() const;
-#endif
 
 protected:
     /// Execution context.
-    Context* context_;
+    WeakPtr<Context> context_;
 
 private:
     /// Find the first event handler with no specific sender.
-    EventHandler* FindEventHandler(StringHash eventType, EventHandler** previous = nullptr) const;
+    ea::intrusive_list<EventHandler>::iterator FindEventHandler(StringHash eventType);
+    /// Find the first event handler with no specific sender.
+    ea::intrusive_list<EventHandler>::iterator FindEventHandler(StringHash eventType) const { return const_cast<Object*>(this)->FindEventHandler(eventType); }
     /// Find the first event handler with specific sender.
-    EventHandler* FindSpecificEventHandler(Object* sender, EventHandler** previous = nullptr) const;
+    ea::intrusive_list<EventHandler>::iterator FindSpecificEventHandler(Object* sender);
+    /// Find the first event handler with specific sender.
+    ea::intrusive_list<EventHandler>::iterator FindSpecificEventHandler(Object* sender) const { return const_cast<Object*>(this)->FindSpecificEventHandler(sender); }
     /// Find the first event handler with specific sender and event type.
-    EventHandler* FindSpecificEventHandler(Object* sender, StringHash eventType, EventHandler** previous = nullptr) const;
+    ea::intrusive_list<EventHandler>::iterator FindSpecificEventHandler(Object* sender, StringHash eventType);
+    /// Find the first event handler with specific sender and event type.
+    ea::intrusive_list<EventHandler>::iterator FindSpecificEventHandler(Object* sender, StringHash eventType) const { return const_cast<Object*>(this)->FindSpecificEventHandler(sender, eventType); }
+    /// Erase event handler from the list.
+    ea::intrusive_list<EventHandler>::iterator EraseEventHandler(ea::intrusive_list<EventHandler>::iterator handlerIter);
     /// Remove event handlers related to a specific sender.
     void RemoveEventSender(Object* sender);
 
     /// Event handlers. Sender is null for non-specific handlers.
-    LinkedList<EventHandler> eventHandlers_;
+    ea::intrusive_list<EventHandler> eventHandlers_;
 
     /// Block object from sending and receiving any events.
     bool blockEvents_;
@@ -293,7 +297,7 @@ public:
     StringHash GetType() const { return typeInfo_->GetType(); }
 
     /// Return type name of objects created by this factory.
-    const String& GetTypeName() const { return typeInfo_->GetTypeName(); }
+    const ea::string& GetTypeName() const { return typeInfo_->GetTypeName(); }
 
 protected:
     /// Execution context.
@@ -311,33 +315,14 @@ public:
         ObjectFactory(context)
     {
         typeInfo_ = T::GetTypeInfoStatic();
-        allocator_ = AllocatorInitialize(sizeof(T));
-    }
-
-    ~ObjectFactoryImpl() override
-    {
-        AllocatorUninitialize(allocator_);
-        allocator_ = nullptr;
     }
 
     /// Create an object of the specific type.
-    SharedPtr<Object> CreateObject() override
-    {
-        auto* newObject = static_cast<T*>(AllocatorReserve(allocator_));
-        new(newObject) T(context_);
-        newObject->SetDeleter([this, newObject](RefCounted* refCounted) {
-            newObject->~T();
-            AllocatorFree(allocator_, newObject);
-        });
-        return SharedPtr<Object>(newObject);
-    }
-
-private:
-    AllocatorBlock* allocator_;
+    SharedPtr<Object> CreateObject() override { return SharedPtr<Object>(new T(context_)); }
 };
 
 /// Internal helper class for invoking event handler functions.
-class URHO3D_API EventHandler : public LinkedListNode
+class URHO3D_API EventHandler : public ea::intrusive_list_node
 {
 public:
     /// Construct with specified receiver and userdata.
@@ -482,7 +467,4 @@ template <> URHO3D_API SystemUI* Object::GetSubsystem<SystemUI>() const;
 #endif
 template <> URHO3D_API Graphics* Object::GetSubsystem<Graphics>() const;
 template <> URHO3D_API Renderer* Object::GetSubsystem<Renderer>() const;
-#if URHO3D_TASKS
-template <> URHO3D_API Tasks* Object::GetSubsystem<Tasks>() const;
-#endif
 }

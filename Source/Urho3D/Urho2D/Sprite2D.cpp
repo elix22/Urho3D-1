@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -53,7 +53,7 @@ void Sprite2D::RegisterObject(Context* context)
 
 bool Sprite2D::BeginLoad(Deserializer& source)
 {
-    if (GetName().Empty())
+    if (GetName().empty())
         SetName(source.GetName());
 
     // Reload
@@ -61,7 +61,7 @@ bool Sprite2D::BeginLoad(Deserializer& source)
         loadTexture_ = texture_;
     else
     {
-        loadTexture_ = new Texture2D(context_);
+        loadTexture_ = context_->CreateObject<Texture2D>();
         loadTexture_->SetName(GetName());
     }
     // In case we're async loading, only call BeginLoad() for the texture (load image but do not upload to GPU)
@@ -179,10 +179,10 @@ bool Sprite2D::GetTextureRectangle(Rect& rect, bool flipX, bool flipY) const
     rect.max_.y_ = ((float)rectangle_.top_ + edgeOffset_) * invHeight;
 
     if (flipX)
-        Swap(rect.min_.x_, rect.max_.x_);
+        ea::swap(rect.min_.x_, rect.max_.x_);
 
     if (flipY)
-        Swap(rect.min_.y_, rect.max_.y_);
+        ea::swap(rect.min_.y_, rect.max_.y_);
 
     return true;
 }
@@ -213,12 +213,12 @@ Sprite2D* Sprite2D::LoadFromResourceRef(Object* object, const ResourceRef& value
     if (value.type_ == SpriteSheet2D::GetTypeStatic())
     {
         // value.name_ include sprite sheet name and sprite name.
-        Vector<String> names = value.name_.Split('@');
-        if (names.Size() != 2)
+        ea::vector<ea::string> names = value.name_.split('@');
+        if (names.size() != 2)
             return nullptr;
 
-        const String& spriteSheetName = names[0];
-        const String& spriteName = names[1];
+        const ea::string& spriteSheetName = names[0];
+        const ea::string& spriteName = names[1];
 
         auto* spriteSheet = cache->GetResource<SpriteSheet2D>(spriteSheetName);
         if (!spriteSheet)

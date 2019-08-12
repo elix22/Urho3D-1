@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -93,7 +93,7 @@ void prepareVertices(Vertex2D vtx[4][4], const float xs[4], const float ys[4], c
     }
 }
 
-void pushVertices(Vector<Vertex2D>& target, const Vertex2D source[4][4])
+void pushVertices(ea::vector<Vertex2D>& target, const Vertex2D source[4][4])
 {
     for (unsigned i = 0; i < 3; ++i) // iterate over 3 columns
     {
@@ -105,10 +105,10 @@ void pushVertices(Vector<Vertex2D>& target, const Vertex2D source[4][4])
                 if (!Equals(source[0][j].position_.y_,
                     source[0][j + 1].position_.y_)) // if height != 0
                 {
-                    target.Push(source[i][j]);          // V0 in V1---V2
-                    target.Push(source[i][j + 1]);      // V1 in |   / |
-                    target.Push(source[i + 1][j + 1]);  // V2 in | /   |
-                    target.Push(source[i + 1][j]);      // V3 in V0---V3
+                    target.push_back(source[i][j]);          // V0 in V1---V2
+                    target.push_back(source[i][j + 1]);      // V1 in |   / |
+                    target.push_back(source[i + 1][j + 1]);  // V2 in | /   |
+                    target.push_back(source[i + 1][j]);      // V3 in V0---V3
                 }
             }
         }
@@ -169,8 +169,8 @@ void StretchableSprite2D::UpdateSourceBatches()
     if (!sourceBatchesDirty_ || !sprite_ || (!useTextureRect_ && !sprite_->GetTextureRectangle(textureRect_, flipX_, flipY_)))
         return;
 
-    Vector<Vertex2D>& vertices = sourceBatches_[0].vertices_;
-    vertices.Clear();
+    ea::vector<Vertex2D>& vertices = sourceBatches_[0].vertices_;
+    vertices.clear();
 
     auto effectiveBorder = calcEffectiveBorder(border_, drawRect_.Size());
 

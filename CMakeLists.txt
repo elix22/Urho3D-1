@@ -24,7 +24,7 @@
 cmake_minimum_required (VERSION 3.4.3)
 
 # Set project name
-project (Urho3D)
+project (rbfx)
 
 # Set CMake modules search path
 set (CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/CMake/Modules)
@@ -37,15 +37,19 @@ include(UrhoCommon)
 
 # Enable common build options
 if (NOT DEFINED CMAKE_CXX_STANDARD)
-    set (CMAKE_CXX_STANDARD 11)
+    set (CMAKE_CXX_STANDARD 17)
 endif ()
 
-# Workarounds
-if (EMSCRIPTEN OR APPLE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++${CMAKE_CXX_STANDARD}")
+# Workarounds. They are mirrored in Urho3D target build script so that projects linking to it would inherit settings.
+if (WEB OR ANDROID)
+    set (URHO3D_CXX_STANDARD ${CMAKE_CXX_STANDARD})
+    ucm_add_flags(CXX -std=gnu++${CMAKE_CXX_STANDARD})
+    # NDK bundles old cmake and insists on usiing it, That version chokes on standard being set to 17 while
+    # crosscompiler works just fine.
+    unset (CMAKE_CXX_STANDARD)
 endif ()
 if (APPLE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+    ucm_add_flags(CXX -stdlib=libc++)
 endif ()
 
 set (CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -55,8 +59,13 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 if (URHO3D_SSE AND NOT MSVC)
     # Build engine and it's dependencies with SSE/SSE2 enabled.
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse -msse2")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse -msse2")
+    ucm_add_flags(-msse -msse2)
+endif ()
+
+if (NOT "$ENV{CI}" STREQUAL "")
+    ucm_add_flags(-w)
+elseif (MSVC)
+    ucm_add_flags(/W1)
 endif ()
 
 if (URHO3D_STATIC_RUNTIME)
@@ -67,33 +76,6 @@ endif ()
 
 add_subdirectory(Source)
 
-include(UrhoPackaging)
-
-# Install CMake modules and toolchains provided by and for Urho3D
-install (DIRECTORY ${CMAKE_SOURCE_DIR}/CMake/ DESTINATION ${DEST_SHARE_DIR}/CMake)    # Note: the trailing slash is significant
-# Install CMake build scripts
-file (GLOB CMAKE_SCRIPTS ${CMAKE_SOURCE_DIR}/Script/*${SCRIPT_EXT})
-install (PROGRAMS ${CMAKE_SCRIPTS} DESTINATION ${DEST_SHARE_DIR}/Scripts)
-# Install data files
-file (MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-if (NOT ANDROID)
-    foreach (RES_DIR ${RESOURCE_DIRS})
-        get_filename_component (NAME ${RES_DIR} NAME)
-        install (DIRECTORY ${RES_DIR} DESTINATION ${DEST_RESOURCE_DIR})
-        if (NOT EXISTS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NAME})
-            create_symlink(${RES_DIR} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NAME})
-        endif ()
-    endforeach ()
-    foreach (RES_DIR ${AUTOLOAD_DIRS})
-        get_filename_component (NAME ${RES_DIR} NAME)
-        install (DIRECTORY ${RES_DIR} DESTINATION ${DEST_RESOURCE_DIR}/Autoload)
-        if (NOT EXISTS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Autoload/${NAME})
-            create_symlink(${RES_DIR} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Autoload/${NAME})
-        endif ()
-    endforeach ()
-endif ()
-install (DIRECTORY ${CMAKE_BINARY_DIR}/bin/Cache DESTINATION ${DEST_RESOURCE_DIR})
-
 # Print current build configuration
 message(STATUS "Urho3D Configuration:")
 if (URHO3D_STATIC_RUNTIME)
@@ -101,7 +83,11 @@ if (URHO3D_STATIC_RUNTIME)
 else ()
     message(STATUS "  Runtime         SHARED")
 endif ()
-message(STATUS "  Library         ${URHO3D_LIBRARY_TYPE}")
+if (BUILD_SHARED_LIBS)
+    message(STATUS "  Library         SHARED")
+else ()
+    message(STATUS "  Library         STATIC")
+endif ()
 message(STATUS "  SSE             ${URHO3D_SSE}")
 message(STATUS "  2D              ${URHO3D_URHO2D}")
 message(STATUS "  IK              ${URHO3D_IK}")
@@ -116,12 +102,12 @@ if (WIN32)
     message(STATUS "  MiniDumps       ${URHO3D_MINIDUMPS}")
 endif()
 message(STATUS "Developer options:")
-message(STATUS "  Packaging       ${URHO3D_PACKAGING}")
 message(STATUS "  SystemUI        ${URHO3D_SYSTEMUI}")
 message(STATUS "  Logging         ${URHO3D_LOGGING}")
 message(STATUS "  Profiling       ${URHO3D_PROFILING}")
 message(STATUS "  Extras          ${URHO3D_EXTRAS}")
 message(STATUS "  Tools           ${URHO3D_TOOLS}")
+message(STATUS "  Docs            ${URHO3D_DOCS}")
 if (TARGET Profiler)
     message(STATUS "     Profiler GUI ${URHO3D_PROFILING}")
 endif ()
@@ -140,3 +126,38 @@ if (CLANG_TIDY)
     )
     set_target_properties(tidy PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
 endif()
+
+################################################### SDK preparation ####################################################
+if (MINI_URHO)
+    return ()
+endif ()
+
+if (URHO3D_DOCS)
+    add_subdirectory(Docs)
+endif ()
+
+# Install CMake modules and toolchains provided by and for Urho3D
+install (DIRECTORY ${CMAKE_SOURCE_DIR}/CMake/Toolchains/ DESTINATION ${DEST_SHARE_DIR}/CMake/Toolchains)    # Note: the trailing slash is significant
+install (DIRECTORY ${CMAKE_SOURCE_DIR}/CMake/Modules/ DESTINATION ${DEST_SHARE_DIR}/CMake/Modules/)
+# Install CMake build scripts
+file (GLOB CMAKE_SCRIPTS ${CMAKE_SOURCE_DIR}/Script/*${SCRIPT_EXT})
+install (PROGRAMS ${CMAKE_SCRIPTS} DESTINATION ${DEST_SHARE_DIR}/Scripts)
+# Install data files
+file (MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+if (NOT ANDROID)
+    file (MAKE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Autoload)
+    foreach (RES_DIR ${RESOURCE_DIRS})
+        get_filename_component (NAME ${RES_DIR} NAME)
+        install (DIRECTORY ${RES_DIR} DESTINATION ${DEST_RESOURCE_DIR})
+        if (NOT EXISTS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NAME})
+            create_symlink(${RES_DIR} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NAME})
+        endif ()
+    endforeach ()
+    foreach (RES_DIR ${AUTOLOAD_DIRS})
+        get_filename_component (NAME ${RES_DIR} NAME)
+        install (DIRECTORY ${RES_DIR} DESTINATION ${DEST_RESOURCE_DIR}/Autoload)
+        if (NOT EXISTS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Autoload/${NAME})
+            create_symlink(${RES_DIR} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Autoload/${NAME})
+        endif ()
+    endforeach ()
+endif ()

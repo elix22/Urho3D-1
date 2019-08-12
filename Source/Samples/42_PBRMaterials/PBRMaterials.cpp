@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -36,15 +36,11 @@
 #include <Urho3D/UI/UI.h>
 #include <Urho3D/UI/UIEvents.h>
 #include <Urho3D/UI/Text.h>
-#ifdef URHO3D_ANGELSCRIPT
-#include <Urho3D/AngelScript/Script.h>
-#endif
 
 #include "PBRMaterials.h"
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(PBRMaterials)
 
 PBRMaterials::PBRMaterials(Context* context) :
     Sample(context),
@@ -72,6 +68,9 @@ void PBRMaterials::Start()
 
     // Subscribe to global events for camera movement
     SubscribeToEvents();
+
+    // Set the mouse mode to use in the sample
+    Sample::InitMouseMode(MM_RELATIVE);
 }
 
 void PBRMaterials::CreateInstructions()
@@ -95,11 +94,6 @@ void PBRMaterials::CreateInstructions()
 void PBRMaterials::CreateScene()
 {
     auto* cache = GetSubsystem<ResourceCache>();
-
-#ifdef URHO3D_ANGELSCRIPT
-    // The scene uses an AngelScript component for animation. Instantiate the subsystem if possible
-    context_->RegisterSubsystem(new Script(context_));
-#endif
 
     scene_ = new Scene(context_);
 
@@ -187,14 +181,14 @@ void PBRMaterials::HandleRoughnessSliderChanged(StringHash eventType, VariantMap
 {
     float newValue = eventData[SliderChanged::P_VALUE].GetFloat();
     dynamicMaterial_->SetShaderParameter("Roughness", newValue);
-    roughnessLabel_->SetText("Roughness: " + String(newValue));
+    roughnessLabel_->SetText("Roughness: " + ea::to_string(newValue));
 }
 
 void PBRMaterials::HandleMetallicSliderChanged(StringHash eventType, VariantMap& eventData)
 {
     float newValue = eventData[SliderChanged::P_VALUE].GetFloat();
     dynamicMaterial_->SetShaderParameter("Metallic", newValue);
-    metallicLabel_->SetText("Metallic: " + String(newValue));
+    metallicLabel_->SetText("Metallic: " + ea::to_string(newValue));
 }
 
 void PBRMaterials::HandleAmbientSliderChanged(StringHash eventType, VariantMap& eventData)
@@ -202,7 +196,7 @@ void PBRMaterials::HandleAmbientSliderChanged(StringHash eventType, VariantMap& 
     float newValue = eventData[SliderChanged::P_VALUE].GetFloat();
     Color col = Color(0.0, 0.0, 0.0, newValue);
     zone_->SetAmbientColor(col);
-    ambientLabel_->SetText("Ambient HDR Scale: " + String(zone_->GetAmbientColor().a_));
+    ambientLabel_->SetText("Ambient HDR Scale: " + ea::to_string(zone_->GetAmbientColor().a_));
 }
 
 void PBRMaterials::SetupViewport()

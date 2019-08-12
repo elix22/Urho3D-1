@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2018 the Urho3D project.
+# Copyright (c) 2008-2019 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -35,4 +35,8 @@ target_include_directories(GLEW
 
 if (WIN32)
     target_link_libraries(GLEW opengl32.lib)
+endif ()
+
+if (NOT URHO3D_MERGE_STATIC_LIBS)
+    install(TARGETS GLEW EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
 endif ()

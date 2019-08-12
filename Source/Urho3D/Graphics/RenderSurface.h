@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -78,7 +78,7 @@ public:
     bool GetAutoResolve() const;
 
     /// Return number of viewports.
-    unsigned GetNumViewports() const { return viewports_.Size(); }
+    unsigned GetNumViewports() const { return viewports_.size(); }
 
     /// Return viewport by index.
     Viewport* GetViewport(unsigned index) const;
@@ -123,6 +123,8 @@ public:
     void SetResolveDirty(bool enable) { resolveDirty_ = enable; }
 
 private:
+    /// Graphics subsystem.
+    WeakPtr<Graphics> graphics_;
     /// Parent texture.
     WeakPtr<Texture> parentTexture_;
 
@@ -145,7 +147,7 @@ private:
     };
 
     /// Viewports.
-    Vector<SharedPtr<Viewport> > viewports_;
+    ea::vector<SharedPtr<Viewport> > viewports_;
     /// Linked color buffer.
     WeakPtr<RenderSurface> linkedRenderTarget_;
     /// Linked depth buffer.

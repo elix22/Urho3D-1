@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,6 @@
 
 #pragma once
 
-#include "../Container/List.h"
 #include "../Core/Mutex.h"
 #include "../Core/Object.h"
 #include "../Core/Thread.h"
@@ -32,6 +31,30 @@ namespace Urho3D
 {
 
 class FileSystem;
+
+enum FileChangeKind
+{
+    /// New file was created.
+    FILECHANGE_ADDED,
+    /// File was deleted.
+    FILECHANGE_REMOVED,
+    /// File was renamed.
+    FILECHANGE_RENAMED,
+    /// File was modified.
+    FILECHANGE_MODIFIED,
+};
+
+/// File change information.
+struct FileChange
+{
+    /// File change kind.
+    FileChangeKind kind_;
+    /// Name of modified file name. Always set.
+    ea::string fileName_;
+    /// Previous file name in case of FILECHANGE_MODIFIED event. Empty otherwise.
+    ea::string oldFileName_;
+};
+
 
 /// Watches a directory and its subdirectories for files being modified.
 class URHO3D_API FileWatcher : public Object, public Thread
@@ -48,29 +71,37 @@ public:
     void ThreadFunction() override;
 
     /// Start watching a directory. Return true if successful.
-    bool StartWatching(const String& pathName, bool watchSubDirs);
+    bool StartWatching(const ea::string& pathName, bool watchSubDirs);
     /// Stop watching the directory.
     void StopWatching();
     /// Set the delay in seconds before file changes are notified. This (hopefully) avoids notifying when a file save is still in progress. Default 1 second.
     void SetDelay(float interval);
     /// Add a file change into the changes queue.
-    void AddChange(const String& fileName);
+    void AddChange(const FileChange& change);
     /// Return a file change (true if was found, false if not.)
-    bool GetNextChange(String& dest);
+    bool GetNextChange(FileChange& dest);
 
     /// Return the path being watched, or empty if not watching.
-    const String& GetPath() const { return path_; }
+    const ea::string& GetPath() const { return path_; }
 
     /// Return the delay in seconds for notifying file changes.
     float GetDelay() const { return delay_; }
 
 private:
+    struct TimedFileChange
+    {
+        /// File change information.
+        FileChange change_;
+        /// Timer used to filter out repeated events when file is being written.
+        Timer timer_;
+    };
+
     /// Filesystem.
     SharedPtr<FileSystem> fileSystem_;
     /// The path being watched.
-    String path_;
+    ea::string path_;
     /// Pending changes. These will be returned and removed from the list when their timer has exceeded the delay.
-    HashMap<String, Timer> changes_;
+    ea::unordered_map<ea::string, TimedFileChange> changes_;
     /// Mutex for the change buffer.
     Mutex changesMutex_;
     /// Delay in seconds for notifying changes.
@@ -86,7 +117,7 @@ private:
 #elif __linux__
 
     /// HashMap for the directory and sub-directories (needed for inotify's int handles).
-    HashMap<int, String> dirHandle_;
+    ea::unordered_map<int, ea::string> dirHandle_;
     /// Linux inotify needs a handle.
     int watchHandle_;
 

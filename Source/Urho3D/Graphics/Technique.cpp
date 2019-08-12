@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +27,7 @@
 #include "../Core/Profiler.h"
 #include "../Graphics/Graphics.h"
 #include "../Graphics/Technique.h"
+#include "../Graphics/Material.h"
 #include "../Graphics/ShaderVariation.h"
 #include "../IO/Log.h"
 #include "../Resource/ResourceCache.h"
@@ -37,43 +38,7 @@
 namespace Urho3D
 {
 
-extern const char* cullModeNames[];
-
-const char* blendModeNames[] =
-{
-    "replace",
-    "add",
-    "multiply",
-    "alpha",
-    "addalpha",
-    "premulalpha",
-    "invdestalpha",
-    "subtract",
-    "subtractalpha",
-    nullptr
-};
-
-static const char* compareModeNames[] =
-{
-    "always",
-    "equal",
-    "notequal",
-    "less",
-    "lessequal",
-    "greater",
-    "greaterequal",
-    nullptr
-};
-
-static const char* lightingModeNames[] =
-{
-    "unlit",
-    "pervertex",
-    "perpixel",
-    nullptr
-};
-
-Pass::Pass(const String& name) :
+Pass::Pass(const ea::string& name) :
     blendMode_(BLEND_REPLACE),
     cullMode_(MAX_CULLMODES),
     depthTestMode_(CMP_LESSEQUAL),
@@ -83,7 +48,7 @@ Pass::Pass(const String& name) :
     depthWrite_(true),
     isDesktop_(false)
 {
-    name_ = name.ToLower();
+    name_ = name.to_lower();
     index_ = Technique::GetPassIndex(name_);
 
     // Guess default lighting mode from pass name
@@ -132,37 +97,37 @@ void Pass::SetIsDesktop(bool enable)
     isDesktop_ = enable;
 }
 
-void Pass::SetVertexShader(const String& name)
+void Pass::SetVertexShader(const ea::string& name)
 {
     vertexShaderName_ = name;
     ReleaseShaders();
 }
 
-void Pass::SetPixelShader(const String& name)
+void Pass::SetPixelShader(const ea::string& name)
 {
     pixelShaderName_ = name;
     ReleaseShaders();
 }
 
-void Pass::SetVertexShaderDefines(const String& defines)
+void Pass::SetVertexShaderDefines(const ea::string& defines)
 {
     vertexShaderDefines_ = defines;
     ReleaseShaders();
 }
 
-void Pass::SetPixelShaderDefines(const String& defines)
+void Pass::SetPixelShaderDefines(const ea::string& defines)
 {
     pixelShaderDefines_ = defines;
     ReleaseShaders();
 }
 
-void Pass::SetVertexShaderDefineExcludes(const String& excludes)
+void Pass::SetVertexShaderDefineExcludes(const ea::string& excludes)
 {
     vertexShaderDefineExcludes_ = excludes;
     ReleaseShaders();
 }
 
-void Pass::SetPixelShaderDefineExcludes(const String& excludes)
+void Pass::SetPixelShaderDefineExcludes(const ea::string& excludes)
 {
     pixelShaderDefineExcludes_ = excludes;
     ReleaseShaders();
@@ -170,10 +135,10 @@ void Pass::SetPixelShaderDefineExcludes(const String& excludes)
 
 void Pass::ReleaseShaders()
 {
-    vertexShaders_.Clear();
-    pixelShaders_.Clear();
-    extraVertexShaders_.Clear();
-    extraPixelShaders_.Clear();
+    vertexShaders_.clear();
+    pixelShaders_.clear();
+    extraVertexShaders_.clear();
+    extraPixelShaders_.clear();
 }
 
 void Pass::MarkShadersLoaded(unsigned frameNumber)
@@ -181,35 +146,35 @@ void Pass::MarkShadersLoaded(unsigned frameNumber)
     shadersLoadedFrameNumber_ = frameNumber;
 }
 
-String Pass::GetEffectiveVertexShaderDefines() const
+ea::string Pass::GetEffectiveVertexShaderDefines() const
 {
     // Prefer to return just the original defines if possible
-    if (vertexShaderDefineExcludes_.Empty())
+    if (vertexShaderDefineExcludes_.empty())
         return vertexShaderDefines_;
 
-    Vector<String> vsDefines = vertexShaderDefines_.Split(' ');
-    Vector<String> vsExcludes = vertexShaderDefineExcludes_.Split(' ');
-    for (unsigned i = 0; i < vsExcludes.Size(); ++i)
-        vsDefines.Remove(vsExcludes[i]);
+    ea::vector<ea::string> vsDefines = vertexShaderDefines_.split(' ');
+    ea::vector<ea::string> vsExcludes = vertexShaderDefineExcludes_.split(' ');
+    for (unsigned i = 0; i < vsExcludes.size(); ++i)
+        vsDefines.erase_first(vsExcludes[i]);
 
-    return String::Joined(vsDefines, " ");
+    return ea::string::joined(vsDefines, " ");
 }
 
-String Pass::GetEffectivePixelShaderDefines() const
+ea::string Pass::GetEffectivePixelShaderDefines() const
 {
     // Prefer to return just the original defines if possible
-    if (pixelShaderDefineExcludes_.Empty())
+    if (pixelShaderDefineExcludes_.empty())
         return pixelShaderDefines_;
 
-    Vector<String> psDefines = pixelShaderDefines_.Split(' ');
-    Vector<String> psExcludes = pixelShaderDefineExcludes_.Split(' ');
-    for (unsigned i = 0; i < psExcludes.Size(); ++i)
-        psDefines.Remove(psExcludes[i]);
+    ea::vector<ea::string> psDefines = pixelShaderDefines_.split(' ');
+    ea::vector<ea::string> psExcludes = pixelShaderDefineExcludes_.split(' ');
+    for (unsigned i = 0; i < psExcludes.size(); ++i)
+        psDefines.erase_first(psExcludes[i]);
 
-    return String::Joined(psDefines, " ");
+    return ea::string::joined(psDefines, " ");
 }
 
-Vector<SharedPtr<ShaderVariation> >& Pass::GetVertexShaders(const StringHash& extraDefinesHash)
+ea::vector<SharedPtr<ShaderVariation> >& Pass::GetVertexShaders(const StringHash& extraDefinesHash)
 {
     // If empty hash, return the base shaders
     if (!extraDefinesHash.Value())
@@ -218,7 +183,7 @@ Vector<SharedPtr<ShaderVariation> >& Pass::GetVertexShaders(const StringHash& ex
         return extraVertexShaders_[extraDefinesHash];
 }
 
-Vector<SharedPtr<ShaderVariation> >& Pass::GetPixelShaders(const StringHash& extraDefinesHash)
+ea::vector<SharedPtr<ShaderVariation> >& Pass::GetPixelShaders(const StringHash& extraDefinesHash)
 {
     if (!extraDefinesHash.Value())
         return pixelShaders_;
@@ -235,7 +200,7 @@ unsigned Technique::litBasePassIndex = 0;
 unsigned Technique::litAlphaPassIndex = 0;
 unsigned Technique::shadowPassIndex = 0;
 
-HashMap<String, unsigned> Technique::passIndices;
+ea::unordered_map<ea::string, unsigned> Technique::passIndices;
 
 Technique::Technique(Context* context) :
     Resource(context),
@@ -257,12 +222,12 @@ void Technique::RegisterObject(Context* context)
 
 bool Technique::BeginLoad(Deserializer& source)
 {
-    passes_.Clear();
-    cloneTechniques_.Clear();
+    passes_.clear();
+    cloneTechniques_.clear();
 
     SetMemoryUse(sizeof(Technique));
 
-    SharedPtr<XMLFile> xml(new XMLFile(context_));
+    SharedPtr<XMLFile> xml(context_->CreateObject<XMLFile>());
     if (!xml->Load(source))
         return false;
 
@@ -270,14 +235,14 @@ bool Technique::BeginLoad(Deserializer& source)
     if (rootElem.HasAttribute("desktop"))
         isDesktop_ = rootElem.GetBool("desktop");
 
-    String globalVS = rootElem.GetAttribute("vs");
-    String globalPS = rootElem.GetAttribute("ps");
-    String globalVSDefines = rootElem.GetAttribute("vsdefines");
-    String globalPSDefines = rootElem.GetAttribute("psdefines");
+    ea::string globalVS = rootElem.GetAttribute("vs");
+    ea::string globalPS = rootElem.GetAttribute("ps");
+    ea::string globalVSDefines = rootElem.GetAttribute("vsdefines");
+    ea::string globalPSDefines = rootElem.GetAttribute("psdefines");
     // End with space so that the pass-specific defines can be appended
-    if (!globalVSDefines.Empty())
+    if (!globalVSDefines.empty())
         globalVSDefines += ' ';
-    if (!globalPSDefines.Empty())
+    if (!globalPSDefines.empty())
         globalPSDefines += ' ';
 
     XMLElement passElem = rootElem.GetChild("pass");
@@ -317,30 +282,30 @@ bool Technique::BeginLoad(Deserializer& source)
 
             if (passElem.HasAttribute("lighting"))
             {
-                String lighting = passElem.GetAttributeLower("lighting");
-                newPass->SetLightingMode((PassLightingMode)GetStringListIndex(lighting.CString(), lightingModeNames,
+                ea::string lighting = passElem.GetAttributeLower("lighting");
+                newPass->SetLightingMode((PassLightingMode)GetStringListIndex(lighting.c_str(), lightingModeNames,
                     LIGHTING_UNLIT));
             }
 
             if (passElem.HasAttribute("blend"))
             {
-                String blend = passElem.GetAttributeLower("blend");
-                newPass->SetBlendMode((BlendMode)GetStringListIndex(blend.CString(), blendModeNames, BLEND_REPLACE));
+                ea::string blend = passElem.GetAttributeLower("blend");
+                newPass->SetBlendMode((BlendMode)GetStringListIndex(blend.c_str(), blendModeNames, BLEND_REPLACE));
             }
 
             if (passElem.HasAttribute("cull"))
             {
-                String cull = passElem.GetAttributeLower("cull");
-                newPass->SetCullMode((CullMode)GetStringListIndex(cull.CString(), cullModeNames, MAX_CULLMODES));
+                ea::string cull = passElem.GetAttributeLower("cull");
+                newPass->SetCullMode((CullMode)GetStringListIndex(cull.c_str(), cullModeNames, MAX_CULLMODES));
             }
 
             if (passElem.HasAttribute("depthtest"))
             {
-                String depthTest = passElem.GetAttributeLower("depthtest");
+                ea::string depthTest = passElem.GetAttributeLower("depthtest");
                 if (depthTest == "false")
                     newPass->SetDepthTestMode(CMP_ALWAYS);
                 else
-                    newPass->SetDepthTestMode((CompareMode)GetStringListIndex(depthTest.CString(), compareModeNames, CMP_LESS));
+                    newPass->SetDepthTestMode((CompareMode)GetStringListIndex(depthTest.c_str(), compareModeNames, CMP_LESS));
             }
 
             if (passElem.HasAttribute("depthwrite"))
@@ -365,7 +330,7 @@ void Technique::SetIsDesktop(bool enable)
 
 void Technique::ReleaseShaders()
 {
-    for (Vector<SharedPtr<Pass> >::ConstIterator i = passes_.Begin(); i != passes_.End(); ++i)
+    for (auto i = passes_.begin(); i != passes_.end(); ++i)
     {
         Pass* pass = i->Get();
         if (pass)
@@ -373,14 +338,14 @@ void Technique::ReleaseShaders()
     }
 }
 
-SharedPtr<Technique> Technique::Clone(const String& cloneName) const
+SharedPtr<Technique> Technique::Clone(const ea::string& cloneName) const
 {
-    SharedPtr<Technique> ret(new Technique(context_));
+    SharedPtr<Technique> ret(context_->CreateObject<Technique>());
     ret->SetIsDesktop(isDesktop_);
     ret->SetName(cloneName);
 
     // Deep copy passes
-    for (Vector<SharedPtr<Pass> >::ConstIterator i = passes_.Begin(); i != passes_.End(); ++i)
+    for (auto i = passes_.begin(); i != passes_.end(); ++i)
     {
         Pass* srcPass = i->Get();
         if (!srcPass)
@@ -404,7 +369,7 @@ SharedPtr<Technique> Technique::Clone(const String& cloneName) const
     return ret;
 }
 
-Pass* Technique::CreatePass(const String& name)
+Pass* Technique::CreatePass(const ea::string& name)
 {
     Pass* oldPass = GetPass(name);
     if (oldPass)
@@ -412,8 +377,8 @@ Pass* Technique::CreatePass(const String& name)
 
     SharedPtr<Pass> newPass(new Pass(name));
     unsigned passIndex = newPass->GetIndex();
-    if (passIndex >= passes_.Size())
-        passes_.Resize(passIndex + 1);
+    if (passIndex >= passes_.size())
+        passes_.resize(passIndex + 1);
     passes_[passIndex] = newPass;
 
     // Calculate memory use now
@@ -422,41 +387,41 @@ Pass* Technique::CreatePass(const String& name)
     return newPass;
 }
 
-void Technique::RemovePass(const String& name)
+void Technique::RemovePass(const ea::string& name)
 {
-    HashMap<String, unsigned>::ConstIterator i = passIndices.Find(name.ToLower());
-    if (i == passIndices.End())
+    auto i = passIndices.find(name.to_lower());
+    if (i == passIndices.end())
         return;
-    else if (i->second_ < passes_.Size() && passes_[i->second_].Get())
+    else if (i->second < passes_.size() && passes_[i->second].Get())
     {
-        passes_[i->second_].Reset();
+        passes_[i->second].Reset();
         SetMemoryUse((unsigned)(sizeof(Technique) + GetNumPasses() * sizeof(Pass)));
     }
 }
 
-bool Technique::HasPass(const String& name) const
+bool Technique::HasPass(const ea::string& name) const
 {
-    HashMap<String, unsigned>::ConstIterator i = passIndices.Find(name.ToLower());
-    return i != passIndices.End() ? HasPass(i->second_) : false;
+    auto i = passIndices.find(name.to_lower());
+    return i != passIndices.end() ? HasPass(i->second) : false;
 }
 
-Pass* Technique::GetPass(const String& name) const
+Pass* Technique::GetPass(const ea::string& name) const
 {
-    HashMap<String, unsigned>::ConstIterator i = passIndices.Find(name.ToLower());
-    return i != passIndices.End() ? GetPass(i->second_) : nullptr;
+    auto i = passIndices.find(name.to_lower());
+    return i != passIndices.end() ? GetPass(i->second) : nullptr;
 }
 
-Pass* Technique::GetSupportedPass(const String& name) const
+Pass* Technique::GetSupportedPass(const ea::string& name) const
 {
-    HashMap<String, unsigned>::ConstIterator i = passIndices.Find(name.ToLower());
-    return i != passIndices.End() ? GetSupportedPass(i->second_) : nullptr;
+    auto i = passIndices.find(name.to_lower());
+    return i != passIndices.end() ? GetSupportedPass(i->second) : nullptr;
 }
 
 unsigned Technique::GetNumPasses() const
 {
     unsigned ret = 0;
 
-    for (Vector<SharedPtr<Pass> >::ConstIterator i = passes_.Begin(); i != passes_.End(); ++i)
+    for (auto i = passes_.begin(); i != passes_.end(); ++i)
     {
         if (i->Get())
             ++ret;
@@ -465,70 +430,70 @@ unsigned Technique::GetNumPasses() const
     return ret;
 }
 
-Vector<String> Technique::GetPassNames() const
+ea::vector<ea::string> Technique::GetPassNames() const
 {
-    Vector<String> ret;
+    ea::vector<ea::string> ret;
 
-    for (Vector<SharedPtr<Pass> >::ConstIterator i = passes_.Begin(); i != passes_.End(); ++i)
+    for (auto i = passes_.begin(); i != passes_.end(); ++i)
     {
         Pass* pass = i->Get();
         if (pass)
-            ret.Push(pass->GetName());
+            ret.push_back(pass->GetName());
     }
 
     return ret;
 }
 
-PODVector<Pass*> Technique::GetPasses() const
+ea::vector<Pass*> Technique::GetPasses() const
 {
-    PODVector<Pass*> ret;
+    ea::vector<Pass*> ret;
 
-    for (Vector<SharedPtr<Pass> >::ConstIterator i = passes_.Begin(); i != passes_.End(); ++i)
+    for (auto i = passes_.begin(); i != passes_.end(); ++i)
     {
         Pass* pass = i->Get();
         if (pass)
-            ret.Push(pass);
+            ret.push_back(pass);
     }
 
     return ret;
 }
 
-SharedPtr<Technique> Technique::CloneWithDefines(const String& vsDefines, const String& psDefines)
+SharedPtr<Technique> Technique::CloneWithDefines(const ea::string& vsDefines, const ea::string& psDefines)
 {
     // Return self if no actual defines
-    if (vsDefines.Empty() && psDefines.Empty())
+    if (vsDefines.empty() && psDefines.empty())
         return SharedPtr<Technique>(this);
 
-    Pair<StringHash, StringHash> key = MakePair(StringHash(vsDefines), StringHash(psDefines));
+    ea::pair<StringHash, StringHash> key = ea::make_pair(StringHash(vsDefines), StringHash(psDefines));
 
     // Return existing if possible
-    HashMap<Pair<StringHash, StringHash>, SharedPtr<Technique> >::Iterator i = cloneTechniques_.Find(key);
-    if (i != cloneTechniques_.End())
-        return i->second_;
+    auto i = cloneTechniques_.find(key);
+    if (i != cloneTechniques_.end())
+        return i->second;
 
     // Set same name as the original for the clones to ensure proper serialization of the material. This should not be a problem
     // since the clones are never stored to the resource cache
-    i = cloneTechniques_.Insert(MakePair(key, Clone(GetName())));
+    i = cloneTechniques_.insert(ea::make_pair(key, Clone(GetName()))).first;
 
-    for (Vector<SharedPtr<Pass> >::ConstIterator j = i->second_->passes_.Begin(); j != i->second_->passes_.End(); ++j)
+    for (auto j = i->second->passes_.begin(); j != i->second->passes_.end(); ++j)
     {
         Pass* pass = (*j);
         if (!pass)
             continue;
 
-        if (!vsDefines.Empty())
+        if (!vsDefines.empty())
             pass->SetVertexShaderDefines(pass->GetVertexShaderDefines() + " " + vsDefines);
-        if (!psDefines.Empty())
+        if (!psDefines.empty())
             pass->SetPixelShaderDefines(pass->GetPixelShaderDefines() + " " + psDefines);
     }
 
-    return i->second_;
+    return i->second;
 }
 
-unsigned Technique::GetPassIndex(const String& passName)
+unsigned Technique::GetPassIndex(const ea::string& passName)
 {
     // Initialize built-in pass indices on first call
-    if (passIndices.Empty())
+    if (passIndices.empty())
     {
         basePassIndex = passIndices["base"] = 0;
         alphaPassIndex = passIndices["alpha"] = 1;
@@ -540,13 +505,13 @@ unsigned Technique::GetPassIndex(const String& passName)
         shadowPassIndex = passIndices["shadow"] = 7;
     }
 
-    String nameLower = passName.ToLower();
-    HashMap<String, unsigned>::Iterator i = passIndices.Find(nameLower);
-    if (i != passIndices.End())
-        return i->second_;
+    ea::string nameLower = passName.to_lower();
+    auto i = passIndices.find(nameLower);
+    if (i != passIndices.end())
+        return i->second;
     else
     {
-        unsigned newPassIndex = passIndices.Size();
+        unsigned newPassIndex = passIndices.size();
         passIndices[nameLower] = newPassIndex;
         return newPassIndex;
     }

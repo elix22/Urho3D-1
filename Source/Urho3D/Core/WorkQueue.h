@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,9 @@
 
 #pragma once
 
-#include "../Container/List.h"
+#include <EASTL/list.h>
+#include <atomic>
+
 #include "../Core/Mutex.h"
 #include "../Core/Object.h"
 
@@ -56,7 +58,7 @@ public:
     /// Whether to send event on completion.
     bool sendEvent_{};
     /// Completed flag.
-    volatile bool completed_{};
+    std::atomic<bool> completed_{};
 
 private:
     bool pooled_{};
@@ -88,7 +90,7 @@ public:
     /// Remove a work item before it has started executing. Return true if successfully removed.
     bool RemoveWorkItem(SharedPtr<WorkItem> item);
     /// Remove a number of work items before they have started executing. Return the number of items successfully removed.
-    unsigned RemoveWorkItems(const Vector<SharedPtr<WorkItem> >& items);
+    unsigned RemoveWorkItems(const ea::vector<SharedPtr<WorkItem> >& items);
     /// Pause worker threads.
     void Pause();
     /// Resume worker threads.
@@ -103,8 +105,10 @@ public:
     void SetNonThreadedWorkMs(int ms) { maxNonThreadedWorkMs_ = Max(ms, 1); }
 
     /// Return number of worker threads.
-    unsigned GetNumThreads() const { return threads_.Size(); }
+    unsigned GetNumThreads() const { return threads_.size(); }
 
+    /// Return number of incomplete tasks with at least the specified priority.
+    unsigned GetNumIncomplete(unsigned priority) const;
     /// Return whether all work with at least the specified priority is finished.
     bool IsCompleted(unsigned priority) const;
     /// Return whether the queue is currently completing work in the main thread.
@@ -129,19 +133,19 @@ private:
     void HandleBeginFrame(StringHash eventType, VariantMap& eventData);
 
     /// Worker threads.
-    Vector<SharedPtr<WorkerThread> > threads_;
+    ea::vector<SharedPtr<WorkerThread> > threads_;
     /// Work item pool for reuse to cut down on allocation. The bool is a flag for item pooling and whether it is available or not.
-    List<SharedPtr<WorkItem> > poolItems_;
+    ea::list<SharedPtr<WorkItem> > poolItems_;
     /// Work item collection. Accessed only by the main thread.
-    List<SharedPtr<WorkItem> > workItems_;
+    ea::list<SharedPtr<WorkItem> > workItems_;
     /// Work item prioritized queue for worker threads. Pointers are guaranteed to be valid (point to workItems.)
-    List<WorkItem*> queue_;
+    ea::list<WorkItem*> queue_;
     /// Worker queue mutex.
     Mutex queueMutex_;
     /// Shutting down flag.
-    volatile bool shutDown_;
+    std::atomic<bool> shutDown_;
     /// Pausing flag. Indicates the worker threads should not contend for the queue mutex.
-    volatile bool pausing_;
+    std::atomic<bool> pausing_;
     /// Paused flag. Indicates the queue mutex being locked to prevent worker threads using up CPU time.
     bool paused_;
     /// Completing work in the main thread flag.

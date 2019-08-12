@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -42,7 +42,6 @@
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(HugeObjectCount)
 
 HugeObjectCount::HugeObjectCount(Context* context) :
     Sample(context),
@@ -81,7 +80,7 @@ void HugeObjectCount::CreateScene()
     else
     {
         scene_->Clear();
-        boxNodes_.Clear();
+        boxNodes_.clear();
     }
 
     // Create the Octree component to the scene so that drawable objects can be rendered. Use default volume
@@ -116,7 +115,7 @@ void HugeObjectCount::CreateScene()
                 boxNode->SetScale(0.25f);
                 auto* boxObject = boxNode->CreateComponent<StaticModel>();
                 boxObject->SetModel(cache->GetResource<Model>("Models/Box.mdl"));
-                boxNodes_.Push(SharedPtr<Node>(boxNode));
+                boxNodes_.push_back(SharedPtr<Node>(boxNode));
             }
         }
     }
@@ -145,7 +144,7 @@ void HugeObjectCount::CreateScene()
                 Node* boxNode = scene_->CreateChild("Box");
                 boxNode->SetPosition(Vector3(x * 0.3f, 0.0f, y * 0.3f));
                 boxNode->SetScale(0.25f);
-                boxNodes_.Push(SharedPtr<Node>(boxNode));
+                boxNodes_.push_back(SharedPtr<Node>(boxNode));
                 lastGroup->AddInstanceNode(boxNode);
             }
         }
@@ -239,7 +238,7 @@ void HugeObjectCount::AnimateObjects(float timeStep)
     // Rotate about the Z axis (roll)
     Quaternion rotateQuat(ROTATE_SPEED * timeStep, Vector3::FORWARD);
 
-    for (unsigned i = 0; i < boxNodes_.Size(); ++i)
+    for (unsigned i = 0; i < boxNodes_.size(); ++i)
         boxNodes_[i]->Rotate(rotateQuat);
 }
 

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -235,7 +235,7 @@ public:
     Vector4 ToVector4() const { return Vector4(min_.x_, min_.y_, max_.x_, max_.y_); }
 
     /// Return as string.
-    String ToString() const;
+    ea::string ToString() const;
 
     /// Return left-top corner position.
     Vector2 Min() const { return min_; }
@@ -426,7 +426,7 @@ public:
     const int* Data() const { return &left_; }
 
     /// Return as string.
-    String ToString() const;
+    ea::string ToString() const;
 
     /// Return left-top corner position.
     IntVector2 Min() const { return {left_, top_}; }

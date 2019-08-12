@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -45,18 +45,18 @@ const IntVector2 IntVector2::UP(0, 1);
 const IntVector2 IntVector2::DOWN(0, -1);
 const IntVector2 IntVector2::ONE(1, 1);
 
-String Vector2::ToString() const
+ea::string Vector2::ToString() const
 {
     char tempBuffer[CONVERSION_BUFFER_LENGTH];
     sprintf(tempBuffer, "%g %g", x_, y_);
-    return String(tempBuffer);
+    return ea::string(tempBuffer);
 }
 
-String IntVector2::ToString() const
+ea::string IntVector2::ToString() const
 {
     char tempBuffer[CONVERSION_BUFFER_LENGTH];
     sprintf(tempBuffer, "%d %d", x_, y_);
-    return String(tempBuffer);
+    return ea::string(tempBuffer);
 }
 
 }

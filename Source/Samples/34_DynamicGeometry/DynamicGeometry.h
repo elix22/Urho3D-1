@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -50,7 +50,7 @@ public:
 
 protected:
     /// Return XML patch instructions for screen joystick layout for a specific sample app, if any.
-    String GetScreenJoystickPatchString() const override { return
+    ea::string GetScreenJoystickPatchString() const override { return
         "<patch>"
         "    <remove sel=\"/element/element[./attribute[@name='Name' and @value='Button0']]/attribute[@name='Is Visible']\" />"
         "    <replace sel=\"/element/element[./attribute[@name='Name' and @value='Button0']]/element[./attribute[@name='Name' and @value='Label']]/attribute[@name='Text']/@value\">Animation</replace>"
@@ -80,11 +80,11 @@ private:
     void HandleUpdate(StringHash eventType, VariantMap& eventData);
 
     /// Cloned models' vertex buffers that we will animate.
-    Vector<SharedPtr<VertexBuffer> > animatingBuffers_;
+    ea::vector<SharedPtr<VertexBuffer> > animatingBuffers_;
     /// Original vertex positions for the sphere model.
-    PODVector<Vector3> originalVertices_;
+    ea::vector<Vector3> originalVertices_;
     /// If the vertices are duplicates, indices to the original vertices (to allow seamless animation.)
-    PODVector<unsigned> vertexDuplicates_;
+    ea::vector<unsigned> vertexDuplicates_;
     /// Animation flag.
     bool animate_;
     /// Animation's elapsed time.

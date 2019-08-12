@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -108,7 +108,7 @@ public:
     BlendMode GetBlendMode() const { return blendMode_; }
 
     /// Return max particles.
-    unsigned GetMaxParticles() const { return particles_.Size(); }
+    unsigned GetMaxParticles() const { return particles_.size(); }
 
     /// Set particle model attr.
     void SetParticleEffectAttr(const ResourceRef& value);
@@ -156,7 +156,7 @@ private:
     /// Currently emitting flag.
     bool emitting_;
     /// Particles.
-    Vector<Particle2D> particles_;
+    ea::vector<Particle2D> particles_;
     /// Bounding box min point.
     Vector3 boundingBoxMinPoint_;
     /// Bounding box max point.

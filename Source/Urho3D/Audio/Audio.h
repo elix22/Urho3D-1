@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,9 +22,10 @@
 
 #pragma once
 
+#include <EASTL/unique_ptr.h>
+#include <EASTL/hash_set.h>
+
 #include "../Audio/AudioDefs.h"
-#include "../Container/ArrayPtr.h"
-#include "../Container/HashSet.h"
 #include "../Core/Mutex.h"
 #include "../Core/Object.h"
 
@@ -56,11 +57,11 @@ public:
     /// Suspend sound output.
     void Stop();
     /// Set master gain on a specific sound type such as sound effects, music or voice.
-    void SetMasterGain(const String& type, float gain);
+    void SetMasterGain(const ea::string& type, float gain);
     /// Pause playback of specific sound type. This allows to suspend e.g. sound effects or voice when the game is paused. By default all sound types are unpaused.
-    void PauseSoundType(const String& type);
+    void PauseSoundType(const ea::string& type);
     /// Resume playback of specific sound type.
-    void ResumeSoundType(const String& type);
+    void ResumeSoundType(const ea::string& type);
     /// Resume playback of all sound types.
     void ResumeAll();
     /// Set active sound listener for 3D sounds.
@@ -87,19 +88,19 @@ public:
     bool IsInitialized() const { return deviceID_ != 0; }
 
     /// Return master gain for a specific sound source type. Unknown sound types will return full gain (1).
-    float GetMasterGain(const String& type) const;
+    float GetMasterGain(const ea::string& type) const;
 
     /// Return whether specific sound type has been paused.
-    bool IsSoundTypePaused(const String& type) const;
+    bool IsSoundTypePaused(const ea::string& type) const;
 
     /// Return active sound listener.
     SoundListener* GetListener() const;
 
     /// Return all sound sources.
-    const PODVector<SoundSource*>& GetSoundSources() const { return soundSources_; }
+    const ea::vector<SoundSource*>& GetSoundSources() const { return soundSources_; }
 
     /// Return whether the specified master gain has been defined.
-    bool HasMasterGain(const String& type) const { return masterGain_.Contains(type); }
+    bool HasMasterGain(const ea::string& type) const { return masterGain_.contains(type); }
 
     /// Add a sound source to keep track of. Called by SoundSource.
     void AddSoundSource(SoundSource* soundSource);
@@ -124,7 +125,7 @@ private:
     void UpdateInternal(float timeStep);
 
     /// Clipping buffer for mixing.
-    SharedArrayPtr<int> clipBuffer_;
+    ea::unique_ptr<int[]> clipBuffer_;
     /// Audio thread mutex.
     Mutex audioMutex_;
     /// SDL audio device ID.
@@ -142,11 +143,11 @@ private:
     /// Playing flag.
     bool playing_{};
     /// Master gain by sound source type.
-    HashMap<StringHash, Variant> masterGain_;
+    ea::unordered_map<StringHash, Variant> masterGain_;
     /// Paused sound types.
-    HashSet<StringHash> pausedSoundTypes_;
+    ea::hash_set<StringHash> pausedSoundTypes_;
     /// Sound sources.
-    PODVector<SoundSource*> soundSources_;
+    ea::vector<SoundSource*> soundSources_;
     /// Sound listener.
     WeakPtr<SoundListener> listener_;
 };

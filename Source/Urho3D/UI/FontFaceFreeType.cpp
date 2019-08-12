@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -137,16 +137,16 @@ bool FontFaceFreeType::Load(const unsigned char* fontData, unsigned fontDataSize
     if (error)
     {
         FT_Done_Face(face);
-        URHO3D_LOGERROR("Could not set font point size " + String(pointSize));
+        URHO3D_LOGERROR("Could not set font point size " + ea::to_string(pointSize));
         return false;
     }
 
     face_ = face;
 
     auto numGlyphs = (unsigned)face->num_glyphs;
-    URHO3D_LOGDEBUGF("Font face %s (%fpt) has %d glyphs", GetFileName(font_->GetName()).CString(), pointSize, numGlyphs);
+    URHO3D_LOGDEBUGF("Font face %s (%fpt) has %d glyphs", GetFileName(font_->GetName()).c_str(), pointSize, numGlyphs);
 
-    PODVector<unsigned> charCodes(numGlyphs + 1, 0);
+    ea::vector<unsigned> charCodes(numGlyphs + 1, 0);
 
     // Attempt to load space glyph first regardless if it's listed or not
     // In some fonts (Consola) it is missing
@@ -198,13 +198,13 @@ bool FontFaceFreeType::Load(const unsigned char* fontData, unsigned fontDataSize
     int textureHeight = maxTextureSize;
     hasMutableGlyph_ = false;
 
-    SharedPtr<Image> image(new Image(font_->GetContext()));
+    SharedPtr<Image> image(font_->GetContext()->CreateObject<Image>());
     image->SetSize(textureWidth, textureHeight, 1);
     unsigned char* imageData = image->GetData();
     memset(imageData, 0, (size_t)image->GetWidth() * image->GetHeight());
     allocator_.Reset(FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MIN_SIZE, textureWidth, textureHeight);
 
-    for (unsigned i = 0; i < charCodes.Size(); ++i)
+    for (unsigned i = 0; i < charCodes.size(); ++i)
     {
         unsigned charCode = charCodes[i];
         if (charCode == 0)
@@ -221,7 +221,7 @@ bool FontFaceFreeType::Load(const unsigned char* fontData, unsigned fontDataSize
     if (!texture)
         return false;
 
-    textures_.Push(texture);
+    textures_.push_back(texture);
     font_->SetMemoryUse(font_->GetMemoryUse() + textureWidth * textureHeight);
 
     // Store kerning if face has kerning information
@@ -238,8 +238,8 @@ bool FontFaceFreeType::Load(const unsigned char* fontData, unsigned fontDataSize
             return false;
         }
 
-        SharedArrayPtr<unsigned char> kerningTable(new unsigned char[kerningTableSize]);
-        error = FT_Load_Sfnt_Table(face, tagKern, 0, kerningTable, &kerningTableSize);
+        ea::shared_array<unsigned char> kerningTable(new unsigned char[kerningTableSize]);
+        error = FT_Load_Sfnt_Table(face, tagKern, 0, kerningTable.get(), &kerningTableSize);
         if (error)
         {
             URHO3D_LOGERROR("Could not load kerning table");
@@ -248,8 +248,8 @@ bool FontFaceFreeType::Load(const unsigned char* fontData, unsigned fontDataSize
 
         // Convert big endian to little endian
         for (unsigned i = 0; i < kerningTableSize; i += 2)
-            Swap(kerningTable[i], kerningTable[i + 1]);
-        MemoryBuffer deserializer(kerningTable, (unsigned)kerningTableSize);
+            ea::swap(kerningTable[i], kerningTable[i + 1]);
+        MemoryBuffer deserializer(kerningTable.get(), (unsigned)kerningTableSize);
 
         unsigned short version = deserializer.ReadUShort();
         if (version == 0)
@@ -307,20 +307,20 @@ bool FontFaceFreeType::Load(const unsigned char* fontData, unsigned fontDataSize
 
 const FontGlyph* FontFaceFreeType::GetGlyph(unsigned c)
 {
-    HashMap<unsigned, FontGlyph>::Iterator i = glyphMapping_.Find(c);
-    if (i != glyphMapping_.End())
+    auto i = glyphMapping_.find(c);
+    if (i != glyphMapping_.end())
     {
-        FontGlyph& glyph = i->second_;
+        FontGlyph& glyph = i->second;
         glyph.used_ = true;
         return &glyph;
     }
 
     if (LoadCharGlyph(c))
     {
-        HashMap<unsigned, FontGlyph>::Iterator i = glyphMapping_.Find(c);
-        if (i != glyphMapping_.End())
+        auto i = glyphMapping_.find(c);
+        if (i != glyphMapping_.end())
         {
-            FontGlyph& glyph = i->second_;
+            FontGlyph& glyph = i->second;
             glyph.used_ = true;
             return &glyph;
         }
@@ -331,7 +331,7 @@ const FontGlyph* FontFaceFreeType::GetGlyph(unsigned c)
 
 bool FontFaceFreeType::SetupNextTexture(int textureWidth, int textureHeight)
 {
-    SharedPtr<Image> image(new Image(font_->GetContext()));
+    SharedPtr<Image> image(font_->GetContext()->CreateObject<Image>());
     image->SetSize(textureWidth, textureHeight, 1);
     unsigned char* imageData = image->GetData();
     memset(imageData, 0, (size_t)image->GetWidth() * image->GetHeight());
@@ -340,7 +340,7 @@ bool FontFaceFreeType::SetupNextTexture(int textureWidth, int textureHeight)
     if (!texture)
         return false;
 
-    textures_.Push(texture);
+    textures_.push_back(texture);
     allocator_.Reset(FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MIN_SIZE, textureWidth, textureHeight);
 
     font_->SetMemoryUse(font_->GetMemoryUse() + textureWidth * textureHeight);
@@ -495,7 +495,7 @@ bool FontFaceFreeType::LoadCharGlyph(unsigned charCode, Image* image)
         }
         else
         {
-            fontGlyph.page_ = textures_.Size() - 1;
+            fontGlyph.page_ = textures_.size() - 1;
             dest = new unsigned char[fontGlyph.texWidth_ * fontGlyph.texHeight_];
             pitch = (unsigned)fontGlyph.texWidth_;
         }
@@ -524,7 +524,7 @@ bool FontFaceFreeType::LoadCharGlyph(unsigned charCode, Image* image)
 
         if (!image)
         {
-            textures_.Back()->SetData(0, fontGlyph.x_, fontGlyph.y_, fontGlyph.texWidth_, fontGlyph.texHeight_, dest);
+            textures_.back()->SetData(0, fontGlyph.x_, fontGlyph.y_, fontGlyph.texWidth_, fontGlyph.texHeight_, dest);
             delete[] dest;
         }
     }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,10 +20,28 @@
 // THE SOFTWARE.
 //
 
-#include <Urho3D/Urho3DAll.h>
+#include <Urho3D/Core/CommandLine.h>
+#include <Urho3D/Core/CoreEvents.h>
+#include <Urho3D/Engine/Application.h>
+#include <Urho3D/Engine/EngineDefs.h>
+#include <Urho3D/Graphics/AnimatedModel.h>
+#include <Urho3D/Graphics/AnimationController.h>
+#include <Urho3D/Graphics/Camera.h>
+#include <Urho3D/Graphics/Light.h>
+#include <Urho3D/Graphics/Octree.h>
+#include <Urho3D/Graphics/Renderer.h>
+#include <Urho3D/Graphics/Viewport.h>
+#include <Urho3D/Graphics/Zone.h>
+#include <Urho3D/Input/Input.h>
+#include <Urho3D/IO/FileSystem.h>
+#include <Urho3D/Resource/ResourceCache.h>
+#include <Urho3D/Scene/Scene.h>
+#include <Urho3D/SystemUI/SystemUI.h>
 #include <Toolbox/SystemUI/Gizmo.h>
 #include <ctime>
 #include <cstdio>
+#include <Urho3D/IO/Log.h>
+
 
 using namespace std::placeholders;
 
@@ -46,6 +64,7 @@ public:
     float lookSensitivity_ = 1.0f;
     Gizmo gizmo_;
     bool showHelp_ = false;
+    ea::string assetFile_;
 
     explicit AssetViewer(Context* context)
         : Application(context), gizmo_(context)
@@ -64,11 +83,13 @@ public:
         engineParameters_[EP_RESOURCE_PREFIX_PATHS] = ";..;../..";
         engineParameters_[EP_WINDOW_RESIZABLE] = true;
 
-        ui::GetIO().IniFilename = nullptr;    // Disable saving of settings.
+        GetCommandLineParser().add_option("asset", assetFile_, "Asset file to be opened on application startup.");
     }
 
     void Start() override
     {
+        ui::GetIO().IniFilename = nullptr;    // Disable saving of settings.
+
         GetInput()->SetMouseVisible(true);
         GetInput()->SetMouseMode(MM_ABSOLUTE);
 
@@ -93,13 +114,13 @@ public:
         SubscribeToEvent(E_UPDATE, std::bind(&AssetViewer::OnUpdate, this, _2));
         SubscribeToEvent(E_DROPFILE, std::bind(&AssetViewer::OnFileDrop, this, _2));
 
-        for (const auto& arg: GetArguments())
-            LoadFile(arg);
+        if (!assetFile_.empty())
+            LoadFile(assetFile_.c_str());
     }
 
     void OnUpdate(VariantMap& args)
     {
-        if (node_.Null())
+        if (!node_)
             return;
 
         if (!GetSystemUI()->IsAnyItemActive() && !GetSystemUI()->IsAnyItemHovered())
@@ -174,19 +195,19 @@ public:
         LoadFile(args[DropFile::P_FILENAME].GetString());
     }
 
-    void LoadFile(const String& file_path)
+    void LoadFile(const ea::string& file_path)
     {
-        if (file_path.EndsWith(".mdl"))
+        if (file_path.ends_with(".mdl"))
             LoadModel(file_path);
-        else if (file_path.EndsWith(".ani"))
+        else if (file_path.ends_with(".ani"))
             LoadAnimation(file_path);
-        else if (file_path.EndsWith(".fbx"))
+        else if (file_path.ends_with(".fbx"))
             LoadFbx(file_path);
     }
 
-    void LoadModel(const String& file_path, const Vector<String>& materials = { })
+    void LoadModel(const ea::string& file_path, const ea::vector<ea::string>& materials = { })
     {
-        if (node_.NotNull())
+        if (node_)
             node_->Remove();
 
         node_ = parentNode_->CreateChild("Node");
@@ -198,13 +219,13 @@ public:
 
         ResetNode();
 
-        for (auto i = 0; i < materials.Size(); i++)
+        for (auto i = 0; i < materials.size(); i++)
             model_->SetMaterial(i, cache->GetTempResource<Material>(materials[i]));
     }
 
     void ResetNode()
     {
-        if (node_.NotNull())
+        if (node_)
         {
             parentNode_->SetScale(1.f);
             parentNode_->SetPosition(Vector3::ZERO);
@@ -222,62 +243,61 @@ public:
         }
     }
 
-    void LoadAnimation(const String& file_path)
+    void LoadAnimation(const ea::string& file_path)
     {
         if (animator_)
             animator_->PlayExclusive(file_path, 0, true);
     }
 
-    void LoadFbx(const String& file_path)
+    void LoadFbx(const ea::string& file_path)
     {
         auto fs = GetSubsystem<FileSystem>();
-        String temp = fs->GetTemporaryDir();
-        temp += "AssetViewer/";
-        if (!fs->DirExists(temp))
-        {
-            fs->CreateDir(temp);
-            fs->CreateDir(temp + "/mdl");
-            fs->CreateDir(temp + "/ani");
-        }
-        auto animation_path = temp + "/ani";
-        auto model_file = temp + "/mdl/out.mdl";
-        auto material_list_file = temp + "/mdl/out.txt";
+        auto temp = fs->GetTemporaryDir() + "AssetViewer/";
+        auto model_path = temp + "mdl/";
+        auto animation_path = temp + "ani/";
+        fs->CreateDir(temp);
+        fs->CreateDir(model_path);
+        fs->CreateDir(animation_path);
+        auto model_file = model_path + "out.mdl";
+        auto material_list_file = model_path + "out.txt";
         fs->Delete(model_file);
 
-        Process proc(fs->GetProgramDir() + "AssetImporter", {"model", file_path, model_file.CString(), "-na", "-l"});
-        if (proc.Run() == 0)
+        unsigned result = fs->SystemRun(fs->GetProgramDir() + "AssetImporter", {"model", file_path, model_file.c_str(), "-na", "-l"});
+        if (result != 0)
         {
-            if (fs->FileExists(model_file))
-            {
-                Vector<String> materials;
-                File fp(context_, material_list_file);
-                if (fp.IsOpen())
-                {
-                    while (!fp.IsEof())
-                        materials.Push(temp + "/mdl/" + fp.ReadLine());
-                }
-                LoadModel(model_file, materials);
-            }
-
-            Vector<String> animations;
-            fs->ScanDir(animations, animation_path, "*.ani", SCAN_FILES, false);
-            for (const auto& filename : animations)
-                fs->Delete(animation_path + "/" + filename);
-
-            proc = Process(fs->GetProgramDir() + "AssetImporter",
-                {"anim", file_path, animation_path + "/out_" + ToString("%ld", time(nullptr))});
-            if (proc.Run() == 0)
-            {
-                fs->ScanDir(animations, animation_path, "*.ani", SCAN_FILES, false);
-
-                if (animations.Size())
-                    LoadAnimation(animation_path + "/" + animations[0]);
-            }
-            else
-                URHO3D_LOGERROR("Importing animations failed.");
-        }
-        else
             URHO3D_LOGERROR("Importing model failed.");
+            return;
+        }
+
+        if (fs->FileExists(model_file))
+        {
+            ea::vector<ea::string> materials;
+            File fp(context_, material_list_file);
+            if (fp.IsOpen())
+            {
+                while (!fp.IsEof())
+                    materials.push_back(model_path + fp.ReadLine());
+            }
+            LoadModel(model_file, materials);
+        }
+
+        ea::vector<ea::string> animations;
+        fs->ScanDir(animations, animation_path, "*.ani", SCAN_FILES, false);
+        for (const auto& filename : animations)
+            fs->Delete(animation_path + filename);
+
+        result = fs->SystemRun(fs->GetProgramDir() + "AssetImporter",
+            {"anim", file_path, animation_path + "out_" + ToString("%ld", time(nullptr))});
+        if (result != 0)
+        {
+            URHO3D_LOGERROR("Importing animations failed.");
+            return;
+        }
+
+        fs->ScanDir(animations, animation_path, "*.ani", SCAN_FILES, false);
+
+        if (animations.size())
+            LoadAnimation(animation_path + "/" + animations[0]);
     }
 };
 

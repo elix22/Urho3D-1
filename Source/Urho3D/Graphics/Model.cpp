@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -40,9 +40,9 @@
 namespace Urho3D
 {
 
-unsigned LookupVertexBuffer(VertexBuffer* buffer, const Vector<SharedPtr<VertexBuffer> >& buffers)
+unsigned LookupVertexBuffer(VertexBuffer* buffer, const ea::vector<SharedPtr<VertexBuffer> >& buffers)
 {
-    for (unsigned i = 0; i < buffers.Size(); ++i)
+    for (unsigned i = 0; i < buffers.size(); ++i)
     {
         if (buffers[i] == buffer)
             return i;
@@ -50,9 +50,9 @@ unsigned LookupVertexBuffer(VertexBuffer* buffer, const Vector<SharedPtr<VertexB
     return 0;
 }
 
-unsigned LookupIndexBuffer(IndexBuffer* buffer, const Vector<SharedPtr<IndexBuffer> >& buffers)
+unsigned LookupIndexBuffer(IndexBuffer* buffer, const ea::vector<SharedPtr<IndexBuffer> >& buffers)
 {
-    for (unsigned i = 0; i < buffers.Size(); ++i)
+    for (unsigned i = 0; i < buffers.size(); ++i)
     {
         if (buffers[i] == buffer)
             return i;
@@ -75,7 +75,7 @@ void Model::RegisterObject(Context* context)
 bool Model::BeginLoad(Deserializer& source)
 {
     // Check ID
-    String fileID = source.ReadFileID();
+    ea::string fileID = source.ReadFileID();
     if (fileID != "UMDL" && fileID != "UMD2")
     {
         URHO3D_LOGERROR(source.GetName() + " is not a valid model file");
@@ -84,22 +84,22 @@ bool Model::BeginLoad(Deserializer& source)
 
     bool hasVertexDeclarations = (fileID == "UMD2");
 
-    geometries_.Clear();
-    geometryBoneMappings_.Clear();
-    geometryCenters_.Clear();
-    morphs_.Clear();
-    vertexBuffers_.Clear();
-    indexBuffers_.Clear();
+    geometries_.clear();
+    geometryBoneMappings_.clear();
+    geometryCenters_.clear();
+    morphs_.clear();
+    vertexBuffers_.clear();
+    indexBuffers_.clear();
 
     unsigned memoryUse = sizeof(Model);
     bool async = GetAsyncLoadState() == ASYNC_LOADING;
 
     // Read vertex buffers
     unsigned numVertexBuffers = source.ReadUInt();
-    vertexBuffers_.Reserve(numVertexBuffers);
-    morphRangeStarts_.Resize(numVertexBuffers);
-    morphRangeCounts_.Resize(numVertexBuffers);
-    loadVBData_.Resize(numVertexBuffers);
+    vertexBuffers_.reserve(numVertexBuffers);
+    morphRangeStarts_.resize(numVertexBuffers);
+    morphRangeCounts_.resize(numVertexBuffers);
+    loadVBData_.resize(numVertexBuffers);
     for (unsigned i = 0; i < numVertexBuffers; ++i)
     {
         VertexBufferDesc& desc = loadVBData_[i];
@@ -112,7 +112,7 @@ bool Model::BeginLoad(Deserializer& source)
         }
         else
         {
-            desc.vertexElements_.Clear();
+            desc.vertexElements_.clear();
             unsigned numElements = source.ReadUInt();
             for (unsigned j = 0; j < numElements; ++j)
             {
@@ -120,14 +120,14 @@ bool Model::BeginLoad(Deserializer& source)
                 auto type = (VertexElementType)(elementDesc & 0xffu);
                 auto semantic = (VertexElementSemantic)((elementDesc >> 8u) & 0xffu);
                 auto index = (unsigned char)((elementDesc >> 16u) & 0xffu);
-                desc.vertexElements_.Push(VertexElement(type, semantic, index));
+                desc.vertexElements_.push_back(VertexElement(type, semantic, index));
             }
         }
 
         morphRangeStarts_[i] = source.ReadUInt();
         morphRangeCounts_[i] = source.ReadUInt();
 
-        SharedPtr<VertexBuffer> buffer(new VertexBuffer(context_));
+        SharedPtr<VertexBuffer> buffer(context_->CreateObject<VertexBuffer>());
         unsigned vertexSize = VertexBuffer::GetVertexSize(desc.vertexElements_);
         desc.dataSize_ = desc.vertexCount_ * vertexSize;
 
@@ -135,12 +135,12 @@ bool Model::BeginLoad(Deserializer& source)
         if (async)
         {
             desc.data_ = new unsigned char[desc.dataSize_];
-            source.Read(desc.data_.Get(), desc.dataSize_);
+            source.Read(desc.data_.get(), desc.dataSize_);
         }
         else
         {
             // If not async loading, use locking to avoid extra allocation & copy
-            desc.data_.Reset(); // Make sure no previous data
+            desc.data_.reset(); // Make sure no previous data
             buffer->SetShadowed(true);
             buffer->SetSize(desc.vertexCount_, desc.vertexElements_);
             void* dest = buffer->Lock(0, desc.vertexCount_);
@@ -149,19 +149,19 @@ bool Model::BeginLoad(Deserializer& source)
         }
 
         memoryUse += sizeof(VertexBuffer) + desc.vertexCount_ * vertexSize;
-        vertexBuffers_.Push(buffer);
+        vertexBuffers_.push_back(buffer);
     }
 
     // Read index buffers
     unsigned numIndexBuffers = source.ReadUInt();
-    indexBuffers_.Reserve(numIndexBuffers);
-    loadIBData_.Resize(numIndexBuffers);
+    indexBuffers_.reserve(numIndexBuffers);
+    loadIBData_.resize(numIndexBuffers);
     for (unsigned i = 0; i < numIndexBuffers; ++i)
     {
         unsigned indexCount = source.ReadUInt();
         unsigned indexSize = source.ReadUInt();
 
-        SharedPtr<IndexBuffer> buffer(new IndexBuffer(context_));
+        SharedPtr<IndexBuffer> buffer(context_->CreateObject<IndexBuffer>());
 
         // Prepare index buffer data to be uploaded during EndLoad()
         if (async)
@@ -170,12 +170,12 @@ bool Model::BeginLoad(Deserializer& source)
             loadIBData_[i].indexSize_ = indexSize;
             loadIBData_[i].dataSize_ = indexCount * indexSize;
             loadIBData_[i].data_ = new unsigned char[loadIBData_[i].dataSize_];
-            source.Read(loadIBData_[i].data_.Get(), loadIBData_[i].dataSize_);
+            source.Read(loadIBData_[i].data_.get(), loadIBData_[i].dataSize_);
         }
         else
         {
             // If not async loading, use locking to avoid extra allocation & copy
-            loadIBData_[i].data_.Reset(); // Make sure no previous data
+            loadIBData_[i].data_.reset(); // Make sure no previous data
             buffer->SetShadowed(true);
             buffer->SetSize(indexCount, indexSize > sizeof(unsigned short));
             void* dest = buffer->Lock(0, indexCount);
@@ -184,28 +184,28 @@ bool Model::BeginLoad(Deserializer& source)
         }
 
         memoryUse += sizeof(IndexBuffer) + indexCount * indexSize;
-        indexBuffers_.Push(buffer);
+        indexBuffers_.push_back(buffer);
     }
 
     // Read geometries
     unsigned numGeometries = source.ReadUInt();
-    geometries_.Reserve(numGeometries);
-    geometryBoneMappings_.Reserve(numGeometries);
-    geometryCenters_.Reserve(numGeometries);
-    loadGeometries_.Resize(numGeometries);
+    geometries_.reserve(numGeometries);
+    geometryBoneMappings_.reserve(numGeometries);
+    geometryCenters_.reserve(numGeometries);
+    loadGeometries_.resize(numGeometries);
     for (unsigned i = 0; i < numGeometries; ++i)
     {
         // Read bone mappings
         unsigned boneMappingCount = source.ReadUInt();
-        PODVector<unsigned> boneMapping(boneMappingCount);
+        ea::vector<unsigned> boneMapping(boneMappingCount);
         for (unsigned j = 0; j < boneMappingCount; ++j)
             boneMapping[j] = source.ReadUInt();
-        geometryBoneMappings_.Push(boneMapping);
+        geometryBoneMappings_.push_back(boneMapping);
 
         unsigned numLodLevels = source.ReadUInt();
-        Vector<SharedPtr<Geometry> > geometryLodLevels;
-        geometryLodLevels.Reserve(numLodLevels);
-        loadGeometries_[i].Resize(numLodLevels);
+        ea::vector<SharedPtr<Geometry> > geometryLodLevels;
+        geometryLodLevels.reserve(numLodLevels);
+        loadGeometries_[i].resize(numLodLevels);
 
         for (unsigned j = 0; j < numLodLevels; ++j)
         {
@@ -217,24 +217,24 @@ bool Model::BeginLoad(Deserializer& source)
             unsigned indexStart = source.ReadUInt();
             unsigned indexCount = source.ReadUInt();
 
-            if (vbRef >= vertexBuffers_.Size())
+            if (vbRef >= vertexBuffers_.size())
             {
                 URHO3D_LOGERROR("Vertex buffer index out of bounds");
-                loadVBData_.Clear();
-                loadIBData_.Clear();
-                loadGeometries_.Clear();
+                loadVBData_.clear();
+                loadIBData_.clear();
+                loadGeometries_.clear();
                 return false;
             }
-            if (ibRef >= indexBuffers_.Size())
+            if (ibRef >= indexBuffers_.size())
             {
                 URHO3D_LOGERROR("Index buffer index out of bounds");
-                loadVBData_.Clear();
-                loadIBData_.Clear();
-                loadGeometries_.Clear();
+                loadVBData_.clear();
+                loadIBData_.clear();
+                loadGeometries_.clear();
                 return false;
             }
 
-            SharedPtr<Geometry> geometry(new Geometry(context_));
+            SharedPtr<Geometry> geometry(context_->CreateObject<Geometry>());
             geometry->SetLodDistance(distance);
 
             // Prepare geometry to be defined during EndLoad()
@@ -244,16 +244,16 @@ bool Model::BeginLoad(Deserializer& source)
             loadGeometries_[i][j].indexStart_ = indexStart;
             loadGeometries_[i][j].indexCount_ = indexCount;
 
-            geometryLodLevels.Push(geometry);
+            geometryLodLevels.push_back(geometry);
             memoryUse += sizeof(Geometry);
         }
 
-        geometries_.Push(geometryLodLevels);
+        geometries_.push_back(geometryLodLevels);
     }
 
     // Read morphs
     unsigned numMorphs = source.ReadUInt();
-    morphs_.Reserve(numMorphs);
+    morphs_.reserve(numMorphs);
     for (unsigned i = 0; i < numMorphs; ++i)
     {
         ModelMorph newMorph;
@@ -289,7 +289,7 @@ bool Model::BeginLoad(Deserializer& source)
             memoryUse += sizeof(VertexBufferMorph) + newBuffer.vertexCount_ * vertexSize;
         }
 
-        morphs_.Push(newMorph);
+        morphs_.push_back(newMorph);
         memoryUse += sizeof(ModelMorph);
     }
 
@@ -301,15 +301,15 @@ bool Model::BeginLoad(Deserializer& source)
     boundingBox_ = source.ReadBoundingBox();
 
     // Read geometry centers
-    for (unsigned i = 0; i < geometries_.Size() && !source.IsEof(); ++i)
-        geometryCenters_.Push(source.ReadVector3());
-    while (geometryCenters_.Size() < geometries_.Size())
-        geometryCenters_.Push(Vector3::ZERO);
-    memoryUse += sizeof(Vector3) * geometries_.Size();
+    for (unsigned i = 0; i < geometries_.size() && !source.IsEof(); ++i)
+        geometryCenters_.push_back(source.ReadVector3());
+    while (geometryCenters_.size() < geometries_.size())
+        geometryCenters_.push_back(Vector3::ZERO);
+    memoryUse += sizeof(Vector3) * geometries_.size();
 
     // Read metadata
     auto* cache = GetSubsystem<ResourceCache>();
-    String xmlName = ReplaceExtension(GetName(), ".xml");
+    ea::string xmlName = ReplaceExtension(GetName(), ".xml");
     SharedPtr<XMLFile> file(cache->GetTempResource<XMLFile>(xmlName, false));
     if (file)
         LoadMetadataFromXML(file->GetRoot());
@@ -321,7 +321,7 @@ bool Model::BeginLoad(Deserializer& source)
 bool Model::EndLoad()
 {
     // Upload vertex buffer data
-    for (unsigned i = 0; i < vertexBuffers_.Size(); ++i)
+    for (unsigned i = 0; i < vertexBuffers_.size(); ++i)
     {
         VertexBuffer* buffer = vertexBuffers_[i];
         VertexBufferDesc& desc = loadVBData_[i];
@@ -329,12 +329,12 @@ bool Model::EndLoad()
         {
             buffer->SetShadowed(true);
             buffer->SetSize(desc.vertexCount_, desc.vertexElements_);
-            buffer->SetData(desc.data_.Get());
+            buffer->SetData(desc.data_.get());
         }
     }
 
     // Upload index buffer data
-    for (unsigned i = 0; i < indexBuffers_.Size(); ++i)
+    for (unsigned i = 0; i < indexBuffers_.size(); ++i)
     {
         IndexBuffer* buffer = indexBuffers_[i];
         IndexBufferDesc& desc = loadIBData_[i];
@@ -342,14 +342,14 @@ bool Model::EndLoad()
         {
             buffer->SetShadowed(true);
             buffer->SetSize(desc.indexCount_, desc.indexSize_ > sizeof(unsigned short));
-            buffer->SetData(desc.data_.Get());
+            buffer->SetData(desc.data_.get());
         }
     }
 
     // Set up geometries
-    for (unsigned i = 0; i < geometries_.Size(); ++i)
+    for (unsigned i = 0; i < geometries_.size(); ++i)
     {
-        for (unsigned j = 0; j < geometries_[i].Size(); ++j)
+        for (unsigned j = 0; j < geometries_[i].size(); ++j)
         {
             Geometry* geometry = geometries_[i][j];
             GeometryDesc& desc = loadGeometries_[i][j];
@@ -359,9 +359,9 @@ bool Model::EndLoad()
         }
     }
 
-    loadVBData_.Clear();
-    loadIBData_.Clear();
-    loadGeometries_.Clear();
+    loadVBData_.clear();
+    loadIBData_.clear();
+    loadGeometries_.clear();
     return true;
 }
 
@@ -372,14 +372,14 @@ bool Model::Save(Serializer& dest) const
         return false;
 
     // Write vertex buffers
-    dest.WriteUInt(vertexBuffers_.Size());
-    for (unsigned i = 0; i < vertexBuffers_.Size(); ++i)
+    dest.WriteUInt(vertexBuffers_.size());
+    for (unsigned i = 0; i < vertexBuffers_.size(); ++i)
     {
         VertexBuffer* buffer = vertexBuffers_[i];
         dest.WriteUInt(buffer->GetVertexCount());
-        const PODVector<VertexElement>& elements = buffer->GetElements();
-        dest.WriteUInt(elements.Size());
-        for (unsigned j = 0; j < elements.Size(); ++j)
+        const ea::vector<VertexElement>& elements = buffer->GetElements();
+        dest.WriteUInt(elements.size());
+        for (unsigned j = 0; j < elements.size(); ++j)
         {
             unsigned elementDesc = ((unsigned)elements[j].type_) |
                 (((unsigned)elements[j].semantic_) << 8u) |
@@ -391,8 +391,8 @@ bool Model::Save(Serializer& dest) const
         dest.Write(buffer->GetShadowData(), buffer->GetVertexCount() * buffer->GetVertexSize());
     }
     // Write index buffers
-    dest.WriteUInt(indexBuffers_.Size());
-    for (unsigned i = 0; i < indexBuffers_.Size(); ++i)
+    dest.WriteUInt(indexBuffers_.size());
+    for (unsigned i = 0; i < indexBuffers_.size(); ++i)
     {
         IndexBuffer* buffer = indexBuffers_[i];
         dest.WriteUInt(buffer->GetIndexCount());
@@ -400,17 +400,17 @@ bool Model::Save(Serializer& dest) const
         dest.Write(buffer->GetShadowData(), buffer->GetIndexCount() * buffer->GetIndexSize());
     }
     // Write geometries
-    dest.WriteUInt(geometries_.Size());
-    for (unsigned i = 0; i < geometries_.Size(); ++i)
+    dest.WriteUInt(geometries_.size());
+    for (unsigned i = 0; i < geometries_.size(); ++i)
     {
         // Write bone mappings
-        dest.WriteUInt(geometryBoneMappings_[i].Size());
-        for (unsigned j = 0; j < geometryBoneMappings_[i].Size(); ++j)
+        dest.WriteUInt(geometryBoneMappings_[i].size());
+        for (unsigned j = 0; j < geometryBoneMappings_[i].size(); ++j)
             dest.WriteUInt(geometryBoneMappings_[i][j]);
 
         // Write the LOD levels
-        dest.WriteUInt(geometries_[i].Size());
-        for (unsigned j = 0; j < geometries_[i].Size(); ++j)
+        dest.WriteUInt(geometries_[i].size());
+        for (unsigned j = 0; j < geometries_[i].size(); ++j)
         {
             Geometry* geometry = geometries_[i][j];
             dest.WriteFloat(geometry->GetLodDistance());
@@ -423,31 +423,31 @@ bool Model::Save(Serializer& dest) const
     }
 
     // Write morphs
-    dest.WriteUInt(morphs_.Size());
-    for (unsigned i = 0; i < morphs_.Size(); ++i)
+    dest.WriteUInt(morphs_.size());
+    for (unsigned i = 0; i < morphs_.size(); ++i)
     {
         dest.WriteString(morphs_[i].name_);
-        dest.WriteUInt(morphs_[i].buffers_.Size());
+        dest.WriteUInt(morphs_[i].buffers_.size());
 
         // Write morph vertex buffers
-        for (HashMap<unsigned, VertexBufferMorph>::ConstIterator j = morphs_[i].buffers_.Begin();
-             j != morphs_[i].buffers_.End(); ++j)
+        for (auto j = morphs_[i].buffers_.begin();
+             j != morphs_[i].buffers_.end(); ++j)
         {
-            dest.WriteUInt(j->first_);
-            dest.WriteUInt(j->second_.elementMask_);
-            dest.WriteUInt(j->second_.vertexCount_);
+            dest.WriteUInt(j->first);
+            dest.WriteUInt(j->second.elementMask_);
+            dest.WriteUInt(j->second.vertexCount_);
 
             // Base size: size of each vertex index
             unsigned vertexSize = sizeof(unsigned);
             // Add size of individual elements
-            if (j->second_.elementMask_ & MASK_POSITION)
+            if (j->second.elementMask_ & MASK_POSITION)
                 vertexSize += sizeof(Vector3);
-            if (j->second_.elementMask_ & MASK_NORMAL)
+            if (j->second.elementMask_ & MASK_NORMAL)
                 vertexSize += sizeof(Vector3);
-            if (j->second_.elementMask_ & MASK_TANGENT)
+            if (j->second.elementMask_ & MASK_TANGENT)
                 vertexSize += sizeof(Vector3);
 
-            dest.Write(j->second_.morphData_.Get(), vertexSize * j->second_.vertexCount_);
+            dest.Write(j->second.morphData_.get(), vertexSize * j->second.vertexCount_);
         }
     }
 
@@ -458,7 +458,7 @@ bool Model::Save(Serializer& dest) const
     dest.WriteBoundingBox(boundingBox_);
 
     // Write geometry centers
-    for (unsigned i = 0; i < geometryCenters_.Size(); ++i)
+    for (unsigned i = 0; i < geometryCenters_.size(); ++i)
         dest.WriteVector3(geometryCenters_[i]);
 
     // Write metadata
@@ -467,9 +467,9 @@ bool Model::Save(Serializer& dest) const
         auto* destFile = dynamic_cast<File*>(&dest);
         if (destFile)
         {
-            String xmlName = ReplaceExtension(destFile->GetName(), ".xml");
+            ea::string xmlName = ReplaceExtension(destFile->GetName(), ".xml");
 
-            SharedPtr<XMLFile> xml(new XMLFile(context_));
+            SharedPtr<XMLFile> xml(context_->CreateObject<XMLFile>());
             XMLElement rootElem = xml->CreateRoot("model");
             SaveMetadataToXML(rootElem);
 
@@ -488,10 +488,10 @@ void Model::SetBoundingBox(const BoundingBox& box)
     boundingBox_ = box;
 }
 
-bool Model::SetVertexBuffers(const Vector<SharedPtr<VertexBuffer> >& buffers, const PODVector<unsigned>& morphRangeStarts,
-    const PODVector<unsigned>& morphRangeCounts)
+bool Model::SetVertexBuffers(const ea::vector<SharedPtr<VertexBuffer> >& buffers, const ea::vector<unsigned>& morphRangeStarts,
+    const ea::vector<unsigned>& morphRangeCounts)
 {
-    for (unsigned i = 0; i < buffers.Size(); ++i)
+    for (unsigned i = 0; i < buffers.size(); ++i)
     {
         if (!buffers[i])
         {
@@ -506,22 +506,22 @@ bool Model::SetVertexBuffers(const Vector<SharedPtr<VertexBuffer> >& buffers, co
     }
 
     vertexBuffers_ = buffers;
-    morphRangeStarts_.Resize(buffers.Size());
-    morphRangeCounts_.Resize(buffers.Size());
+    morphRangeStarts_.resize(buffers.size());
+    morphRangeCounts_.resize(buffers.size());
 
     // If morph ranges are not specified for buffers, assume to be zero
-    for (unsigned i = 0; i < buffers.Size(); ++i)
+    for (unsigned i = 0; i < buffers.size(); ++i)
     {
-        morphRangeStarts_[i] = i < morphRangeStarts.Size() ? morphRangeStarts[i] : 0;
-        morphRangeCounts_[i] = i < morphRangeCounts.Size() ? morphRangeCounts[i] : 0;
+        morphRangeStarts_[i] = i < morphRangeStarts.size() ? morphRangeStarts[i] : 0;
+        morphRangeCounts_[i] = i < morphRangeCounts.size() ? morphRangeCounts[i] : 0;
     }
 
     return true;
 }
 
-bool Model::SetIndexBuffers(const Vector<SharedPtr<IndexBuffer> >& buffers)
+bool Model::SetIndexBuffers(const ea::vector<SharedPtr<IndexBuffer> >& buffers)
 {
-    for (unsigned i = 0; i < buffers.Size(); ++i)
+    for (unsigned i = 0; i < buffers.size(); ++i)
     {
         if (!buffers[i])
         {
@@ -541,21 +541,21 @@ bool Model::SetIndexBuffers(const Vector<SharedPtr<IndexBuffer> >& buffers)
 
 void Model::SetNumGeometries(unsigned num)
 {
-    geometries_.Resize(num);
-    geometryBoneMappings_.Resize(num);
-    geometryCenters_.Resize(num);
+    geometries_.resize(num);
+    geometryBoneMappings_.resize(num);
+    geometryCenters_.resize(num);
 
     // For easier creation of from-scratch geometry, ensure that all geometries start with at least 1 LOD level (0 makes no sense)
-    for (unsigned i = 0; i < geometries_.Size(); ++i)
+    for (unsigned i = 0; i < geometries_.size(); ++i)
     {
-        if (geometries_[i].Empty())
-            geometries_[i].Resize(1);
+        if (geometries_[i].empty())
+            geometries_[i].resize(1);
     }
 }
 
 bool Model::SetNumGeometryLodLevels(unsigned index, unsigned num)
 {
-    if (index >= geometries_.Size())
+    if (index >= geometries_.size())
     {
         URHO3D_LOGERROR("Geometry index out of bounds");
         return false;
@@ -566,18 +566,18 @@ bool Model::SetNumGeometryLodLevels(unsigned index, unsigned num)
         return false;
     }
 
-    geometries_[index].Resize(num);
+    geometries_[index].resize(num);
     return true;
 }
 
 bool Model::SetGeometry(unsigned index, unsigned lodLevel, Geometry* geometry)
 {
-    if (index >= geometries_.Size())
+    if (index >= geometries_.size())
     {
         URHO3D_LOGERROR("Geometry index out of bounds");
         return false;
     }
-    if (lodLevel >= geometries_[index].Size())
+    if (lodLevel >= geometries_[index].size())
     {
         URHO3D_LOGERROR("LOD level index out of bounds");
         return false;
@@ -589,7 +589,7 @@ bool Model::SetGeometry(unsigned index, unsigned lodLevel, Geometry* geometry)
 
 bool Model::SetGeometryCenter(unsigned index, const Vector3& center)
 {
-    if (index >= geometryCenters_.Size())
+    if (index >= geometryCenters_.size())
     {
         URHO3D_LOGERROR("Geometry index out of bounds");
         return false;
@@ -604,19 +604,19 @@ void Model::SetSkeleton(const Skeleton& skeleton)
     skeleton_ = skeleton;
 }
 
-void Model::SetGeometryBoneMappings(const Vector<PODVector<unsigned> >& geometryBoneMappings)
+void Model::SetGeometryBoneMappings(const ea::vector<ea::vector<unsigned> >& geometryBoneMappings)
 {
     geometryBoneMappings_ = geometryBoneMappings;
 }
 
-void Model::SetMorphs(const Vector<ModelMorph>& morphs)
+void Model::SetMorphs(const ea::vector<ModelMorph>& morphs)
 {
     morphs_ = morphs;
 }
 
-SharedPtr<Model> Model::Clone(const String& cloneName) const
+SharedPtr<Model> Model::Clone(const ea::string& cloneName) const
 {
-    SharedPtr<Model> ret(new Model(context_));
+    SharedPtr<Model> ret(context_->CreateObject<Model>());
 
     ret->SetName(cloneName);
     ret->boundingBox_ = boundingBox_;
@@ -628,15 +628,15 @@ SharedPtr<Model> Model::Clone(const String& cloneName) const
     ret->morphRangeCounts_ = morphRangeCounts_;
 
     // Deep copy vertex/index buffers
-    HashMap<VertexBuffer*, VertexBuffer*> vbMapping;
-    for (Vector<SharedPtr<VertexBuffer> >::ConstIterator i = vertexBuffers_.Begin(); i != vertexBuffers_.End(); ++i)
+    ea::unordered_map<VertexBuffer*, VertexBuffer*> vbMapping;
+    for (auto i = vertexBuffers_.begin(); i != vertexBuffers_.end(); ++i)
     {
         VertexBuffer* origBuffer = *i;
         SharedPtr<VertexBuffer> cloneBuffer;
 
         if (origBuffer)
         {
-            cloneBuffer = new VertexBuffer(context_);
+            cloneBuffer = context_->CreateObject<VertexBuffer>();
             cloneBuffer->SetSize(origBuffer->GetVertexCount(), origBuffer->GetElementMask(), origBuffer->IsDynamic());
             cloneBuffer->SetShadowed(origBuffer->IsShadowed());
             if (origBuffer->IsShadowed())
@@ -652,18 +652,18 @@ SharedPtr<Model> Model::Clone(const String& cloneName) const
             vbMapping[origBuffer] = cloneBuffer;
         }
 
-        ret->vertexBuffers_.Push(cloneBuffer);
+        ret->vertexBuffers_.push_back(cloneBuffer);
     }
 
-    HashMap<IndexBuffer*, IndexBuffer*> ibMapping;
-    for (Vector<SharedPtr<IndexBuffer> >::ConstIterator i = indexBuffers_.Begin(); i != indexBuffers_.End(); ++i)
+    ea::unordered_map<IndexBuffer*, IndexBuffer*> ibMapping;
+    for (auto i = indexBuffers_.begin(); i != indexBuffers_.end(); ++i)
     {
         IndexBuffer* origBuffer = *i;
         SharedPtr<IndexBuffer> cloneBuffer;
 
         if (origBuffer)
         {
-            cloneBuffer = new IndexBuffer(context_);
+            cloneBuffer = context_->CreateObject<IndexBuffer>();
             cloneBuffer->SetSize(origBuffer->GetIndexCount(), origBuffer->GetIndexSize() == sizeof(unsigned),
                 origBuffer->IsDynamic());
             cloneBuffer->SetShadowed(origBuffer->IsShadowed());
@@ -680,22 +680,22 @@ SharedPtr<Model> Model::Clone(const String& cloneName) const
             ibMapping[origBuffer] = cloneBuffer;
         }
 
-        ret->indexBuffers_.Push(cloneBuffer);
+        ret->indexBuffers_.push_back(cloneBuffer);
     }
 
     // Deep copy all the geometry LOD levels and refer to the copied vertex/index buffers
-    ret->geometries_.Resize(geometries_.Size());
-    for (unsigned i = 0; i < geometries_.Size(); ++i)
+    ret->geometries_.resize(geometries_.size());
+    for (unsigned i = 0; i < geometries_.size(); ++i)
     {
-        ret->geometries_[i].Resize(geometries_[i].Size());
-        for (unsigned j = 0; j < geometries_[i].Size(); ++j)
+        ret->geometries_[i].resize(geometries_[i].size());
+        for (unsigned j = 0; j < geometries_[i].size(); ++j)
         {
             SharedPtr<Geometry> cloneGeometry;
             Geometry* origGeometry = geometries_[i][j];
 
             if (origGeometry)
             {
-                cloneGeometry = new Geometry(context_);
+                cloneGeometry = context_->CreateObject<Geometry>();
                 cloneGeometry->SetIndexBuffer(ibMapping[origGeometry->GetIndexBuffer()]);
                 unsigned numVbs = origGeometry->GetNumVertexBuffers();
                 for (unsigned k = 0; k < numVbs; ++k)
@@ -713,16 +713,17 @@ SharedPtr<Model> Model::Clone(const String& cloneName) const
 
 
     // Deep copy the morph data (if any) to allow modifying it
-    for (Vector<ModelMorph>::Iterator i = ret->morphs_.Begin(); i != ret->morphs_.End(); ++i)
+    for (auto i = ret->morphs_.begin(); i != ret->morphs_.end(); ++i)
     {
         ModelMorph& morph = *i;
-        for (HashMap<unsigned, VertexBufferMorph>::Iterator j = morph.buffers_.Begin(); j != morph.buffers_.End(); ++j)
+        for (auto j = morph.buffers_.begin(); j !=
+            morph.buffers_.end(); ++j)
         {
-            VertexBufferMorph& vbMorph = j->second_;
+            VertexBufferMorph& vbMorph = j->second;
             if (vbMorph.dataSize_)
             {
-                SharedArrayPtr<unsigned char> cloneData(new unsigned char[vbMorph.dataSize_]);
-                memcpy(cloneData.Get(), vbMorph.morphData_.Get(), vbMorph.dataSize_);
+                ea::shared_array<unsigned char> cloneData(new unsigned char[vbMorph.dataSize_]);
+                memcpy(cloneData.get(), vbMorph.morphData_.get(), vbMorph.dataSize_);
                 vbMorph.morphData_ = cloneData;
             }
         }
@@ -735,33 +736,33 @@ SharedPtr<Model> Model::Clone(const String& cloneName) const
 
 unsigned Model::GetNumGeometryLodLevels(unsigned index) const
 {
-    return index < geometries_.Size() ? geometries_[index].Size() : 0;
+    return index < geometries_.size() ? geometries_[index].size() : 0;
 }
 
 Geometry* Model::GetGeometry(unsigned index, unsigned lodLevel) const
 {
-    if (index >= geometries_.Size() || geometries_[index].Empty())
+    if (index >= geometries_.size() || geometries_[index].empty())
         return nullptr;
 
-    if (lodLevel >= geometries_[index].Size())
-        lodLevel = geometries_[index].Size() - 1;
+    if (lodLevel >= geometries_[index].size())
+        lodLevel = geometries_[index].size() - 1;
 
     return geometries_[index][lodLevel];
 }
 
 const ModelMorph* Model::GetMorph(unsigned index) const
 {
-    return index < morphs_.Size() ? &morphs_[index] : nullptr;
+    return index < morphs_.size() ? &morphs_[index] : nullptr;
 }
 
-const ModelMorph* Model::GetMorph(const String& name) const
+const ModelMorph* Model::GetMorph(const ea::string& name) const
 {
     return GetMorph(StringHash(name));
 }
 
 const ModelMorph* Model::GetMorph(StringHash nameHash) const
 {
-    for (Vector<ModelMorph>::ConstIterator i = morphs_.Begin(); i != morphs_.End(); ++i)
+    for (auto i = morphs_.begin(); i != morphs_.end(); ++i)
     {
         if (i->nameHash_ == nameHash)
             return &(*i);
@@ -772,12 +773,12 @@ const ModelMorph* Model::GetMorph(StringHash nameHash) const
 
 unsigned Model::GetMorphRangeStart(unsigned bufferIndex) const
 {
-    return bufferIndex < vertexBuffers_.Size() ? morphRangeStarts_[bufferIndex] : 0;
+    return bufferIndex < vertexBuffers_.size() ? morphRangeStarts_[bufferIndex] : 0;
 }
 
 unsigned Model::GetMorphRangeCount(unsigned bufferIndex) const
 {
-    return bufferIndex < vertexBuffers_.Size() ? morphRangeCounts_[bufferIndex] : 0;
+    return bufferIndex < vertexBuffers_.size() ? morphRangeCounts_[bufferIndex] : 0;
 }
 
 }

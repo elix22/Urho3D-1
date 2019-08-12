@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,19 +22,23 @@
 
 #pragma once
 
-#include "../Container/HashSet.h"
+#include <EASTL/hash_set.h>
+
 #include "../Core/Object.h"
 #include "../Core/Timer.h"
 #include "../Input/Controls.h"
 #include "../IO/VectorBuffer.h"
 #include "../Scene/ReplicationState.h"
 
-#include <kNet/kNetFwd.h>
-#include <kNet/SharedPtr.h>
-
-#ifdef SendMessage
-#undef SendMessage
-#endif
+namespace SLNet
+{
+    class SystemAddress;
+    struct AddressOrGUID;
+    struct RakNetGUID;
+    struct Packet;
+    class NatPunchthroughClient;
+    class RakPeerInterface;
+}
 
 namespace Urho3D
 {
@@ -68,9 +72,9 @@ struct PackageDownload
     /// Destination file.
     SharedPtr<File> file_;
     /// Already received fragments.
-    HashSet<unsigned> receivedFragments_;
+    ea::hash_set<unsigned> receivedFragments_;
     /// Package name.
-    String name_;
+    ea::string name_;
     /// Total number of fragments.
     unsigned totalFragments_;
     /// Checksum.
@@ -107,10 +111,15 @@ class URHO3D_API Connection : public Object
     URHO3D_OBJECT(Connection, Object);
 
 public:
-    /// Construct with context and kNet message connection pointers.
-    Connection(Context* context, bool isClient, const kNet::SharedPtr<kNet::MessageConnection>& connection);
+    /// Construct with context, RakNet connection address and Raknet peer pointer.
+    Connection(Context* context);
     /// Destruct.
     ~Connection() override;
+    /// Initialize object state. Should be called immediately after constructor.
+    void Initialize(bool isClient, const SLNet::AddressOrGUID& address, SLNet::RakPeerInterface* peer);
+
+    /// Register object with the engine.
+    static void RegisterObject(Context* context);
 
     /// Send a message.
     void SendMessage(int msgID, bool reliable, bool inOrder, const VectorBuffer& msg, unsigned contentID = 0);
@@ -148,9 +157,12 @@ public:
     void ProcessPendingLatestData();
     /// Process a message from the server or client. Called by Network.
     bool ProcessMessage(int msgID, MemoryBuffer& msg);
-
-    /// Return the kNet message connection.
-    kNet::MessageConnection* GetMessageConnection() const;
+    /// Ban this connections IP address.
+    void Ban();
+    /// Return the RakNet address/guid.
+    const SLNet::AddressOrGUID& GetAddressOrGUID() const { return *address_; }
+    /// Set the the RakNet address/guid.
+    void SetAddressOrGUID(const SLNet::AddressOrGUID& addr);
 
     /// Return client identity.
     VariantMap& GetIdentity() { return identity_; }
@@ -186,7 +198,7 @@ public:
     bool GetLogStatistics() const { return logStatistics_; }
 
     /// Return remote address.
-    String GetAddress() const { return address_; }
+    ea::string GetAddress() const;
 
     /// Return remote port.
     unsigned short GetPort() const { return port_; }
@@ -195,7 +207,7 @@ public:
     float GetRoundTripTime() const;
 
     /// Return the time since last received data from the remote host in milliseconds.
-    float GetLastHeardTime() const;
+    unsigned GetLastHeardTime() const;
 
     /// Return bytes received per second.
     float GetBytesInPerSec() const;
@@ -204,17 +216,17 @@ public:
     float GetBytesOutPerSec() const;
 
     /// Return packets received per second.
-    float GetPacketsInPerSec() const;
+    int GetPacketsInPerSec() const;
 
     /// Return packets sent per second.
-    float GetPacketsOutPerSec() const;
+    int GetPacketsOutPerSec() const;
 
     /// Return an address:port string.
-    String ToString() const;
+    ea::string ToString() const;
     /// Return number of package downloads remaining.
     unsigned GetNumDownloads() const;
     /// Return name of current package download, or empty if no downloads.
-    const String& GetDownloadName() const;
+    const ea::string& GetDownloadName() const;
     /// Return progress of current package download, or 1.0 if no downloads.
     float GetDownloadProgress() const;
     /// Trigger client connection to download a package file from the server. Can be used to download additional resource packages when client is already joined in a scene. The package must have been added as a requirement to the scene the client is joined in, or else the eventual download will fail.
@@ -260,42 +272,38 @@ private:
     /// Check a package list received from server and initiate package downloads as necessary. Return true on success, or false if failed to initialze downloads (cache dir not set)
     bool RequestNeededPackages(unsigned numPackages, MemoryBuffer& msg);
     /// Initiate a package download.
-    void RequestPackage(const String& name, unsigned fileSize, unsigned checksum);
+    void RequestPackage(const ea::string& name, unsigned fileSize, unsigned checksum);
     /// Send an error reply for a package download.
-    void SendPackageError(const String& name);
+    void SendPackageError(const ea::string& name);
     /// Handle scene load failure on the server or client.
     void OnSceneLoadFailed();
     /// Handle a package download failure on the client.
-    void OnPackageDownloadFailed(const String& name);
+    void OnPackageDownloadFailed(const ea::string& name);
     /// Handle all packages loaded successfully. Also called directly on MSG_LOADSCENE if there are none.
     void OnPackagesReady();
 
-    /// kNet message connection.
-    kNet::SharedPtr<kNet::MessageConnection> connection_;
     /// Scene.
     WeakPtr<Scene> scene_;
     /// Network replication state of the scene.
     SceneReplicationState sceneState_;
     /// Waiting or ongoing package file receive transfers.
-    HashMap<StringHash, PackageDownload> downloads_;
+    ea::unordered_map<StringHash, PackageDownload> downloads_;
     /// Ongoing package send transfers.
-    HashMap<StringHash, PackageUpload> uploads_;
+    ea::unordered_map<StringHash, PackageUpload> uploads_;
     /// Pending latest data for not yet received nodes.
-    HashMap<unsigned, PODVector<unsigned char> > nodeLatestData_;
+    ea::unordered_map<unsigned, ea::vector<unsigned char> > nodeLatestData_;
     /// Pending latest data for not yet received components.
-    HashMap<unsigned, PODVector<unsigned char> > componentLatestData_;
+    ea::unordered_map<unsigned, ea::vector<unsigned char> > componentLatestData_;
     /// Node ID's to process during a replication update.
-    HashSet<unsigned> nodesToProcess_;
+    ea::hash_set<unsigned> nodesToProcess_;
     /// Reusable message buffer.
     VectorBuffer msg_;
     /// Queued remote events.
-    Vector<RemoteEvent> remoteEvents_;
+    ea::vector<RemoteEvent> remoteEvents_;
     /// Scene file to load once all packages (if any) have been downloaded.
-    String sceneFileName_;
+    ea::string sceneFileName_;
     /// Statistics timer.
     Timer statsTimer_;
-    /// Remote endpoint address.
-    String address_;
     /// Remote endpoint port.
     unsigned short port_;
     /// Observer position for interest management.
@@ -312,6 +320,18 @@ private:
     bool sceneLoaded_;
     /// Show statistics flag.
     bool logStatistics_;
+    /// Address of this connection.
+    SLNet::AddressOrGUID* address_;
+    /// Raknet peer object.
+    SLNet::RakPeerInterface* peer_;
+    /// Temporary variable to hold packet count in the next second, x - packets in, y - packets out
+    IntVector2 tempPacketCounter_;
+    /// Packet count in the last second, x - packets in, y - packets out
+    IntVector2 packetCounter_;
+    /// Packet count timer which resets every 1s
+    Timer packetCounterTimer_;
+    /// Last heard timer, resets when new packet is incoming
+    Timer lastHeardTimer_;
 };
 
 }

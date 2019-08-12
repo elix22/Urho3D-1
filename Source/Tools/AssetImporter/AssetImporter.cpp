@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,7 @@
 // THE SOFTWARE.
 //
 
+#include <Urho3D/Container/Utility.h>
 #include <Urho3D/Core/Context.h>
 #include <Urho3D/Core/ProcessUtils.h>
 #include <Urho3D/Core/StringUtils.h>
@@ -60,16 +61,16 @@ using namespace Urho3D;
 
 struct OutModel
 {
-    String outName_;
+    ea::string outName_;
     aiNode* rootNode_{};
-    HashSet<unsigned> meshIndices_;
-    PODVector<aiMesh*> meshes_;
-    PODVector<aiNode*> meshNodes_;
-    PODVector<aiNode*> bones_;
-    PODVector<aiNode*> pivotlessBones_;
-    PODVector<aiAnimation*> animations_;
-    PODVector<float> boneRadii_;
-    PODVector<BoundingBox> boneHitboxes_;
+    ea::hash_set<unsigned> meshIndices_;
+    ea::vector<aiMesh*> meshes_;
+    ea::vector<aiNode*> meshNodes_;
+    ea::vector<aiNode*> bones_;
+    ea::vector<aiNode*> pivotlessBones_;
+    ea::vector<aiAnimation*> animations_;
+    ea::vector<float> boneRadii_;
+    ea::vector<BoundingBox> boneHitboxes_;
     aiNode* rootBone_{};
     unsigned totalVertices_{};
     unsigned totalIndices_{};
@@ -77,11 +78,11 @@ struct OutModel
 
 struct OutScene
 {
-    String outName_;
+    ea::string outName_;
     aiNode* rootNode_{};
-    Vector<OutModel> models_;
-    PODVector<aiNode*> nodes_;
-    PODVector<unsigned> nodeModelIndices_;
+    ea::vector<OutModel> models_;
+    ea::vector<aiNode*> nodes_;
+    ea::vector<unsigned> nodeModelIndices_;
 };
 
 // FBX transform chain
@@ -139,10 +140,10 @@ static const unsigned MAX_CHANNELS = 4;
 SharedPtr<Context> context_(new Context());
 const aiScene* scene_ = nullptr;
 aiNode* rootNode_ = nullptr;
-String inputName_;
-String resourcePath_;
-String outPath_;
-String outName_;
+ea::string inputName_;
+ea::string resourcePath_;
+ea::string outPath_;
+ea::string outName_;
 bool useSubdirs_ = true;
 bool localIDs_ = false;
 bool saveBinary_ = false;
@@ -164,11 +165,11 @@ bool noOverwriteNewerTexture_ = false;
 bool checkUniqueModel_ = true;
 bool moveToBindPose_ = false;
 unsigned maxBones_ = 64;
-Vector<String> nonSkinningBoneIncludes_;
-Vector<String> nonSkinningBoneExcludes_;
+ea::vector<ea::string> nonSkinningBoneIncludes_;
+ea::vector<ea::string> nonSkinningBoneExcludes_;
 
-HashSet<aiAnimation*> allAnimations_;
-PODVector<aiAnimation*> sceneAnimations_;
+ea::hash_set<aiAnimation*> allAnimations_;
+ea::vector<aiAnimation*> sceneAnimations_;
 
 float defaultTicksPerSecond_ = 4800.0f;
 // For subset animation import usage
@@ -177,73 +178,73 @@ float importEndTime_ = 0.0f;
 bool suppressFbxPivotNodes_ = true;
 
 int main(int argc, char** argv);
-void Run(const Vector<String>& arguments);
+void Run(const ea::vector<ea::string>& arguments);
 void DumpNodes(aiNode* rootNode, unsigned level);
 
-void ExportModel(const String& outName, bool animationOnly);
-void ExportAnimation(const String& outName, bool animationOnly);
+void ExportModel(const ea::string& outName, bool animationOnly);
+void ExportAnimation(const ea::string& outName, bool animationOnly);
 void CollectMeshes(OutModel& model, aiNode* node);
 void CollectBones(OutModel& model, bool animationOnly = false);
-void CollectBonesFinal(PODVector<aiNode*>& dest, const HashSet<aiNode*>& necessary, aiNode* node);
+void CollectBonesFinal(ea::vector<aiNode*>& dest, const ea::hash_set<aiNode*>& necessary, aiNode* node);
 void MoveToBindPose(OutModel& model, aiNode* current);
 void CollectAnimations(OutModel* model = nullptr);
 void BuildBoneCollisionInfo(OutModel& model);
 void BuildAndSaveModel(OutModel& model);
 void BuildAndSaveAnimations(OutModel* model = nullptr);
 
-void ExportScene(const String& outName, bool asPrefab);
+void ExportScene(const ea::string& outName, bool asPrefab);
 void CollectSceneModels(OutScene& scene, aiNode* node);
-void CreateHierarchy(Scene* scene, aiNode* srcNode, HashMap<aiNode*, Node*>& nodeMapping);
-Node* CreateSceneNode(Scene* scene, aiNode* srcNode, HashMap<aiNode*, Node*>& nodeMapping);
+void CreateHierarchy(Scene* scene, aiNode* srcNode, ea::unordered_map<aiNode*, Node*>& nodeMapping);
+Node* CreateSceneNode(Scene* scene, aiNode* srcNode, ea::unordered_map<aiNode*, Node*>& nodeMapping);
 void BuildAndSaveScene(OutScene& scene, bool asPrefab);
 
-void ExportMaterials(HashSet<String>& usedTextures);
-void BuildAndSaveMaterial(aiMaterial* material, HashSet<String>& usedTextures);
-void CopyTextures(const HashSet<String>& usedTextures, const String& sourcePath);
+void ExportMaterials(ea::hash_set<ea::string>& usedTextures);
+void BuildAndSaveMaterial(aiMaterial* material, ea::hash_set<ea::string>& usedTextures);
+void CopyTextures(const ea::hash_set<ea::string>& usedTextures, const ea::string& sourcePath);
 
-void CombineLods(const PODVector<float>& lodDistances, const Vector<String>& modelNames, const String& outName);
+void CombineLods(const ea::vector<float>& lodDistances, const ea::vector<ea::string>& modelNames, const ea::string& outName);
 
-void GetMeshesUnderNode(Vector<Pair<aiNode*, aiMesh*> >& dest, aiNode* node);
+void GetMeshesUnderNode(ea::vector<ea::pair<aiNode*, aiMesh*> >& dest, aiNode* node);
 unsigned GetMeshIndex(aiMesh* mesh);
-unsigned GetBoneIndex(OutModel& model, const String& boneName);
-aiBone* GetMeshBone(OutModel& model, const String& boneName);
-Matrix3x4 GetOffsetMatrix(OutModel& model, const String& boneName);
-void GetBlendData(OutModel& model, aiMesh* mesh, aiNode* meshNode, PODVector<unsigned>& boneMappings, Vector<PODVector<unsigned char> >&
-    blendIndices, Vector<PODVector<float> >& blendWeights);
-String GetMeshMaterialName(aiMesh* mesh);
-String GetMaterialTextureName(const String& nameIn);
-String GenerateMaterialName(aiMaterial* material);
-String GenerateTextureName(unsigned texIndex);
+unsigned GetBoneIndex(OutModel& model, const ea::string& boneName);
+aiBone* GetMeshBone(OutModel& model, const ea::string& boneName);
+Matrix3x4 GetOffsetMatrix(OutModel& model, const ea::string& boneName);
+void GetBlendData(OutModel& model, aiMesh* mesh, aiNode* meshNode, ea::vector<unsigned>& boneMappings, ea::vector<ea::vector<unsigned char> >&
+    blendIndices, ea::vector<ea::vector<float> >& blendWeights);
+ea::string GetMeshMaterialName(aiMesh* mesh);
+ea::string GetMaterialTextureName(const ea::string& nameIn);
+ea::string GenerateMaterialName(aiMaterial* material);
+ea::string GenerateTextureName(unsigned texIndex);
 unsigned GetNumValidFaces(aiMesh* mesh);
 
 void WriteShortIndices(unsigned short*& dest, aiMesh* mesh, unsigned index, unsigned offset);
 void WriteLargeIndices(unsigned*& dest, aiMesh* mesh, unsigned index, unsigned offset);
 void WriteVertex(float*& dest, aiMesh* mesh, unsigned index, bool isSkinned, BoundingBox& box,
-    const Matrix3x4& vertexTransform, const Matrix3& normalTransform, Vector<PODVector<unsigned char> >& blendIndices,
-    Vector<PODVector<float> >& blendWeights);
-PODVector<VertexElement> GetVertexElements(aiMesh* mesh, bool isSkinned);
+    const Matrix3x4& vertexTransform, const Matrix3& normalTransform, ea::vector<ea::vector<unsigned char> >& blendIndices,
+    ea::vector<ea::vector<float> >& blendWeights);
+ea::vector<VertexElement> GetVertexElements(aiMesh* mesh, bool isSkinned);
 
-aiNode* GetNode(const String& name, aiNode* rootNode, bool caseSensitive = true);
+aiNode* GetNode(const ea::string& name, aiNode* rootNode, bool caseSensitive = true);
 aiMatrix4x4 GetDerivedTransform(aiNode* node, aiNode* rootNode, bool rootInclusive = true);
 aiMatrix4x4 GetDerivedTransform(aiMatrix4x4 transform, aiNode* node, aiNode* rootNode, bool rootInclusive = true);
 aiMatrix4x4 GetMeshBakingTransform(aiNode* meshNode, aiNode* modelRootNode);
 void GetPosRotScale(const aiMatrix4x4& transform, Vector3& pos, Quaternion& rot, Vector3& scale);
 
-String FromAIString(const aiString& str);
+ea::string FromAIString(const aiString& str);
 Vector3 ToVector3(const aiVector3D& vec);
 Vector2 ToVector2(const aiVector2D& vec);
 Quaternion ToQuaternion(const aiQuaternion& quat);
 Matrix3x4 ToMatrix3x4(const aiMatrix4x4& mat);
 aiMatrix4x4 ToAIMatrix4x4(const Matrix3x4& mat);
-String SanitateAssetName(const String& name);
+ea::string SanitateAssetName(const ea::string& name);
 
-unsigned GetPivotlessBoneIndex(OutModel& model, const String& boneName);
+unsigned GetPivotlessBoneIndex(OutModel& model, const ea::string& boneName);
 void ExtrapolatePivotlessAnimation(OutModel* model);
 void CollectSceneNodesAsBones(OutModel &model, aiNode* rootNode);
 
 int main(int argc, char** argv)
 {
-    Vector<String> arguments;
+    ea::vector<ea::string> arguments;
 
     #ifdef WIN32
     arguments = ParseArguments(GetCommandLineW());
@@ -255,9 +256,9 @@ int main(int argc, char** argv)
     return 0;
 }
 
-void Run(const Vector<String>& arguments)
+void Run(const ea::vector<ea::string>& arguments)
 {
-    if (arguments.Size() < 2)
+    if (arguments.size() < 2)
     {
         ErrorExit(
             "Usage: AssetImporter <command> <input file> <output file> [options]\n"
@@ -318,8 +319,8 @@ void Run(const Vector<String>& arguments)
     RegisterPhysicsLibrary(context_);
 #endif
 
-    String command = arguments[0].ToLower();
-    String rootNodeName;
+    ea::string command = arguments[0].to_lower();
+    ea::string rootNodeName;
 
     unsigned flags =
         aiProcess_ConvertToLeftHanded |
@@ -335,12 +336,12 @@ void Run(const Vector<String>& arguments)
         aiProcess_FindInstances |
         aiProcess_OptimizeMeshes;
 
-    for (unsigned i = 2; i < arguments.Size(); ++i)
+    for (unsigned i = 2; i < arguments.size(); ++i)
     {
-        if (arguments[i].Length() > 1 && arguments[i][0] == '-')
+        if (arguments[i].length() > 1 && arguments[i][0] == '-')
         {
-            String argument = arguments[i].Substring(1).ToLower();
-            String value = i + 1 < arguments.Size() ? arguments[i + 1] : String::EMPTY;
+            ea::string argument = arguments[i].substr(1).to_lower();
+            ea::string value = i + 1 < arguments.size() ? arguments[i + 1] : EMPTY_STRING;
 
             if (argument == "b")
                 saveBinary_ = true;
@@ -359,7 +360,7 @@ void Run(const Vector<String>& arguments)
                 flags |= aiProcess_CalcTangentSpace;
             else if (argument == "o")
                 flags |= aiProcess_PreTransformVertices;
-            else if (argument.Length() == 2 && argument[0] == 'n')
+            else if (argument.length() == 2 && argument[0] == 'n')
             {
                 switch (tolower(argument[1]))
                 {
@@ -405,24 +406,24 @@ void Run(const Vector<String>& arguments)
 
                 }
             }
-            else if (argument == "mb" && !value.Empty())
+            else if (argument == "mb" && !value.empty())
             {
                 maxBones_ = ToUInt(value);
                 if (maxBones_ < 1)
                     maxBones_ = 1;
                 ++i;
             }
-            else if (argument == "p" && !value.Empty())
+            else if (argument == "p" && !value.empty())
             {
                 resourcePath_ = AddTrailingSlash(value);
                 ++i;
             }
-            else if (argument == "r" && !value.Empty())
+            else if (argument == "r" && !value.empty())
             {
                 rootNodeName = value;
                 ++i;
             }
-            else if (argument == "f" && !value.Empty())
+            else if (argument == "f" && !value.empty())
             {
                 defaultTicksPerSecond_ = ToFloat(value);
                 ++i;
@@ -430,15 +431,15 @@ void Run(const Vector<String>& arguments)
             else if (argument == "s")
             {
                 includeNonSkinningBones_ = true;
-                if (value.Length() && (value[0] != '-' || value.Length() > 3))
+                if (value.length() && (value[0] != '-' || value.length() > 3))
                 {
-                    Vector<String> filters = value.Split(';');
-                    for (unsigned i = 0; i < filters.Size(); ++i)
+                    ea::vector<ea::string> filters = value.split(';');
+                    for (unsigned i = 0; i < filters.size(); ++i)
                     {
                         if (filters[i][0] == '-')
-                            nonSkinningBoneExcludes_.Push(filters[i].Substring(1));
+                            nonSkinningBoneExcludes_.push_back(filters[i].substr(1));
                         else
-                            nonSkinningBoneIncludes_.Push(filters[i]);
+                            nonSkinningBoneIncludes_.push_back(filters[i]);
                     }
                 }
             }
@@ -458,8 +459,8 @@ void Run(const Vector<String>& arguments)
                 moveToBindPose_ = true;
             else if (argument == "split")
             {
-                String value2 = i + 2 < arguments.Size() ? arguments[i + 2] : String::EMPTY;
-                if (value.Length() && value2.Length() && (value[0] != '-') && (value2[0] != '-'))
+                ea::string value2 = i + 2 < arguments.size() ? arguments[i + 2] : EMPTY_STRING;
+                if (value.length() && value2.length() && (value[0] != '-') && (value2[0] != '-'))
                 {
                     importStartTime_ = ToFloat(value);
                     importEndTime_ = ToFloat(value2);
@@ -470,31 +471,33 @@ void Run(const Vector<String>& arguments)
 
     if (command == "model" || command == "scene" || command == "anim" || command == "node" || command == "dump")
     {
-        String inFile = arguments[1];
-        String outFile;
-        if (arguments.Size() > 2 && arguments[2][0] != '-')
+        ea::string inFile = arguments[1];
+        ea::string outFile;
+        if (arguments.size() > 2 && arguments[2][0] != '-')
             outFile = GetInternalPath(arguments[2]);
 
         inputName_ = GetFileName(inFile);
         outName_ = outFile;
         outPath_ = GetPath(outFile);
 
-        if (resourcePath_.Empty())
+        context_->GetFileSystem()->CreateDirsRecursive(outPath_);
+
+        if (resourcePath_.empty())
         {
             resourcePath_ = outPath_;
             // If output file already has the Models/ path (model mode), do not take it into the resource path
             if (command == "model")
             {
-                if (resourcePath_.EndsWith("Models/", false))
-                    resourcePath_ = resourcePath_.Substring(0, resourcePath_.Length() - 7);
+                if (resourcePath_.ends_with("Models/", false))
+                    resourcePath_ = resourcePath_.substr(0, resourcePath_.length() - 7);
             }
-            if (resourcePath_.Empty())
+            if (resourcePath_.empty())
                 resourcePath_ = "./";
         }
 
         resourcePath_ = AddTrailingSlash(resourcePath_);
 
-        if (command != "dump" && outFile.Empty())
+        if (command != "dump" && outFile.empty())
             ErrorExit("No output file defined");
 
         if (verboseLog_)
@@ -502,7 +505,7 @@ void Run(const Vector<String>& arguments)
 
         PrintLine("Reading file " + inFile);
 
-        if (!inFile.EndsWith(".fbx", false))
+        if (!inFile.ends_with(".fbx", false))
             suppressFbxPivotNodes_ = false;
 
         // Only do this for the "model" command. "anim" command extrapolates animation from the original bone definition
@@ -520,22 +523,22 @@ void Run(const Vector<String>& arguments)
             aiSetImportPropertyInteger(aiprops, AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, 0);                //**false, default = true;
             aiSetImportPropertyInteger(aiprops, AI_CONFIG_IMPORT_FBX_OPTIMIZE_EMPTY_ANIMATION_CURVES, 1);//default = true;
 
-            scene_ = aiImportFileExWithProperties(GetNativePath(inFile).CString(), flags, nullptr, aiprops);
+            scene_ = aiImportFileExWithProperties(GetNativePath(inFile).c_str(), flags, nullptr, aiprops);
 
             // prevent processing animation suppression, both cannot work simultaneously
             suppressFbxPivotNodes_ = false;
         }
         else
-            scene_ = aiImportFile(GetNativePath(inFile).CString(), flags);
+            scene_ = aiImportFile(GetNativePath(inFile).c_str(), flags);
 
         if (!scene_)
-            ErrorExit("Could not open or parse input file " + inFile + ": " + String(aiGetErrorString()));
+            ErrorExit("Could not open or parse input file " + inFile + ": " + ea::string(aiGetErrorString()));
 
         if (verboseLog_)
             Assimp::DefaultLogger::kill();
 
         rootNode_ = scene_->mRootNode;
-        if (!rootNodeName.Empty())
+        if (!rootNodeName.empty())
         {
             rootNode_ = GetNode(rootNodeName, rootNode_, false);
             if (!rootNode_)
@@ -567,7 +570,7 @@ void Run(const Vector<String>& arguments)
 
         if (!noMaterials_)
         {
-            HashSet<String> usedTextures;
+            ea::hash_set<ea::string> usedTextures;
             ExportMaterials(usedTextures);
             if (!noTextures_)
                 CopyTextures(usedTextures, GetPath(inFile));
@@ -575,12 +578,12 @@ void Run(const Vector<String>& arguments)
     }
     else if (command == "lod")
     {
-        PODVector<float> lodDistances;
-        Vector<String> modelNames;
-        String outFile;
+        ea::vector<float> lodDistances;
+        ea::vector<ea::string> modelNames;
+        ea::string outFile;
 
         unsigned numLodArguments = 0;
-        for (unsigned i = 1; i < arguments.Size(); ++i)
+        for (unsigned i = 1; i < arguments.size(); ++i)
         {
             if (arguments[i][0] == '-')
                 break;
@@ -598,9 +601,9 @@ void Run(const Vector<String>& arguments)
             else
             {
                 if (i & 1u)
-                    lodDistances.Push(Max(ToFloat(arguments[i]), 0.0f));
+                    lodDistances.push_back(Max(ToFloat(arguments[i]), 0.0f));
                 else
-                    modelNames.Push(GetInternalPath(arguments[i]));
+                    modelNames.push_back(GetInternalPath(arguments[i]));
             }
         }
 
@@ -621,26 +624,26 @@ void DumpNodes(aiNode* rootNode, unsigned level)
     if (!rootNode)
         return;
 
-    String indent(' ', level * 2);
+    ea::string indent(' ', level * 2);
     Vector3 pos, scale;
     Quaternion rot;
     aiMatrix4x4 transform = GetDerivedTransform(rootNode, rootNode_);
     GetPosRotScale(transform, pos, rot, scale);
 
-    PrintLine(indent + "Node " + FromAIString(rootNode->mName) + " pos " + String(pos));
+    PrintLine(indent + "Node " + FromAIString(rootNode->mName) + " pos " + pos.ToString());
 
     if (rootNode->mNumMeshes == 1)
-        PrintLine(indent + "  " + String(rootNode->mNumMeshes) + " geometry");
+        PrintLine(indent + "  " + ea::to_string(rootNode->mNumMeshes) + " geometry");
     if (rootNode->mNumMeshes > 1)
-        PrintLine(indent + "  " + String(rootNode->mNumMeshes) + " geometries");
+        PrintLine(indent + "  " + ea::to_string(rootNode->mNumMeshes) + " geometries");
 
     for (unsigned i = 0; i < rootNode->mNumChildren; ++i)
         DumpNodes(rootNode->mChildren[i], level + 1);
 }
 
-void ExportModel(const String& outName, bool animationOnly)
+void ExportModel(const ea::string& outName, bool animationOnly)
 {
-    if (outName.Empty())
+    if (outName.empty())
         ErrorExit("No output file defined");
 
     OutModel model;
@@ -662,9 +665,9 @@ void ExportModel(const String& outName, bool animationOnly)
     }
 }
 
-void ExportAnimation(const String& outName, bool animationOnly)
+void ExportAnimation(const ea::string& outName, bool animationOnly)
 {
-    if (outName.Empty())
+    if (outName.empty())
         ErrorExit("No output file defined");
 
     OutModel model;
@@ -680,7 +683,7 @@ void ExportAnimation(const String& outName, bool animationOnly)
         // Most fbx animation files contain only a skeleton and no skinned mesh.
         // Assume the scene node contains the model's bone definition and,
         // transfer the info to the model.
-        if (suppressFbxPivotNodes_ && model.bones_.Size() == 0)
+        if (suppressFbxPivotNodes_ && model.bones_.size() == 0)
             CollectSceneNodesAsBones(model, rootNode_);
 
         CollectAnimations(&model);
@@ -697,7 +700,7 @@ void CollectMeshes(OutModel& model, aiNode* node)
     for (unsigned i = 0; i < node->mNumMeshes; ++i)
     {
         aiMesh* mesh = scene_->mMeshes[node->mMeshes[i]];
-        for (unsigned j = 0; j < model.meshes_.Size(); ++j)
+        for (unsigned j = 0; j < model.meshes_.size(); ++j)
         {
             if (mesh == model.meshes_[j])
             {
@@ -706,9 +709,9 @@ void CollectMeshes(OutModel& model, aiNode* node)
             }
         }
 
-        model.meshIndices_.Insert(node->mMeshes[i]);
-        model.meshes_.Push(mesh);
-        model.meshNodes_.Push(node);
+        model.meshIndices_.insert(node->mMeshes[i]);
+        model.meshes_.push_back(mesh);
+        model.meshNodes_.push_back(node);
         model.totalVertices_ += mesh->mNumVertices;
         model.totalIndices_ += GetNumValidFaces(mesh) * 3;
     }
@@ -719,11 +722,11 @@ void CollectMeshes(OutModel& model, aiNode* node)
 
 void CollectBones(OutModel& model, bool animationOnly)
 {
-    HashSet<aiNode*> necessary;
-    HashSet<aiNode*> rootNodes;
+    ea::hash_set<aiNode*> necessary;
+    ea::hash_set<aiNode*> rootNodes;
 
     bool haveSkinnedMeshes = false;
-    for (unsigned i = 0; i < model.meshes_.Size(); ++i)
+    for (unsigned i = 0; i < model.meshes_.size(); ++i)
     {
         if (model.meshes_[i]->HasBones())
         {
@@ -732,7 +735,7 @@ void CollectBones(OutModel& model, bool animationOnly)
         }
     }
 
-    for (unsigned i = 0; i < model.meshes_.Size(); ++i)
+    for (unsigned i = 0; i < model.meshes_.size(); ++i)
     {
         aiMesh* mesh = model.meshes_[i];
         aiNode* meshNode = model.meshNodes_[i];
@@ -742,11 +745,11 @@ void CollectBones(OutModel& model, bool animationOnly)
         for (unsigned j = 0; j < mesh->mNumBones; ++j)
         {
             aiBone* bone = mesh->mBones[j];
-            String boneName(FromAIString(bone->mName));
+            ea::string boneName(FromAIString(bone->mName));
             aiNode* boneNode = GetNode(boneName, scene_->mRootNode, true);
             if (!boneNode)
                 ErrorExit("Could not find scene node for bone " + boneName);
-            necessary.Insert(boneNode);
+            necessary.insert(boneNode);
             rootNode = boneNode;
 
             for (;;)
@@ -755,18 +758,18 @@ void CollectBones(OutModel& model, bool animationOnly)
                 if (!boneNode || ((boneNode == meshNode || boneNode == meshParentNode) && !animationOnly))
                     break;
                 rootNode = boneNode;
-                necessary.Insert(boneNode);
+                necessary.insert(boneNode);
             }
 
-            if (rootNodes.Find(rootNode) == rootNodes.End())
-                rootNodes.Insert(rootNode);
+            if (rootNodes.find(rootNode) == rootNodes.end())
+                rootNodes.insert(rootNode);
         }
 
         // When model is partially skinned, include the attachment nodes of the rigid meshes in the skeleton
         if (haveSkinnedMeshes && !mesh->mNumBones)
         {
             aiNode* boneNode = meshNode;
-            necessary.Insert(boneNode);
+            necessary.insert(boneNode);
             rootNode = boneNode;
 
             for (;;)
@@ -775,26 +778,26 @@ void CollectBones(OutModel& model, bool animationOnly)
                 if (!boneNode || ((boneNode == meshNode || boneNode == meshParentNode) && !animationOnly))
                     break;
                 rootNode = boneNode;
-                necessary.Insert(boneNode);
+                necessary.insert(boneNode);
             }
 
-            if (rootNodes.Find(rootNode) == rootNodes.End())
-                rootNodes.Insert(rootNode);
+            if (rootNodes.find(rootNode) == rootNodes.end())
+                rootNodes.insert(rootNode);
         }
     }
 
 
     // If we find multiple root nodes, try to remedy by going back in the parent chain and finding a common parent
-    if (rootNodes.Size() > 1)
+    if (rootNodes.size() > 1)
     {
-        for (HashSet<aiNode*>::Iterator i = rootNodes.Begin(); i != rootNodes.End(); ++i)
+        for (auto i = rootNodes.begin(); i != rootNodes.end(); ++i)
         {
             aiNode* commonParent = (*i);
 
             while (commonParent)
             {
                 unsigned found = 0;
-                for (HashSet<aiNode*>::Iterator j = rootNodes.Begin(); j != rootNodes.End(); ++j)
+                for (auto j = rootNodes.begin(); j != rootNodes.end(); ++j)
                 {
                     if (i == j)
                         continue;
@@ -810,29 +813,29 @@ void CollectBones(OutModel& model, bool animationOnly)
                     }
                 }
 
-                if (found >= rootNodes.Size() - 1)
+                if (found >= rootNodes.size() - 1)
                 {
                     PrintLine("Multiple roots initially found, using new root node " + FromAIString(commonParent->mName));
-                    rootNodes.Clear();
-                    rootNodes.Insert(commonParent);
-                    necessary.Insert(commonParent);
+                    rootNodes.clear();
+                    rootNodes.insert(commonParent);
+                    necessary.insert(commonParent);
                     break;
                 }
 
                 commonParent = commonParent->mParent;
             }
 
-            if (rootNodes.Size() == 1)
+            if (rootNodes.size() == 1)
                 break; // Succeeded
         }
-        if (rootNodes.Size() > 1)
+        if (rootNodes.size() > 1)
             ErrorExit("Skeleton with multiple root nodes found, not supported");
     }
 
-    if (rootNodes.Empty())
+    if (rootNodes.empty())
         return;
 
-    model.rootBone_ = *rootNodes.Begin();
+    model.rootBone_ = *rootNodes.begin();
 
     // Move the model to bind pose now if requested
     if (moveToBindPose_)
@@ -843,9 +846,9 @@ void CollectBones(OutModel& model, bool animationOnly)
 
     CollectBonesFinal(model.bones_, necessary, model.rootBone_);
     // Initialize the bone collision info
-    model.boneRadii_.Resize(model.bones_.Size());
-    model.boneHitboxes_.Resize(model.bones_.Size());
-    for (unsigned i = 0; i < model.bones_.Size(); ++i)
+    model.boneRadii_.resize(model.bones_.size());
+    model.boneHitboxes_.resize(model.bones_.size());
+    for (unsigned i = 0; i < model.bones_.size(); ++i)
     {
         model.boneRadii_[i] = 0.0f;
         model.boneHitboxes_[i] = BoundingBox(0.0f, 0.0f);
@@ -854,7 +857,7 @@ void CollectBones(OutModel& model, bool animationOnly)
 
 void MoveToBindPose(OutModel& model, aiNode* current)
 {
-    String nodeName(FromAIString(current->mName));
+    ea::string nodeName(FromAIString(current->mName));
     Matrix3x4 bindWorldTransform = GetOffsetMatrix(model, nodeName).Inverse();
     // Skip if we get an identity offset matrix (bone lookup failed)
     if (!bindWorldTransform.Equals(Matrix3x4::IDENTITY))
@@ -873,30 +876,30 @@ void MoveToBindPose(OutModel& model, aiNode* current)
         MoveToBindPose(model, current->mChildren[i]);
 }
 
-void CollectBonesFinal(PODVector<aiNode*>& dest, const HashSet<aiNode*>& necessary, aiNode* node)
+void CollectBonesFinal(ea::vector<aiNode*>& dest, const ea::hash_set<aiNode*>& necessary, aiNode* node)
 {
-    bool includeBone = necessary.Find(node) != necessary.End();
-    String boneName = FromAIString(node->mName);
+    bool includeBone = necessary.find(node) != necessary.end();
+    ea::string boneName = FromAIString(node->mName);
 
     // Check include/exclude filters for non-skinned bones
     if (!includeBone && includeNonSkinningBones_)
     {
         // If no includes specified, include by default but check for excludes
-        if (nonSkinningBoneIncludes_.Empty())
+        if (nonSkinningBoneIncludes_.empty())
             includeBone = true;
 
         // Check against includes/excludes
-        for (unsigned i = 0; i < nonSkinningBoneIncludes_.Size(); ++i)
+        for (unsigned i = 0; i < nonSkinningBoneIncludes_.size(); ++i)
         {
-            if (boneName.Contains(nonSkinningBoneIncludes_[i], false))
+            if (boneName.contains(nonSkinningBoneIncludes_[i], false))
             {
                 includeBone = true;
                 break;
             }
         }
-        for (unsigned i = 0; i < nonSkinningBoneExcludes_.Size(); ++i)
+        for (unsigned i = 0; i < nonSkinningBoneExcludes_.size(); ++i)
         {
-            if (boneName.Contains(nonSkinningBoneExcludes_[i], false))
+            if (boneName.contains(nonSkinningBoneExcludes_[i], false))
             {
                 includeBone = false;
                 break;
@@ -908,7 +911,7 @@ void CollectBonesFinal(PODVector<aiNode*>& dest, const HashSet<aiNode*>& necessa
     }
 
     if (includeBone)
-        dest.Push(node);
+        dest.push_back(node);
 
     for (unsigned i = 0; i < node->mNumChildren; ++i)
         CollectBonesFinal(dest, necessary, node->mChildren[i]);
@@ -920,7 +923,7 @@ void CollectAnimations(OutModel* model)
     for (unsigned i = 0; i < scene->mNumAnimations; ++i)
     {
         aiAnimation* anim = scene->mAnimations[i];
-        if (allAnimations_.Contains(anim))
+        if (allAnimations_.contains(anim))
             continue;
 
         if (model)
@@ -929,7 +932,7 @@ void CollectAnimations(OutModel* model)
             for (unsigned j = 0; j < anim->mNumChannels; ++j)
             {
                 aiNodeAnim* channel = anim->mChannels[j];
-                String channelName = FromAIString(channel->mNodeName);
+                ea::string channelName = FromAIString(channel->mNodeName);
                 if (GetBoneIndex(*model, channelName) != M_MAX_UNSIGNED)
                 {
                     modelBoneFound = true;
@@ -938,14 +941,14 @@ void CollectAnimations(OutModel* model)
             }
             if (modelBoneFound)
             {
-                model->animations_.Push(anim);
-                allAnimations_.Insert(anim);
+                model->animations_.push_back(anim);
+                allAnimations_.insert(anim);
             }
         }
         else
         {
-            sceneAnimations_.Push(anim);
-            allAnimations_.Insert(anim);
+            sceneAnimations_.push_back(anim);
+            allAnimations_.insert(anim);
         }
     }
 
@@ -954,13 +957,13 @@ void CollectAnimations(OutModel* model)
 
 void BuildBoneCollisionInfo(OutModel& model)
 {
-    for (unsigned i = 0; i < model.meshes_.Size(); ++i)
+    for (unsigned i = 0; i < model.meshes_.size(); ++i)
     {
         aiMesh* mesh = model.meshes_[i];
         for (unsigned j = 0; j < mesh->mNumBones; ++j)
         {
             aiBone* bone = mesh->mBones[j];
-            String boneName = FromAIString(bone->mName);
+            ea::string boneName = FromAIString(bone->mName);
             unsigned boneIndex = GetBoneIndex(model, boneName);
             if (boneIndex == M_MAX_UNSIGNED)
                 continue;
@@ -990,8 +993,8 @@ void BuildAndSaveModel(OutModel& model)
         return;
     }
 
-    String rootNodeName = FromAIString(model.rootNode_->mName);
-    if (!model.meshes_.Size())
+    ea::string rootNodeName = FromAIString(model.rootNode_->mName);
+    if (!model.meshes_.size())
     {
         PrintLine("No geometries found starting from node " + rootNodeName + ", skipping model save");
         return;
@@ -1000,20 +1003,20 @@ void BuildAndSaveModel(OutModel& model)
     PrintLine("Writing model " + rootNodeName);
 
     SharedPtr<Model> outModel(new Model(context_));
-    Vector<PODVector<unsigned> > allBoneMappings;
+    ea::vector<ea::vector<unsigned> > allBoneMappings;
     BoundingBox box;
 
     unsigned numValidGeometries = 0;
 
     bool combineBuffers = true;
     // Check if buffers can be combined (same vertex elements, under 65535 vertices)
-    PODVector<VertexElement> elements = GetVertexElements(model.meshes_[0], model.bones_.Size() > 0);
-    for (unsigned i = 0; i < model.meshes_.Size(); ++i)
+    ea::vector<VertexElement> elements = GetVertexElements(model.meshes_[0], model.bones_.size() > 0);
+    for (unsigned i = 0; i < model.meshes_.size(); ++i)
     {
         if (GetNumValidFaces(model.meshes_[i]))
         {
             ++numValidGeometries;
-            if (i > 0 && GetVertexElements(model.meshes_[i], model.bones_.Size() > 0) != elements)
+            if (i > 0 && GetVertexElements(model.meshes_[i], model.bones_.size() > 0) != elements)
                 combineBuffers = false;
         }
     }
@@ -1022,7 +1025,7 @@ void BuildAndSaveModel(OutModel& model)
     if (combineBuffers && model.totalVertices_ > 65535)
     {
         bool allUnder65k = true;
-        for (unsigned i = 0; i < model.meshes_.Size(); ++i)
+        for (unsigned i = 0; i < model.meshes_.size(); ++i)
         {
             if (GetNumValidFaces(model.meshes_[i]))
             {
@@ -1036,19 +1039,19 @@ void BuildAndSaveModel(OutModel& model)
 
     SharedPtr<IndexBuffer> ib;
     SharedPtr<VertexBuffer> vb;
-    Vector<SharedPtr<VertexBuffer> > vbVector;
-    Vector<SharedPtr<IndexBuffer> > ibVector;
+    ea::vector<SharedPtr<VertexBuffer> > vbVector;
+    ea::vector<SharedPtr<IndexBuffer> > ibVector;
     unsigned startVertexOffset = 0;
     unsigned startIndexOffset = 0;
     unsigned destGeomIndex = 0;
-    bool isSkinned = model.bones_.Size() > 0;
+    bool isSkinned = model.bones_.size() > 0;
 
     outModel->SetNumGeometries(numValidGeometries);
 
-    for (unsigned i = 0; i < model.meshes_.Size(); ++i)
+    for (unsigned i = 0; i < model.meshes_.size(); ++i)
     {
         aiMesh* mesh = model.meshes_[i];
-        PODVector<VertexElement> elements = GetVertexElements(mesh, isSkinned);
+        ea::vector<VertexElement> elements = GetVertexElements(mesh, isSkinned);
         unsigned validFaces = GetNumValidFaces(mesh);
         if (!validFaces)
             continue;
@@ -1060,7 +1063,7 @@ void BuildAndSaveModel(OutModel& model)
             largeIndices = mesh->mNumVertices > 65535;
 
         // Create new buffers if necessary
-        if (!combineBuffers || vbVector.Empty())
+        if (!combineBuffers || vbVector.empty())
         {
             vb = new VertexBuffer(context_);
             ib = new IndexBuffer(context_);
@@ -1076,8 +1079,8 @@ void BuildAndSaveModel(OutModel& model)
                 vb->SetSize(mesh->mNumVertices, elements);
             }
 
-            vbVector.Push(vb);
-            ibVector.Push(ib);
+            vbVector.push_back(vb);
+            ibVector.push_back(ib);
             startVertexOffset = 0;
             startIndexOffset = 0;
         }
@@ -1093,11 +1096,11 @@ void BuildAndSaveModel(OutModel& model)
 
         SharedPtr<Geometry> geom(new Geometry(context_));
 
-        PrintLine("Writing geometry " + String(i) + " with " + String(mesh->mNumVertices) + " vertices " +
-            String(validFaces * 3) + " indices");
+        PrintLine("Writing geometry " + ea::to_string(i) + " with " + ea::to_string(mesh->mNumVertices) + " vertices " +
+            ea::to_string(validFaces * 3) + " indices");
 
-        if (model.bones_.Size() > 0 && !mesh->HasBones())
-            PrintLine("Warning: model has bones but geometry " + String(i) + " has no skinning information");
+        if (model.bones_.size() > 0 && !mesh->HasBones())
+            PrintLine("Warning: model has bones but geometry " + ea::to_string(i) + " has no skinning information");
 
         unsigned char* vertexData = vb->GetShadowData();
         unsigned char* indexData = ib->GetShadowData();
@@ -1118,10 +1121,10 @@ void BuildAndSaveModel(OutModel& model)
 
         // Build the vertex data
         // If there are bones, get blend data
-        Vector<PODVector<unsigned char> > blendIndices;
-        Vector<PODVector<float> > blendWeights;
-        PODVector<unsigned> boneMappings;
-        if (model.bones_.Size())
+        ea::vector<ea::vector<unsigned char> > blendIndices;
+        ea::vector<ea::vector<float> > blendWeights;
+        ea::vector<unsigned> boneMappings;
+        if (model.bones_.size())
             GetBlendData(model, mesh, model.meshNodes_[i], boneMappings, blendIndices, blendWeights);
 
         auto* dest = (float*)((unsigned char*)vertexData + startVertexOffset * vb->GetVertexSize());
@@ -1152,8 +1155,8 @@ void BuildAndSaveModel(OutModel& model)
         outModel->SetNumGeometryLodLevels(destGeomIndex, 1);
         outModel->SetGeometry(destGeomIndex, 0, geom);
         outModel->SetGeometryCenter(destGeomIndex, center);
-        if (model.bones_.Size() > maxBones_)
-            allBoneMappings.Push(boneMappings);
+        if (model.bones_.size() > maxBones_)
+            allBoneMappings.push_back(boneMappings);
 
         startVertexOffset += mesh->mNumVertices;
         startIndexOffset += validFaces * 3;
@@ -1161,24 +1164,24 @@ void BuildAndSaveModel(OutModel& model)
     }
 
     // Define the model buffers and bounding box
-    PODVector<unsigned> emptyMorphRange;
+    ea::vector<unsigned> emptyMorphRange;
     outModel->SetVertexBuffers(vbVector, emptyMorphRange, emptyMorphRange);
     outModel->SetIndexBuffers(ibVector);
     outModel->SetBoundingBox(box);
 
     // Build skeleton if necessary
-    if (model.bones_.Size() && model.rootBone_)
+    if (model.bones_.size() && model.rootBone_)
     {
-        PrintLine("Writing skeleton with " + String(model.bones_.Size()) + " bones, rootbone " +
+        PrintLine("Writing skeleton with " + ea::to_string(model.bones_.size()) + " bones, rootbone " +
             FromAIString(model.rootBone_->mName));
 
         Skeleton skeleton;
-        Vector<Bone>& bones = skeleton.GetModifiableBones();
+        ea::vector<Bone>& bones = skeleton.GetModifiableBones();
 
-        for (unsigned i = 0; i < model.bones_.Size(); ++i)
+        for (unsigned i = 0; i < model.bones_.size(); ++i)
         {
             aiNode* boneNode = model.bones_[i];
-            String boneName(FromAIString(boneNode->mName));
+            ea::string boneName(FromAIString(boneNode->mName));
 
             Bone newBone;
             newBone.name_ = boneName;
@@ -1197,13 +1200,13 @@ void BuildAndSaveModel(OutModel& model)
             newBone.boundingBox_ = model.boneHitboxes_[i];
             newBone.collisionMask_ = BONECOLLISION_SPHERE | BONECOLLISION_BOX;
             newBone.parentIndex_ = i;
-            bones.Push(newBone);
+            bones.push_back(newBone);
         }
         // Set the bone hierarchy
-        for (unsigned i = 1; i < model.bones_.Size(); ++i)
+        for (unsigned i = 1; i < model.bones_.size(); ++i)
         {
-            String parentName = FromAIString(model.bones_[i]->mParent->mName);
-            for (unsigned j = 0; j < bones.Size(); ++j)
+            ea::string parentName = FromAIString(model.bones_[i]->mParent->mName);
+            for (unsigned j = 0; j < bones.size(); ++j)
             {
                 if (bones[j].name_ == parentName)
                 {
@@ -1214,7 +1217,7 @@ void BuildAndSaveModel(OutModel& model)
         }
 
         outModel->SetSkeleton(skeleton);
-        if (model.bones_.Size() > maxBones_)
+        if (model.bones_.size() > maxBones_)
             outModel->SetGeometryBoneMappings(allBoneMappings);
     }
 
@@ -1226,11 +1229,11 @@ void BuildAndSaveModel(OutModel& model)
     // If exporting materials, also save material list for use by the editor
     if (!noMaterials_ && saveMaterialList_)
     {
-        String materialListName = ReplaceExtension(model.outName_, ".txt");
+        ea::string materialListName = ReplaceExtension(model.outName_, ".txt");
         File listFile(context_);
         if (listFile.Open(materialListName, FILE_WRITE))
         {
-            for (unsigned i = 0; i < model.meshes_.Size(); ++i)
+            for (unsigned i = 0; i < model.meshes_.size(); ++i)
                 listFile.WriteLine(GetMeshMaterialName(model.meshes_[i]));
         }
         else
@@ -1244,15 +1247,15 @@ void BuildAndSaveAnimations(OutModel* model)
     ExtrapolatePivotlessAnimation(model);
 
     // build and save anim
-    const PODVector<aiAnimation*>& animations = model ? model->animations_ : sceneAnimations_;
+    const ea::vector<aiAnimation*>& animations = model ? model->animations_ : sceneAnimations_;
 
-    for (unsigned i = 0; i < animations.Size(); ++i)
+    for (unsigned i = 0; i < animations.size(); ++i)
     {
         aiAnimation* anim = animations[i];
 
         auto duration = (float)anim->mDuration;
-        String animName = FromAIString(anim->mName);
-        String animOutName;
+        ea::string animName = FromAIString(anim->mName);
+        ea::string animOutName;
 
         float thisImportEndTime = importEndTime_;
         float thisImportStartTime = importStartTime_;
@@ -1261,10 +1264,10 @@ void BuildAndSaveAnimations(OutModel* model)
         if (thisImportEndTime == 0.0f)
             thisImportEndTime = duration;
 
-        if (animName.Empty())
-            animName = "Anim" + String(i + 1);
+        if (animName.empty())
+            animName = "Anim" + ea::to_string(i + 1);
 
-        String outName = model ? model->outName_ : outName_;
+        ea::string outName = model ? model->outName_ : outName_;
 
         if (context_->GetFileSystem()->DirExists(outName))
         {
@@ -1303,19 +1306,19 @@ void BuildAndSaveAnimations(OutModel* model)
         outAnim->SetAnimationName(animName);
         outAnim->SetLength(duration * tickConversion);
 
-        PrintLine("Writing animation " + animName + " length " + String(outAnim->GetLength()));
+        PrintLine("Writing animation " + animName + " length " + ea::to_string(outAnim->GetLength()));
         for (unsigned j = 0; j < anim->mNumChannels; ++j)
         {
             aiNodeAnim* channel = anim->mChannels[j];
-            String channelName = FromAIString(channel->mNodeName);
+            ea::string channelName = FromAIString(channel->mNodeName);
             aiNode* boneNode = nullptr;
 
             if (model)
             {
                 unsigned boneIndex;
-                unsigned pos = channelName.Find("_$AssimpFbx$");
+                unsigned pos = channelName.find("_$AssimpFbx$");
 
-                if (!suppressFbxPivotNodes_ || pos == String::NPOS)
+                if (!suppressFbxPivotNodes_ || pos == ea::string::npos)
                 {
                     boneIndex = GetBoneIndex(*model, channelName);
                     if (boneIndex == M_MAX_UNSIGNED)
@@ -1328,7 +1331,7 @@ void BuildAndSaveAnimations(OutModel* model)
                 }
                 else
                 {
-                    channelName = channelName.Substring(0, pos);
+                    channelName = channelName.substr(0, pos);
 
                     // every first $fbx animation channel for a bone will consolidate other $fbx animation to a single channel
                     // skip subsequent $fbx animation channel for the same bone
@@ -1482,7 +1485,7 @@ void BuildAndSaveAnimations(OutModel* model)
                 if (kf.time_ >= thisImportStartTime && kf.time_ <= thisImportEndTime)
                 {
                     kf.time_ = (kf.time_ - thisImportStartTime) * tickConversion;
-                    track->keyFrames_.Push(kf);
+                    track->keyFrames_.push_back(kf);
                 }
             }
         }
@@ -1494,7 +1497,7 @@ void BuildAndSaveAnimations(OutModel* model)
     }
 }
 
-void ExportScene(const String& outName, bool asPrefab)
+void ExportScene(const ea::string& outName, bool asPrefab)
 {
     OutScene outScene;
     outScene.outName_ = outName;
@@ -1506,7 +1509,7 @@ void ExportScene(const String& outName, bool asPrefab)
     CollectSceneModels(outScene, rootNode_);
 
     // Save models, their material lists and animations
-    for (unsigned i = 0; i < outScene.models_.Size(); ++i)
+    for (unsigned i = 0; i < outScene.models_.size(); ++i)
         BuildAndSaveModel(outScene.models_[i]);
 
     // Save scene-global animations
@@ -1522,21 +1525,21 @@ void ExportScene(const String& outName, bool asPrefab)
 
 void CollectSceneModels(OutScene& scene, aiNode* node)
 {
-    Vector<Pair<aiNode*, aiMesh*> > meshes;
+    ea::vector<ea::pair<aiNode*, aiMesh*> > meshes;
     GetMeshesUnderNode(meshes, node);
 
-    if (meshes.Size())
+    if (meshes.size())
     {
         OutModel model;
         model.rootNode_ = node;
         model.outName_ = resourcePath_ + (useSubdirs_ ? "Models/" : "") + SanitateAssetName(FromAIString(node->mName)) + ".mdl";
-        for (unsigned i = 0; i < meshes.Size(); ++i)
+        for (unsigned i = 0; i < meshes.size(); ++i)
         {
-            aiMesh* mesh = meshes[i].second_;
+            aiMesh* mesh = meshes[i].second;
             unsigned meshIndex = GetMeshIndex(mesh);
-            model.meshIndices_.Insert(meshIndex);
-            model.meshes_.Push(mesh);
-            model.meshNodes_.Push(meshes[i].first_);
+            model.meshIndices_.insert(meshIndex);
+            model.meshes_.push_back(mesh);
+            model.meshNodes_.push_back(meshes[i].first);
             model.totalVertices_ += mesh->mNumVertices;
             model.totalIndices_ += GetNumValidFaces(mesh) * 3;
         }
@@ -1545,13 +1548,13 @@ void CollectSceneModels(OutScene& scene, aiNode* node)
         bool unique = true;
         if (checkUniqueModel_)
         {
-            for (unsigned i = 0; i < scene.models_.Size(); ++i)
+            for (unsigned i = 0; i < scene.models_.size(); ++i)
             {
                 if (scene.models_[i].meshIndices_ == model.meshIndices_)
                 {
                     PrintLine("Added node " + FromAIString(node->mName));
-                    scene.nodes_.Push(node);
-                    scene.nodeModelIndices_.Push(i);
+                    scene.nodes_.push_back(node);
+                    scene.nodeModelIndices_.push_back(i);
                     unique = false;
                     break;
                 }
@@ -1569,9 +1572,9 @@ void CollectSceneModels(OutScene& scene, aiNode* node)
                 BuildAndSaveAnimations(&model);
             }
 
-            scene.models_.Push(model);
-            scene.nodes_.Push(node);
-            scene.nodeModelIndices_.Push(scene.models_.Size() - 1);
+            scene.models_.push_back(model);
+            scene.nodes_.push_back(node);
+            scene.nodeModelIndices_.push_back(scene.models_.size() - 1);
         }
     }
 
@@ -1579,16 +1582,16 @@ void CollectSceneModels(OutScene& scene, aiNode* node)
         CollectSceneModels(scene, node->mChildren[i]);
 }
 
-void CreateHierarchy(Scene* scene, aiNode* srcNode, HashMap<aiNode*, Node*>& nodeMapping)
+void CreateHierarchy(Scene* scene, aiNode* srcNode, ea::unordered_map<aiNode*, Node*>& nodeMapping)
 {
     CreateSceneNode(scene, srcNode, nodeMapping);
     for (unsigned i = 0; i < srcNode->mNumChildren; ++i)
         CreateHierarchy(scene, srcNode->mChildren[i], nodeMapping);
 }
 
-Node* CreateSceneNode(Scene* scene, aiNode* srcNode, HashMap<aiNode*, Node*>& nodeMapping)
+Node* CreateSceneNode(Scene* scene, aiNode* srcNode, ea::unordered_map<aiNode*, Node*>& nodeMapping)
 {
-    if (nodeMapping.Contains(srcNode))
+    if (nodeMapping.contains(srcNode))
         return nodeMapping[srcNode];
     // Flatten hierarchy if requested
     if (noHierarchy_)
@@ -1617,7 +1620,7 @@ Node* CreateSceneNode(Scene* scene, aiNode* srcNode, HashMap<aiNode*, Node*>& no
     else
     {
         // Ensure the existence of the parent chain as in the original file
-        if (!nodeMapping.Contains(srcNode->mParent))
+        if (!nodeMapping.contains(srcNode->mParent))
             CreateSceneNode(scene, srcNode->mParent, nodeMapping);
 
         Node* parent = nodeMapping[srcNode->mParent];
@@ -1673,7 +1676,7 @@ void BuildAndSaveScene(OutScene& scene, bool asPrefab)
 
     auto* cache = context_->GetSubsystem<ResourceCache>();
 
-    HashMap<aiNode*, Node*> nodeMapping;
+    ea::unordered_map<aiNode*, Node*> nodeMapping;
 
     Node* outRootNode = nullptr;
     if (asPrefab)
@@ -1683,7 +1686,7 @@ void BuildAndSaveScene(OutScene& scene, bool asPrefab)
         // If not saving as a prefab, associate the root node with the scene first to prevent unnecessary creation of a root
         // However do not do that if the root node does not have an identity matrix, or itself contains a model
         // (models at the Urho scene root are not preferable)
-        if (ToMatrix3x4(rootNode_->mTransformation).Equals(Matrix3x4::IDENTITY) && !scene.nodes_.Contains(rootNode_))
+        if (ToMatrix3x4(rootNode_->mTransformation).Equals(Matrix3x4::IDENTITY) && !scene.nodes_.contains(rootNode_))
            nodeMapping[rootNode_] = outScene;
     }
 
@@ -1692,29 +1695,29 @@ void BuildAndSaveScene(OutScene& scene, bool asPrefab)
         CreateHierarchy(outScene, rootNode_, nodeMapping);
 
     // Create geometry nodes
-    for (unsigned i = 0; i < scene.nodes_.Size(); ++i)
+    for (unsigned i = 0; i < scene.nodes_.size(); ++i)
     {
         const OutModel& model = scene.models_[scene.nodeModelIndices_[i]];
         Node* modelNode = CreateSceneNode(outScene, scene.nodes_[i], nodeMapping);
         auto* staticModel =
             static_cast<StaticModel*>(
-                model.bones_.Empty() ? modelNode->CreateComponent<StaticModel>() : modelNode->CreateComponent<AnimatedModel>());
+                model.bones_.empty() ? modelNode->CreateComponent<StaticModel>() : modelNode->CreateComponent<AnimatedModel>());
 
         // Create a dummy model so that the reference can be stored
-        String modelName = (useSubdirs_ ? "Models/" : "") + GetFileNameAndExtension(model.outName_);
+        ea::string modelName = (useSubdirs_ ? "Models/" : "") + GetFileNameAndExtension(model.outName_);
         if (!cache->Exists(modelName))
         {
             auto* dummyModel = new Model(context_);
             dummyModel->SetName(modelName);
-            dummyModel->SetNumGeometries(model.meshes_.Size());
+            dummyModel->SetNumGeometries(model.meshes_.size());
             cache->AddManualResource(dummyModel);
         }
         staticModel->SetModel(cache->GetResource<Model>(modelName));
 
         // Set materials if they are known
-        for (unsigned j = 0; j < model.meshes_.Size(); ++j)
+        for (unsigned j = 0; j < model.meshes_.size(); ++j)
         {
-            String matName = GetMeshMaterialName(model.meshes_[j]);
+            ea::string matName = GetMeshMaterialName(model.meshes_[j]);
             // Create a dummy material so that the reference can be stored
             if (!cache->Exists(matName))
             {
@@ -1808,7 +1811,7 @@ void BuildAndSaveScene(OutScene& scene, bool asPrefab)
     }
 }
 
-void ExportMaterials(HashSet<String>& usedTextures)
+void ExportMaterials(ea::hash_set<ea::string>& usedTextures)
 {
     if (useSubdirs_)
         context_->GetSubsystem<FileSystem>()->CreateDir(resourcePath_ + "Materials");
@@ -1817,23 +1820,24 @@ void ExportMaterials(HashSet<String>& usedTextures)
         BuildAndSaveMaterial(scene_->mMaterials[i], usedTextures);
 }
 
-void BuildAndSaveMaterial(aiMaterial* material, HashSet<String>& usedTextures)
+void BuildAndSaveMaterial(aiMaterial* material, ea::hash_set<ea::string>& usedTextures)
 {
     aiString matNameStr;
     material->Get(AI_MATKEY_NAME, matNameStr);
-    String matName = SanitateAssetName(FromAIString(matNameStr));
-    if (matName.Trimmed().Empty())
+    ea::string matName = SanitateAssetName(FromAIString(matNameStr));
+    matName.trim();
+    if (matName.empty())
         matName = GenerateMaterialName(material);
 
     // Do not actually create a material instance, but instead craft an xml file manually
     XMLFile outMaterial(context_);
     XMLElement materialElem = outMaterial.CreateRoot("material");
 
-    String diffuseTexName;
-    String normalTexName;
-    String specularTexName;
-    String lightmapTexName;
-    String emissiveTexName;
+    ea::string diffuseTexName;
+    ea::string normalTexName;
+    ea::string specularTexName;
+    ea::string lightmapTexName;
+    ea::string emissiveTexName;
     Color diffuseColor = Color::WHITE;
     Color specularColor;
     Color emissiveColor = Color::BLACK;
@@ -1884,18 +1888,18 @@ void BuildAndSaveMaterial(aiMaterial* material, HashSet<String>& usedTextures)
     if (material->Get(AI_MATKEY_TWOSIDED, intVal) == AI_SUCCESS)
         twoSided = (intVal != 0);
 
-    String techniqueName = "Techniques/NoTexture";
-    if (!diffuseTexName.Empty())
+    ea::string techniqueName = "Techniques/NoTexture";
+    if (!diffuseTexName.empty())
     {
         techniqueName = "Techniques/Diff";
-        if (!normalTexName.Empty())
+        if (!normalTexName.empty())
             techniqueName += "Normal";
-        if (!specularTexName.Empty())
+        if (!specularTexName.empty())
             techniqueName += "Spec";
         // For now lightmap does not coexist with normal & specular
-        if (normalTexName.Empty() && specularTexName.Empty() && !lightmapTexName.Empty())
+        if (normalTexName.empty() && specularTexName.empty() && !lightmapTexName.empty())
             techniqueName += "LightMap";
-        if (lightmapTexName.Empty() && !emissiveTexName.Empty())
+        if (lightmapTexName.empty() && !emissiveTexName.empty())
             techniqueName += emissiveAO_ ? "AO" : "Emissive";
     }
     if (hasAlpha)
@@ -1904,40 +1908,40 @@ void BuildAndSaveMaterial(aiMaterial* material, HashSet<String>& usedTextures)
     XMLElement techniqueElem = materialElem.CreateChild("technique");
     techniqueElem.SetString("name", techniqueName + ".xml");
 
-    if (!diffuseTexName.Empty())
+    if (!diffuseTexName.empty())
     {
         XMLElement diffuseElem = materialElem.CreateChild("texture");
         diffuseElem.SetString("unit", "diffuse");
         diffuseElem.SetString("name", GetMaterialTextureName(diffuseTexName));
-        usedTextures.Insert(diffuseTexName);
+        usedTextures.insert(diffuseTexName);
     }
-    if (!normalTexName.Empty())
+    if (!normalTexName.empty())
     {
         XMLElement normalElem = materialElem.CreateChild("texture");
         normalElem.SetString("unit", "normal");
         normalElem.SetString("name", GetMaterialTextureName(normalTexName));
-        usedTextures.Insert(normalTexName);
+        usedTextures.insert(normalTexName);
     }
-    if (!specularTexName.Empty())
+    if (!specularTexName.empty())
     {
         XMLElement specularElem = materialElem.CreateChild("texture");
         specularElem.SetString("unit", "specular");
         specularElem.SetString("name", GetMaterialTextureName(specularTexName));
-        usedTextures.Insert(specularTexName);
+        usedTextures.insert(specularTexName);
     }
-    if (!lightmapTexName.Empty())
+    if (!lightmapTexName.empty())
     {
         XMLElement lightmapElem = materialElem.CreateChild("texture");
         lightmapElem.SetString("unit", "emissive");
         lightmapElem.SetString("name", GetMaterialTextureName(lightmapTexName));
-        usedTextures.Insert(lightmapTexName);
+        usedTextures.insert(lightmapTexName);
     }
-    if (!emissiveTexName.Empty())
+    if (!emissiveTexName.empty())
     {
         XMLElement emissiveElem = materialElem.CreateChild("texture");
         emissiveElem.SetString("unit", "emissive");
         emissiveElem.SetString("name", GetMaterialTextureName(emissiveTexName));
-        usedTextures.Insert(emissiveTexName);
+        usedTextures.insert(emissiveTexName);
     }
 
     XMLElement diffuseColorElem = materialElem.CreateChild("parameter");
@@ -1960,7 +1964,7 @@ void BuildAndSaveMaterial(aiMaterial* material, HashSet<String>& usedTextures)
 
     auto* fileSystem = context_->GetSubsystem<FileSystem>();
 
-    String outFileName = resourcePath_ + (useSubdirs_ ? "Materials/" : "" ) + matName + ".xml";
+    ea::string outFileName = resourcePath_ + (useSubdirs_ ? "Materials/" : "" ) + matName + ".xml";
     if (noOverwriteMaterial_ && fileSystem->FileExists(outFileName))
     {
         PrintLine("Skipping save of existing material " + matName);
@@ -1975,25 +1979,25 @@ void BuildAndSaveMaterial(aiMaterial* material, HashSet<String>& usedTextures)
     outMaterial.Save(outFile);
 }
 
-void CopyTextures(const HashSet<String>& usedTextures, const String& sourcePath)
+void CopyTextures(const ea::hash_set<ea::string>& usedTextures, const ea::string& sourcePath)
 {
     auto* fileSystem = context_->GetSubsystem<FileSystem>();
 
     if (useSubdirs_)
         fileSystem->CreateDir(resourcePath_ + "Textures");
 
-    for (HashSet<String>::ConstIterator i = usedTextures.Begin(); i != usedTextures.End(); ++i)
+    for (auto i = usedTextures.begin(); i != usedTextures.end(); ++i)
     {
         // Handle assimp embedded textures
-        if (i->Length() && i->At(0) == '*')
+        if (i->length() && i->at(0) == '*')
         {
-            unsigned texIndex = ToInt(i->Substring(1));
+            unsigned texIndex = ToInt(i->substr(1));
             if (texIndex >= scene_->mNumTextures)
-                PrintLine("Skipping out of range texture index " + String(texIndex));
+                PrintLine("Skipping out of range texture index " + ea::to_string(texIndex));
             else
             {
                 aiTexture* tex = scene_->mTextures[texIndex];
-                String fullDestName = resourcePath_ + GenerateTextureName(texIndex);
+                ea::string fullDestName = resourcePath_ + GenerateTextureName(texIndex);
                 bool destExists = fileSystem->FileExists(fullDestName);
                 if (destExists && noOverwriteTexture_)
                 {
@@ -2020,8 +2024,8 @@ void CopyTextures(const HashSet<String>& usedTextures, const String& sourcePath)
         }
         else
         {
-            String fullSourceName = sourcePath + *i;
-            String fullDestName = resourcePath_ + (useSubdirs_ ? "Textures/" : "") + *i;
+            ea::string fullSourceName = sourcePath + *i;
+            ea::string fullDestName = resourcePath_ + (useSubdirs_ ? "Textures/" : "") + *i;
 
             if (!fileSystem->FileExists(fullSourceName))
             {
@@ -2056,23 +2060,23 @@ void CopyTextures(const HashSet<String>& usedTextures, const String& sourcePath)
     }
 }
 
-void CombineLods(const PODVector<float>& lodDistances, const Vector<String>& modelNames, const String& outName)
+void CombineLods(const ea::vector<float>& lodDistances, const ea::vector<ea::string>& modelNames, const ea::string& outName)
 {
     // Load models
-    Vector<SharedPtr<Model> > srcModels;
-    for (unsigned i = 0; i < modelNames.Size(); ++i)
+    ea::vector<SharedPtr<Model> > srcModels;
+    for (unsigned i = 0; i < modelNames.size(); ++i)
     {
-        PrintLine("Reading LOD level " + String(i) + ": model " + modelNames[i] + " distance " + String(lodDistances[i]));
+        PrintLine("Reading LOD level " + ea::to_string(i) + ": model " + modelNames[i] + " distance " + ea::to_string(lodDistances[i]));
         File srcFile(context_);
         srcFile.Open(modelNames[i]);
         SharedPtr<Model> srcModel(new Model(context_));
         if (!srcModel->Load(srcFile))
             ErrorExit("Could not load input model " + modelNames[i]);
-        srcModels.Push(srcModel);
+        srcModels.push_back(srcModel);
     }
 
     // Check that none of the models already has LOD levels
-    for (unsigned i = 0; i < srcModels.Size(); ++i)
+    for (unsigned i = 0; i < srcModels.size(); ++i)
     {
         for (unsigned j = 0; j < srcModels[i]->GetNumGeometries(); ++j)
         {
@@ -2082,14 +2086,14 @@ void CombineLods(const PODVector<float>& lodDistances, const Vector<String>& mod
     }
 
     // Check for number of geometries (need to have same amount for now)
-    for (unsigned i = 1; i < srcModels.Size(); ++i)
+    for (unsigned i = 1; i < srcModels.size(); ++i)
     {
         if (srcModels[i]->GetNumGeometries() != srcModels[0]->GetNumGeometries())
             ErrorExit(modelNames[i] + " has different amount of geometries than " + modelNames[0]);
     }
 
     // If there are bones, check for compatibility (need to have exact match for now)
-    for (unsigned i = 1; i < srcModels.Size(); ++i)
+    for (unsigned i = 1; i < srcModels.size(); ++i)
     {
         if (srcModels[i]->GetSkeleton().GetNumBones() != srcModels[0]->GetSkeleton().GetNumBones())
             ErrorExit(modelNames[i] + " has different amount of bones than " + modelNames[0]);
@@ -2102,17 +2106,17 @@ void CombineLods(const PODVector<float>& lodDistances, const Vector<String>& mod
             ErrorExit(modelNames[i] + " has different per-geometry bone mappings than " + modelNames[0]);
     }
 
-    Vector<SharedPtr<VertexBuffer> > vbVector;
-    Vector<SharedPtr<IndexBuffer> > ibVector;
-    PODVector<unsigned> emptyMorphRange;
+    ea::vector<SharedPtr<VertexBuffer> > vbVector;
+    ea::vector<SharedPtr<IndexBuffer> > ibVector;
+    ea::vector<unsigned> emptyMorphRange;
 
     // Create the final model
     SharedPtr<Model> outModel(new Model(context_));
     outModel->SetNumGeometries(srcModels[0]->GetNumGeometries());
     for (unsigned i = 0; i < srcModels[0]->GetNumGeometries(); ++i)
     {
-        outModel->SetNumGeometryLodLevels(i, srcModels.Size());
-        for (unsigned j = 0; j < srcModels.Size(); ++j)
+        outModel->SetNumGeometryLodLevels(i, srcModels.size());
+        for (unsigned j = 0; j < srcModels.size(); ++j)
         {
             Geometry* geometry = srcModels[j]->GetGeometry(i, 0);
             geometry->SetLodDistance(lodDistances[j]);
@@ -2121,13 +2125,13 @@ void CombineLods(const PODVector<float>& lodDistances, const Vector<String>& mod
             for (unsigned k = 0; k < geometry->GetNumVertexBuffers(); ++k)
             {
                 SharedPtr<VertexBuffer> vb(geometry->GetVertexBuffer(k));
-                if (!vbVector.Contains(vb))
-                    vbVector.Push(vb);
+                if (!vbVector.contains(vb))
+                    vbVector.push_back(vb);
             }
 
             SharedPtr<IndexBuffer> ib(geometry->GetIndexBuffer());
-            if (!ibVector.Contains(ib))
-                ibVector.Push(ib);
+            if (!ibVector.contains(ib))
+                ibVector.push_back(ib);
         }
     }
 
@@ -2146,10 +2150,10 @@ void CombineLods(const PODVector<float>& lodDistances, const Vector<String>& mod
     outModel->Save(outFile);
 }
 
-void GetMeshesUnderNode(Vector<Pair<aiNode*, aiMesh*> >& dest, aiNode* node)
+void GetMeshesUnderNode(ea::vector<ea::pair<aiNode*, aiMesh*> >& dest, aiNode* node)
 {
     for (unsigned i = 0; i < node->mNumMeshes; ++i)
-        dest.Push(MakePair(node, scene_->mMeshes[node->mMeshes[i]]));
+        dest.push_back(ea::make_pair(node, scene_->mMeshes[node->mMeshes[i]]));
 }
 
 unsigned GetMeshIndex(aiMesh* mesh)
@@ -2162,9 +2166,9 @@ unsigned GetMeshIndex(aiMesh* mesh)
     return M_MAX_UNSIGNED;
 }
 
-unsigned GetBoneIndex(OutModel& model, const String& boneName)
+unsigned GetBoneIndex(OutModel& model, const ea::string& boneName)
 {
-    for (unsigned i = 0; i < model.bones_.Size(); ++i)
+    for (unsigned i = 0; i < model.bones_.size(); ++i)
     {
         if (boneName == model.bones_[i]->mName.data)
             return i;
@@ -2172,9 +2176,9 @@ unsigned GetBoneIndex(OutModel& model, const String& boneName)
     return M_MAX_UNSIGNED;
 }
 
-aiBone* GetMeshBone(OutModel& model, const String& boneName)
+aiBone* GetMeshBone(OutModel& model, const ea::string& boneName)
 {
-    for (unsigned i = 0; i < model.meshes_.Size(); ++i)
+    for (unsigned i = 0; i < model.meshes_.size(); ++i)
     {
         aiMesh* mesh = model.meshes_[i];
         for (unsigned j = 0; j < mesh->mNumBones; ++j)
@@ -2187,9 +2191,9 @@ aiBone* GetMeshBone(OutModel& model, const String& boneName)
     return nullptr;
 }
 
-Matrix3x4 GetOffsetMatrix(OutModel& model, const String& boneName)
+Matrix3x4 GetOffsetMatrix(OutModel& model, const ea::string& boneName)
 {
-    for (unsigned i = 0; i < model.meshes_.Size(); ++i)
+    for (unsigned i = 0; i < model.meshes_.size(); ++i)
     {
         aiMesh* mesh = model.meshes_[i];
         aiNode* node = model.meshNodes_[i];
@@ -2208,7 +2212,7 @@ Matrix3x4 GetOffsetMatrix(OutModel& model, const String& boneName)
     }
 
     // Fallback for rigid skinning for which actual offset matrix information doesn't exist
-    for (unsigned i = 0; i < model.meshes_.Size(); ++i)
+    for (unsigned i = 0; i < model.meshes_.size(); ++i)
     {
         aiMesh* mesh = model.meshes_[i];
         aiNode* node = model.meshNodes_[i];
@@ -2223,30 +2227,30 @@ Matrix3x4 GetOffsetMatrix(OutModel& model, const String& boneName)
     return Matrix3x4::IDENTITY;
 }
 
-void GetBlendData(OutModel& model, aiMesh* mesh, aiNode* meshNode, PODVector<unsigned>& boneMappings, Vector<PODVector<unsigned char> >&
-    blendIndices, Vector<PODVector<float> >& blendWeights)
+void GetBlendData(OutModel& model, aiMesh* mesh, aiNode* meshNode, ea::vector<unsigned>& boneMappings, ea::vector<ea::vector<unsigned char> >&
+    blendIndices, ea::vector<ea::vector<float> >& blendWeights)
 {
-    blendIndices.Resize(mesh->mNumVertices);
-    blendWeights.Resize(mesh->mNumVertices);
-    boneMappings.Clear();
+    blendIndices.resize(mesh->mNumVertices);
+    blendWeights.resize(mesh->mNumVertices);
+    boneMappings.clear();
 
     // If model has more bones than can fit vertex shader parameters, write the per-geometry mappings
-    if (model.bones_.Size() > maxBones_)
+    if (model.bones_.size() > maxBones_)
     {
         if (mesh->mNumBones > maxBones_)
         {
             ErrorExit(
-                "Geometry (submesh) has over " + String(maxBones_) + " bone influences. Try splitting to more submeshes\n"
-                "that each stay at " + String(maxBones_) + " bones or below."
+                "Geometry (submesh) has over " + ea::to_string(maxBones_) + " bone influences. Try splitting to more submeshes\n"
+                "that each stay at " + ea::to_string(maxBones_) + " bones or below."
             );
         }
         if (mesh->mNumBones > 0)
         {
-            boneMappings.Resize(mesh->mNumBones);
+            boneMappings.resize(mesh->mNumBones);
             for (unsigned i = 0; i < mesh->mNumBones; ++i)
             {
                 aiBone* bone = mesh->mBones[i];
-                String boneName = FromAIString(bone->mName);
+                ea::string boneName = FromAIString(bone->mName);
                 unsigned globalIndex = GetBoneIndex(model, boneName);
                 if (globalIndex == M_MAX_UNSIGNED)
                     ErrorExit("Bone " + boneName + " not found");
@@ -2254,25 +2258,25 @@ void GetBlendData(OutModel& model, aiMesh* mesh, aiNode* meshNode, PODVector<uns
                 for (unsigned j = 0; j < bone->mNumWeights; ++j)
                 {
                     unsigned vertex = bone->mWeights[j].mVertexId;
-                    blendIndices[vertex].Push(i);
-                    blendWeights[vertex].Push(bone->mWeights[j].mWeight);
+                    blendIndices[vertex].push_back(i);
+                    blendWeights[vertex].push_back(bone->mWeights[j].mWeight);
                 }
             }
         }
         else
         {
             // If mesh does not have skinning information, implement rigid skinning so that it stays compatible with AnimatedModel
-            String boneName = FromAIString(meshNode->mName);
+            ea::string boneName = FromAIString(meshNode->mName);
             unsigned globalIndex = GetBoneIndex(model, boneName);
             if (globalIndex == M_MAX_UNSIGNED)
                 PrintLine("Warning: bone " + boneName + " not found, skipping rigid skinning");
             else
             {
-                boneMappings.Push(globalIndex);
+                boneMappings.push_back(globalIndex);
                 for (unsigned i = 0; i < mesh->mNumVertices; ++i)
                 {
-                    blendIndices[i].Push(0);
-                    blendWeights[i].Push(1.0f);
+                    blendIndices[i].push_back(0);
+                    blendWeights[i].push_back(1.0f);
                 }
             }
         }
@@ -2284,21 +2288,21 @@ void GetBlendData(OutModel& model, aiMesh* mesh, aiNode* meshNode, PODVector<uns
             for (unsigned i = 0; i < mesh->mNumBones; ++i)
             {
                 aiBone* bone = mesh->mBones[i];
-                String boneName = FromAIString(bone->mName);
+                ea::string boneName = FromAIString(bone->mName);
                 unsigned globalIndex = GetBoneIndex(model, boneName);
                 if (globalIndex == M_MAX_UNSIGNED)
                     ErrorExit("Bone " + boneName + " not found");
                 for (unsigned j = 0; j < bone->mNumWeights; ++j)
                 {
                     unsigned vertex = bone->mWeights[j].mVertexId;
-                    blendIndices[vertex].Push(globalIndex);
-                    blendWeights[vertex].Push(bone->mWeights[j].mWeight);
+                    blendIndices[vertex].push_back(globalIndex);
+                    blendWeights[vertex].push_back(bone->mWeights[j].mWeight);
                 }
             }
         }
         else
         {
-            String boneName = FromAIString(meshNode->mName);
+            ea::string boneName = FromAIString(meshNode->mName);
             unsigned globalIndex = GetBoneIndex(model, boneName);
             if (globalIndex == M_MAX_UNSIGNED)
                 PrintLine("Warning: bone " + boneName + " not found, skipping rigid skinning");
@@ -2306,25 +2310,25 @@ void GetBlendData(OutModel& model, aiMesh* mesh, aiNode* meshNode, PODVector<uns
             {
                 for (unsigned i = 0; i < mesh->mNumVertices; ++i)
                 {
-                    blendIndices[i].Push(globalIndex);
-                    blendWeights[i].Push(1.0f);
+                    blendIndices[i].push_back(globalIndex);
+                    blendWeights[i].push_back(1.0f);
                 }
             }
         }
     }
 
     // Normalize weights now if necessary, also remove too many influences
-    for (unsigned i = 0; i < blendWeights.Size(); ++i)
+    for (unsigned i = 0; i < blendWeights.size(); ++i)
     {
-        if (blendWeights[i].Size() > 4)
+        if (blendWeights[i].size() > 4)
         {
-            PrintLine("Warning: more than 4 bone influences in vertex " + String(i));
+            PrintLine("Warning: more than 4 bone influences in vertex " + ea::to_string(i));
 
-            while (blendWeights[i].Size() > 4)
+            while (blendWeights[i].size() > 4)
             {
                 unsigned lowestIndex = 0;
                 float lowest = M_INFINITY;
-                for (unsigned j = 0; j < blendWeights[i].Size(); ++j)
+                for (unsigned j = 0; j < blendWeights[i].size(); ++j)
                 {
                     if (blendWeights[i][j] < lowest)
                     {
@@ -2332,69 +2336,70 @@ void GetBlendData(OutModel& model, aiMesh* mesh, aiNode* meshNode, PODVector<uns
                         lowestIndex = j;
                     }
                 }
-                blendWeights[i].Erase(lowestIndex);
-                blendIndices[i].Erase(lowestIndex);
+                blendWeights[i].erase_at(lowestIndex);
+                blendIndices[i].erase_at(lowestIndex);
             }
         }
 
         float sum = 0.0f;
-        for (unsigned j = 0; j < blendWeights[i].Size(); ++j)
+        for (unsigned j = 0; j < blendWeights[i].size(); ++j)
             sum += blendWeights[i][j];
         if (sum != 1.0f && sum != 0.0f)
         {
-            for (unsigned j = 0; j < blendWeights[i].Size(); ++j)
+            for (unsigned j = 0; j < blendWeights[i].size(); ++j)
                 blendWeights[i][j] /= sum;
         }
     }
 }
 
-String GetMeshMaterialName(aiMesh* mesh)
+ea::string GetMeshMaterialName(aiMesh* mesh)
 {
     aiMaterial* material = scene_->mMaterials[mesh->mMaterialIndex];
     aiString matNameStr;
     material->Get(AI_MATKEY_NAME, matNameStr);
-    String matName = SanitateAssetName(FromAIString(matNameStr));
-    if (matName.Trimmed().Empty())
+    ea::string matName = SanitateAssetName(FromAIString(matNameStr));
+    matName.trim();
+    if (matName.empty())
         matName = GenerateMaterialName(material);
 
     return (useSubdirs_ ? "Materials/" : "") + matName + ".xml";
 }
 
-String GenerateMaterialName(aiMaterial* material)
+ea::string GenerateMaterialName(aiMaterial* material)
 {
     for (unsigned i = 0; i < scene_->mNumMaterials; ++i)
     {
         if (scene_->mMaterials[i] == material)
-            return inputName_ + "_Material" + String(i);
+            return inputName_ + "_Material" + ea::to_string(i);
     }
 
     // Should not go here
-    return String::EMPTY;
+    return EMPTY_STRING;
 }
 
-String GetMaterialTextureName(const String& nameIn)
+ea::string GetMaterialTextureName(const ea::string& nameIn)
 {
     // Detect assimp embedded texture
-    if (nameIn.Length() && nameIn[0] == '*')
-        return GenerateTextureName(ToInt(nameIn.Substring(1)));
+    if (nameIn.length() && nameIn[0] == '*')
+        return GenerateTextureName(ToInt(nameIn.substr(1)));
     else
         return (useSubdirs_ ? "Textures/" : "") + nameIn;
 }
 
-String GenerateTextureName(unsigned texIndex)
+ea::string GenerateTextureName(unsigned texIndex)
 {
     if (texIndex < scene_->mNumTextures)
     {
         // If embedded texture contains encoded data, use the format hint for file extension. Else save RGBA8 data as PNG
         aiTexture* tex = scene_->mTextures[texIndex];
         if (!tex->mHeight)
-            return (useSubdirs_ ? "Textures/" : "") + inputName_ + "_Texture" + String(texIndex) + "." + tex->achFormatHint;
+            return (useSubdirs_ ? "Textures/" : "") + inputName_ + "_Texture" + ea::to_string(texIndex) + "." + tex->achFormatHint;
         else
-            return (useSubdirs_ ? "Textures/" : "") + inputName_ + "_Texture" + String(texIndex) + ".png";
+            return (useSubdirs_ ? "Textures/" : "") + inputName_ + "_Texture" + ea::to_string(texIndex) + ".png";
     }
 
     // Should not go here
-    return String::EMPTY;
+    return EMPTY_STRING;
 }
 
 unsigned GetNumValidFaces(aiMesh* mesh)
@@ -2431,8 +2436,8 @@ void WriteLargeIndices(unsigned*& dest, aiMesh* mesh, unsigned index, unsigned o
 }
 
 void WriteVertex(float*& dest, aiMesh* mesh, unsigned index, bool isSkinned, BoundingBox& box,
-    const Matrix3x4& vertexTransform, const Matrix3& normalTransform, Vector<PODVector<unsigned char> >& blendIndices,
-    Vector<PODVector<float> >& blendWeights)
+    const Matrix3x4& vertexTransform, const Matrix3& normalTransform, ea::vector<ea::vector<unsigned char> >& blendIndices,
+    ea::vector<ea::vector<float> >& blendWeights)
 {
     Vector3 vertex = vertexTransform * ToVector3(mesh->mVertices[index]);
     box.Merge(vertex);
@@ -2482,7 +2487,7 @@ void WriteVertex(float*& dest, aiMesh* mesh, unsigned index, bool isSkinned, Bou
     {
         for (unsigned i = 0; i < 4; ++i)
         {
-            if (i < blendWeights[index].Size())
+            if (i < blendWeights[index].size())
                 *dest++ = blendWeights[index][i];
             else
                 *dest++ = 0.0f;
@@ -2492,7 +2497,7 @@ void WriteVertex(float*& dest, aiMesh* mesh, unsigned index, bool isSkinned, Bou
         ++dest;
         for (unsigned i = 0; i < 4; ++i)
         {
-            if (i < blendIndices[index].Size())
+            if (i < blendIndices[index].size())
                 *destBytes++ = blendIndices[index][i];
             else
                 *destBytes++ = 0;
@@ -2500,40 +2505,40 @@ void WriteVertex(float*& dest, aiMesh* mesh, unsigned index, bool isSkinned, Bou
     }
 }
 
-PODVector<VertexElement> GetVertexElements(aiMesh* mesh, bool isSkinned)
+ea::vector<VertexElement> GetVertexElements(aiMesh* mesh, bool isSkinned)
 {
-    PODVector<VertexElement> ret;
+    ea::vector<VertexElement> ret;
 
     // Position must always be first and of type Vector3 for raycasts to work
-    ret.Push(VertexElement(TYPE_VECTOR3, SEM_POSITION));
+    ret.push_back(VertexElement(TYPE_VECTOR3, SEM_POSITION));
 
     if (mesh->HasNormals())
-        ret.Push(VertexElement(TYPE_VECTOR3, SEM_NORMAL));
+        ret.push_back(VertexElement(TYPE_VECTOR3, SEM_NORMAL));
 
     for (unsigned i = 0; i < mesh->GetNumColorChannels() && i < MAX_CHANNELS; ++i)
-        ret.Push(VertexElement(TYPE_UBYTE4_NORM, SEM_COLOR, i));
+        ret.push_back(VertexElement(TYPE_UBYTE4_NORM, SEM_COLOR, i));
 
     /// \todo Assimp mesh structure can specify 3D UV-coords. How to determine the difference? For now always treated as 2D.
     for (unsigned i = 0; i < mesh->GetNumUVChannels() && i < MAX_CHANNELS; ++i)
-        ret.Push(VertexElement(TYPE_VECTOR2, SEM_TEXCOORD, i));
+        ret.push_back(VertexElement(TYPE_VECTOR2, SEM_TEXCOORD, i));
 
     if (mesh->HasTangentsAndBitangents())
-        ret.Push(VertexElement(TYPE_VECTOR4, SEM_TANGENT));
+        ret.push_back(VertexElement(TYPE_VECTOR4, SEM_TANGENT));
 
     if (isSkinned)
     {
-        ret.Push(VertexElement(TYPE_VECTOR4, SEM_BLENDWEIGHTS));
-        ret.Push(VertexElement(TYPE_UBYTE4, SEM_BLENDINDICES));
+        ret.push_back(VertexElement(TYPE_VECTOR4, SEM_BLENDWEIGHTS));
+        ret.push_back(VertexElement(TYPE_UBYTE4, SEM_BLENDINDICES));
     }
 
     return ret;
 }
 
-aiNode* GetNode(const String& name, aiNode* rootNode, bool caseSensitive)
+aiNode* GetNode(const ea::string& name, aiNode* rootNode, bool caseSensitive)
 {
     if (!rootNode)
         return nullptr;
-    if (!name.Compare(rootNode->mName.data, caseSensitive))
+    if (!Compare(name, rootNode->mName.data, caseSensitive))
         return rootNode;
     for (unsigned i = 0; i < rootNode->mNumChildren; ++i)
     {
@@ -2583,9 +2588,9 @@ void GetPosRotScale(const aiMatrix4x4& transform, Vector3& pos, Quaternion& rot,
 }
 
 
-String FromAIString(const aiString& str)
+ea::string FromAIString(const aiString& str)
 {
-    return String(str.data);
+    return ea::string(str.data);
 }
 
 Vector3 ToVector3(const aiVector3D& vec)
@@ -2617,25 +2622,25 @@ aiMatrix4x4 ToAIMatrix4x4(const Matrix3x4& mat)
     return ret;
 }
 
-String SanitateAssetName(const String& name)
+ea::string SanitateAssetName(const ea::string& name)
 {
-    String fixedName = name;
-    fixedName.Replace("<", "");
-    fixedName.Replace(">", "");
-    fixedName.Replace("?", "");
-    fixedName.Replace("*", "");
-    fixedName.Replace(":", "");
-    fixedName.Replace("\"", "");
-    fixedName.Replace("/", "");
-    fixedName.Replace("\\", "");
-    fixedName.Replace("|", "");
+    ea::string fixedName = name;
+    fixedName.replace("<", "");
+    fixedName.replace(">", "");
+    fixedName.replace("?", "");
+    fixedName.replace("*", "");
+    fixedName.replace(":", "");
+    fixedName.replace("\"", "");
+    fixedName.replace("/", "");
+    fixedName.replace("\\", "");
+    fixedName.replace("|", "");
 
     return fixedName;
 }
 
-unsigned GetPivotlessBoneIndex(OutModel& model, const String& boneName)
+unsigned GetPivotlessBoneIndex(OutModel& model, const ea::string& boneName)
 {
-    for (unsigned i = 0; i < model.pivotlessBones_.Size(); ++i)
+    for (unsigned i = 0; i < model.pivotlessBones_.size(); ++i)
     {
         if (boneName == model.pivotlessBones_[i]->mName.data)
             return i;
@@ -2643,15 +2648,15 @@ unsigned GetPivotlessBoneIndex(OutModel& model, const String& boneName)
     return M_MAX_UNSIGNED;
 }
 
-void FillChainTransforms(OutModel &model, aiMatrix4x4 *chain, const String& mainBoneName)
+void FillChainTransforms(OutModel &model, aiMatrix4x4 *chain, const ea::string& mainBoneName)
 {
     for (unsigned j = 0; j < TransformationComp_MAXIMUM; ++j)
     {
-        String transfBoneName = mainBoneName + "_$AssimpFbx$_" + String(transformSuffix[j]);
+        ea::string transfBoneName = mainBoneName + "_$AssimpFbx$_" + ea::string(transformSuffix[j]);
 
-        for (unsigned k = 0; k < model.bones_.Size(); ++k)
+        for (unsigned k = 0; k < model.bones_.size(); ++k)
         {
-            String boneName = String(model.bones_[k]->mName.data);
+            ea::string boneName = ea::string(model.bones_[k]->mName.data);
 
             if (boneName == transfBoneName)
             {
@@ -2730,19 +2735,19 @@ void ExpandAnimatedChannelKeys(aiAnimation* anim, unsigned mainChannel, const in
     }
 }
 
-void InitAnimatedChainTransformIndices(aiAnimation* anim, unsigned mainChannel, const String& mainBoneName, int *channelIndices)
+void InitAnimatedChainTransformIndices(aiAnimation* anim, unsigned mainChannel, const ea::string& mainBoneName, int *channelIndices)
 {
     int numTransforms = 0;
 
     for (unsigned j = 0; j < TransformationComp_MAXIMUM; ++j)
     {
-        String transfBoneName = mainBoneName + "_$AssimpFbx$_" + String(transformSuffix[j]);
+        ea::string transfBoneName = mainBoneName + "_$AssimpFbx$_" + ea::string(transformSuffix[j]);
         channelIndices[j] = -1;
 
         for (unsigned k = 0; k < anim->mNumChannels; ++k)
         {
             aiNodeAnim* channel = anim->mChannels[k];
-            String channelName = FromAIString(channel->mNodeName);
+            ea::string channelName = FromAIString(channel->mNodeName);
 
             if (channelName == transfBoneName)
             {
@@ -2761,15 +2766,15 @@ void InitAnimatedChainTransformIndices(aiAnimation* anim, unsigned mainChannel, 
 void CreatePivotlessFbxBoneStruct(OutModel &model)
 {
     // Init
-    model.pivotlessBones_.Clear();
+    model.pivotlessBones_.clear();
     aiMatrix4x4 chains[TransformationComp_MAXIMUM];
 
-    for (unsigned i = 0; i < model.bones_.Size(); ++i)
+    for (unsigned i = 0; i < model.bones_.size(); ++i)
     {
-        String mainBoneName = String(model.bones_[i]->mName.data);
+        ea::string mainBoneName = ea::string(model.bones_[i]->mName.data);
 
         // Skip $fbx nodes
-        if (mainBoneName.Find("$AssimpFbx$") != String::NPOS)
+        if (mainBoneName.find("$AssimpFbx$") != ea::string::npos)
             continue;
 
         std::fill_n(chains, static_cast<unsigned int>(TransformationComp_MAXIMUM), aiMatrix4x4());
@@ -2785,7 +2790,7 @@ void CreatePivotlessFbxBoneStruct(OutModel &model)
         pnode->mName = model.bones_[i]->mName;
         pnode->mTransformation = finalTransform * model.bones_[i]->mTransformation;
 
-        model.pivotlessBones_.Push(pnode);
+        model.pivotlessBones_.push_back(pnode);
     }
 }
 
@@ -2799,29 +2804,29 @@ void ExtrapolatePivotlessAnimation(OutModel* model)
         CreatePivotlessFbxBoneStruct(*model);
 
         // Extrapolate anim
-        const PODVector<aiAnimation *> &animations = model->animations_;
-        for (unsigned i = 0; i < animations.Size(); ++i)
+        const ea::vector<aiAnimation *> &animations = model->animations_;
+        for (unsigned i = 0; i < animations.size(); ++i)
         {
             aiAnimation* anim = animations[i];
-            Vector<String> mainBoneCompleteList;
-            mainBoneCompleteList.Clear();
+            ea::vector<ea::string> mainBoneCompleteList;
+            mainBoneCompleteList.clear();
 
             for (unsigned j = 0; j < anim->mNumChannels; ++j)
             {
                 aiNodeAnim* channel = anim->mChannels[j];
-                String channelName = FromAIString(channel->mNodeName);
-                unsigned pos = channelName.Find("_$AssimpFbx$");
+                ea::string channelName = FromAIString(channel->mNodeName);
+                unsigned pos = channelName.find("_$AssimpFbx$");
 
-                if (pos != String::NPOS)
+                if (pos != ea::string::npos)
                 {
                     // Every first $fbx animation channel for a bone will consolidate other $fbx animation to a single channel
                     // skip subsequent $fbx animation channel for the same bone
-                    String mainBoneName = channelName.Substring(0, pos);
+                    ea::string mainBoneName = channelName.substr(0, pos);
 
-                    if (mainBoneCompleteList.Find(mainBoneName) != mainBoneCompleteList.End())
+                    if (mainBoneCompleteList.find(mainBoneName) != mainBoneCompleteList.end())
                         continue;
 
-                    mainBoneCompleteList.Push(mainBoneName);
+                    mainBoneCompleteList.push_back(mainBoneName);
                     unsigned boneIdx = GetBoneIndex(*model, mainBoneName);
 
                     // This condition exists if a geometry, not a bone, has a key animation
@@ -2917,7 +2922,7 @@ void CollectSceneNodesAsBones(OutModel &model, aiNode* rootNode)
     if (!rootNode)
         return;
 
-    model.bones_.Push(rootNode);
+    model.bones_.push_back(rootNode);
 
     for (unsigned i = 0; i < rootNode->mNumChildren; ++i)
     {

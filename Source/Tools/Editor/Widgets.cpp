@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -32,7 +32,7 @@ using namespace Urho3D;
 namespace ImGui
 {
 
-void Image(const String& name)
+void Image(const ea::string& name)
 {
     auto* icons = ui::GetSystemUI()->GetSubsystem<EditorIconCache>();
 
@@ -46,10 +46,10 @@ void Image(const String& name)
             {(float) rect.right_ / texture->GetWidth(), (float) rect.bottom_ / texture->GetHeight()});
     }
     else
-        URHO3D_LOGERRORF("Editor icon \"%s\" does not exist.", name.CString());
+        URHO3D_LOGERRORF("Editor icon \"%s\" does not exist.", name.c_str());
 }
 
-bool ImageButton(const String& name)
+bool ImageButton(const ea::string& name)
 {
     auto* icons = ui::GetSystemUI()->GetSubsystem<EditorIconCache>();
 
@@ -63,7 +63,7 @@ bool ImageButton(const String& name)
             {(float) rect.right_ / texture->GetWidth(), (float) rect.bottom_ / texture->GetHeight()});
     }
     else
-        URHO3D_LOGERRORF("Editor icon \"%s\" does not exist.", name.CString());
+        URHO3D_LOGERRORF("Editor icon \"%s\" does not exist.", name.c_str());
 
     return false;
 }

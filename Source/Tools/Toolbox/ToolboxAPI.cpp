@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -34,8 +34,8 @@ void RegisterToolboxTypes(Context* context)
 {
     context->RegisterFactory<Gizmo>();
     context->RegisterFactory<AttributeInspector>();
-    context->RegisterFactory<AttributeInspectorWindow>();
     context->RegisterFactory<DebugCameraController>();
+    context->RegisterFactory<DebugCameraController2D>();
     context->RegisterFactory<Undo::Manager>();
 }
 

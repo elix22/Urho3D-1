@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -47,28 +47,28 @@ public:
     /// Construct.
     explicit PackageFile(Context* context);
     /// Construct and open.
-    PackageFile(Context* context, const String& fileName, unsigned startOffset = 0);
+    PackageFile(Context* context, const ea::string& fileName, unsigned startOffset = 0);
     /// Destruct.
     ~PackageFile() override;
 
     /// Open the package file. Return true if successful.
-    bool Open(const String& fileName, unsigned startOffset = 0);
+    bool Open(const ea::string& fileName, unsigned startOffset = 0);
     /// Check if a file exists within the package file. This will be case-insensitive on Windows and case-sensitive on other platforms.
-    bool Exists(const String& fileName) const;
+    bool Exists(const ea::string& fileName) const;
     /// Return the file entry corresponding to the name, or null if not found. This will be case-insensitive on Windows and case-sensitive on other platforms.
-    const PackageEntry* GetEntry(const String& fileName) const;
+    const PackageEntry* GetEntry(const ea::string& fileName) const;
 
     /// Return all file entries.
-    const HashMap<String, PackageEntry>& GetEntries() const { return entries_; }
+    const ea::unordered_map<ea::string, PackageEntry>& GetEntries() const { return entries_; }
 
     /// Return the package file name.
-    const String& GetName() const { return fileName_; }
+    const ea::string& GetName() const { return fileName_; }
 
     /// Return hash of the package file name.
     StringHash GetNameHash() const { return nameHash_; }
 
     /// Return number of files.
-    unsigned GetNumFiles() const { return entries_.Size(); }
+    unsigned GetNumFiles() const { return entries_.size(); }
 
     /// Return total size of the package file.
     unsigned GetTotalSize() const { return totalSize_; }
@@ -83,28 +83,28 @@ public:
     bool IsCompressed() const { return compressed_; }
 
     /// Return list of file names in the package.
-    const Vector<String> GetEntryNames() const { return entries_.Keys(); }
+    const ea::vector<ea::string> GetEntryNames() const { return entries_.keys(); }
 
     /// Return a file name in the package at the specified index
-    const String& GetEntryName(unsigned index) const 
+    const ea::string& GetEntryName(unsigned index) const
     {
         unsigned nn = 0;
-        for (HashMap<String, PackageEntry>::ConstIterator j = entries_.Begin(); j != entries_.End(); ++j)
+        for (auto j = entries_.begin(); j != entries_.end(); ++j)
         {
-            if (nn == index) return j->first_;
+            if (nn == index) return j->first;
             nn++;
         }
-        return String::EMPTY; 
+        return EMPTY_STRING;
     }
 
     /// Scan package for specified files.
-    void Scan(Vector<String>& result, const String& pathName, const String& filter, bool recursive) const;
+    void Scan(ea::vector<ea::string>& result, const ea::string& pathName, const ea::string& filter, bool recursive) const;
 
 private:
     /// File entries.
-    HashMap<String, PackageEntry> entries_;
+    ea::unordered_map<ea::string, PackageEntry> entries_;
     /// File name.
-    String fileName_;
+    ea::string fileName_;
     /// Package file name hash.
     StringHash nameHash_;
     /// Package file total size.

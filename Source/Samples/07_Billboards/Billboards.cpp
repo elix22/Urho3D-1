@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -44,7 +44,6 @@
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(Billboards)
 
 Billboards::Billboards(Context* context) :
     Sample(context),
@@ -70,7 +69,7 @@ void Billboards::Start()
     SubscribeToEvents();
 
     // Set the mouse mode to use in the sample
-    Sample::InitMouseMode(MM_ABSOLUTE);
+    Sample::InitMouseMode(MM_RELATIVE);
 }
 
 void Billboards::CreateScene()
@@ -289,8 +288,8 @@ void Billboards::MoveCamera(float timeStep)
 void Billboards::AnimateScene(float timeStep)
 {
     // Get the light and billboard scene nodes
-    PODVector<Node*> lightNodes;
-    PODVector<Node*> billboardNodes;
+    ea::vector<Node*> lightNodes;
+    ea::vector<Node*> billboardNodes;
     scene_->GetChildrenWithComponent<Light>(lightNodes);
     scene_->GetChildrenWithComponent<BillboardSet>(billboardNodes);
 
@@ -298,11 +297,11 @@ void Billboards::AnimateScene(float timeStep)
     const float BILLBOARD_ROTATION_SPEED = 50.0f;
 
     // Rotate the lights around the world Y-axis
-    for (unsigned i = 0; i < lightNodes.Size(); ++i)
+    for (unsigned i = 0; i < lightNodes.size(); ++i)
         lightNodes[i]->Rotate(Quaternion(0.0f, LIGHT_ROTATION_SPEED * timeStep, 0.0f), TS_WORLD);
 
     // Rotate the individual billboards within the billboard sets, then recommit to make the changes visible
-    for (unsigned i = 0; i < billboardNodes.Size(); ++i)
+    for (unsigned i = 0; i < billboardNodes.size(); ++i)
     {
         auto* billboardObject = billboardNodes[i]->GetComponent<BillboardSet>();
 

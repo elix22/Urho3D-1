@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -45,7 +45,7 @@ public:
     /// Apply attribute changes that can not be applied immediately.
     void ApplyAttributes() override;
     /// Return UI rendering batches.
-    void GetBatches(PODVector<UIBatch>& batches, PODVector<float>& vertexData, const IntRect& currentScissor) override;
+    void GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, const IntRect& currentScissor) override;
     /// React to the popup being shown.
     void OnShowPopup() override;
     /// React to the popup being hidden.
@@ -66,7 +66,7 @@ public:
     /// Set selection.
     void SetSelection(unsigned index);
     /// Set place holder text. This is the text shown when there is no selection (-1) in drop down list. Note that if the list has items, the default is to show the first item, so the "no selection" state has to be set explicitly.
-    void SetPlaceholderText(const String& text);
+    void SetPlaceholderText(const ea::string& text);
     /// Set whether popup should be automatically resized to match the dropdown button width.
     void SetResizePopup(bool enable);
 
@@ -75,7 +75,7 @@ public:
     /// Return item at index.
     UIElement* GetItem(unsigned index) const;
     /// Return all items.
-    PODVector<UIElement*> GetItems() const;
+    ea::vector<UIElement*> GetItems() const;
     /// Return selection index, or M_MAX_UNSIGNED if none selected.
     unsigned GetSelection() const;
     /// Return selected item, or null if none selected.
@@ -88,7 +88,7 @@ public:
     UIElement* GetPlaceholder() const { return placeholder_; }
 
     /// Return place holder text.
-    const String& GetPlaceholderText() const;
+    const ea::string& GetPlaceholderText() const;
 
     /// Return whether popup should be automatically resized.
     bool GetResizePopup() const { return resizePopup_; }

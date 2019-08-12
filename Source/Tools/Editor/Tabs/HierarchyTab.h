@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,9 @@
 #pragma once
 
 
+#include <EASTL/utility.h>
+#include <Urho3D/Container/Ptr.h>
+
 #include "Tabs/Tab.h"
 
 
@@ -33,13 +36,15 @@ class HierarchyTab : public Tab
 {
     URHO3D_OBJECT(HierarchyTab, Tab)
 public:
+    ///
     explicit HierarchyTab(Context* context);
-
+    ///
     bool RenderWindowContent() override;
+    ///
+    void SetProvider(IHierarchyProvider* provider);
 
 protected:
-    WeakPtr<Tab> instance_;
-    IHierarchyProvider* hierarchyProvider_ = nullptr;
+    ea::pair<WeakPtr<RefCounted>, IHierarchyProvider*> provider_;
 };
 
 }

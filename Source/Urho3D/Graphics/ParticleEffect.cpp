@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -42,6 +42,9 @@ static const char* emitterTypeNames[] =
 {
     "Sphere",
     "Box",
+    "SphereVolume",
+    "Cylinder",
+    "Ring",
     nullptr
 };
 
@@ -97,7 +100,7 @@ void ParticleEffect::RegisterObject(Context* context)
 
 bool ParticleEffect::BeginLoad(Deserializer& source)
 {
-    loadMaterialName_.Clear();
+    loadMaterialName_.clear();
 
     XMLFile file(context_);
     if (!file.Load(source))
@@ -117,10 +120,10 @@ bool ParticleEffect::BeginLoad(Deserializer& source)
 bool ParticleEffect::EndLoad()
 {
     // Apply the material now
-    if (!loadMaterialName_.Empty())
+    if (!loadMaterialName_.empty())
     {
         SetMaterial(GetSubsystem<ResourceCache>()->GetResource<Material>(loadMaterialName_));
-        loadMaterialName_.Clear();
+        loadMaterialName_.clear();
     }
 
     return true;
@@ -159,8 +162,8 @@ bool ParticleEffect::Load(const XMLElement& source)
     rotationSpeedMax_ = 0.0f;
     sizeAdd_ = 0.0f;
     sizeMul_ = 1.0f;
-    colorFrames_.Clear();
-    textureFrames_.Clear();
+    colorFrames_.clear();
+    textureFrames_.clear();
     faceCameraMode_ = FC_ROTATE_XYZ;
 
     if (source.IsNull())
@@ -200,7 +203,7 @@ bool ParticleEffect::Load(const XMLElement& source)
 
     if (source.HasChild("emittertype"))
     {
-        String type = source.GetChild("emittertype").GetAttributeLower("value");
+        ea::string type = source.GetChild("emittertype").GetAttributeLower("value");
         if (type == "point")
         {
             // Point emitter type is deprecated, handled as zero sized sphere
@@ -208,7 +211,7 @@ bool ParticleEffect::Load(const XMLElement& source)
             emitterSize_ = Vector3::ZERO;
         }
         else
-            emitterType_ = (EmitterType)GetStringListIndex(type.CString(), emitterTypeNames, EMITTER_SPHERE);
+            emitterType_ = (EmitterType)GetStringListIndex(type.c_str(), emitterTypeNames, EMITTER_SPHERE);
     }
 
     if (source.HasChild("emittersize"))
@@ -265,8 +268,8 @@ bool ParticleEffect::Load(const XMLElement& source)
 
     if (source.HasChild("faceCameraMode"))
     {
-        String type = source.GetChild("faceCameraMode").GetAttributeLower("value");
-        faceCameraMode_ = (FaceCameraMode)GetStringListIndex(type.CString(), faceCameraModeNames, FC_ROTATE_XYZ);
+        ea::string type = source.GetChild("faceCameraMode").GetAttributeLower("value");
+        faceCameraMode_ = (FaceCameraMode)GetStringListIndex(type.c_str(), faceCameraModeNames, FC_ROTATE_XYZ);
     }
 
     if (source.HasChild("sizedelta"))
@@ -286,26 +289,26 @@ bool ParticleEffect::Load(const XMLElement& source)
 
     if (source.HasChild("colorfade"))
     {
-        Vector<ColorFrame> fades;
+        ea::vector<ColorFrame> fades;
         for (XMLElement colorFadeElem = source.GetChild("colorfade"); colorFadeElem;
              colorFadeElem = colorFadeElem.GetNext("colorfade"))
-            fades.Push(ColorFrame(colorFadeElem.GetColor("color"), colorFadeElem.GetFloat("time")));
+            fades.push_back(ColorFrame(colorFadeElem.GetColor("color"), colorFadeElem.GetFloat("time")));
 
         SetColorFrames(fades);
     }
 
-    if (colorFrames_.Empty())
-        colorFrames_.Push(ColorFrame(Color::WHITE));
+    if (colorFrames_.empty())
+        colorFrames_.push_back(ColorFrame(Color::WHITE));
 
     if (source.HasChild("texanim"))
     {
-        Vector<TextureFrame> animations;
+        ea::vector<TextureFrame> animations;
         for (XMLElement animElem = source.GetChild("texanim"); animElem; animElem = animElem.GetNext("texanim"))
         {
             TextureFrame animation;
             animation.uv_ = animElem.GetRect("uv");
             animation.time_ = animElem.GetFloat("time");
-            animations.Push(animation);
+            animations.push_back(animation);
         }
 
         SetTextureFrames(animations);
@@ -316,7 +319,7 @@ bool ParticleEffect::Load(const XMLElement& source)
 
 bool ParticleEffect::Save(Serializer& dest) const
 {
-    SharedPtr<XMLFile> xml(new XMLFile(context_));
+    SharedPtr<XMLFile> xml(context_->CreateObject<XMLFile>());
     XMLElement materialElem = xml->CreateRoot("particleeffect");
 
     Save(materialElem);
@@ -408,15 +411,15 @@ bool ParticleEffect::Save(XMLElement& dest) const
     childElem = dest.CreateChild("faceCameraMode");
     childElem.SetAttribute("value", faceCameraModeNames[faceCameraMode_]);
 
-    if (colorFrames_.Size() == 1)
+    if (colorFrames_.size() == 1)
     {
         childElem = dest.CreateChild("color");
         childElem.SetColor("value", colorFrames_[0].color_);
     }
 
-    if (colorFrames_.Size() > 1)
+    if (colorFrames_.size() > 1)
     {
-        for (unsigned i = 0; i < colorFrames_.Size(); ++i)
+        for (unsigned i = 0; i < colorFrames_.size(); ++i)
         {
             childElem = dest.CreateChild("colorfade");
             childElem.SetColor("color", colorFrames_[i].color_);
@@ -424,7 +427,7 @@ bool ParticleEffect::Save(XMLElement& dest) const
         }
     }
 
-    for (unsigned i = 0; i < textureFrames_.Size(); ++i)
+    for (unsigned i = 0; i < textureFrames_.size(); ++i)
     {
         childElem = dest.CreateChild("texanim");
         childElem.SetRect("uv", textureFrames_[i].uv_);
@@ -587,8 +590,8 @@ void ParticleEffect::SetSizeMul(float sizeMul)
 
 void ParticleEffect::AddColorTime(const Color& color, const float time)
 {
-    unsigned s = colorFrames_.Size();
-    colorFrames_.Resize(s + 1);
+    unsigned s = colorFrames_.size();
+    colorFrames_.resize(s + 1);
 
     for (unsigned i = 0; i < s; i++)
     {
@@ -617,7 +620,7 @@ void ParticleEffect::AddColorFrame(const ColorFrame& colorFrame)
 
 void ParticleEffect::RemoveColorFrame(unsigned index)
 {
-    unsigned s = colorFrames_.Size();
+    unsigned s = colorFrames_.size();
 
     for (unsigned i = index; i < s - 1; i++)
     {
@@ -625,26 +628,26 @@ void ParticleEffect::RemoveColorFrame(unsigned index)
         colorFrames_[i].time_ = colorFrames_[i + 1].time_;
     }
 
-    colorFrames_.Resize(s - 1);
+    colorFrames_.resize(s - 1);
 }
 
-void ParticleEffect::SetColorFrames(const Vector<ColorFrame>& colorFrames)
+void ParticleEffect::SetColorFrames(const ea::vector<ColorFrame>& colorFrames)
 {
     colorFrames_ = colorFrames;
 }
 
 void ParticleEffect::SetColorFrame(unsigned index, const ColorFrame& colorFrame)
 {
-    if (colorFrames_.Size() < index + 1)
-        colorFrames_.Resize(index + 1);
+    if (colorFrames_.size() < index + 1)
+        colorFrames_.resize(index + 1);
     colorFrames_[index] = colorFrame;
 }
 
 void ParticleEffect::SetNumColorFrames(unsigned number)
 {
-    unsigned s = colorFrames_.Size();
+    unsigned s = colorFrames_.size();
     if (s != number)
-        colorFrames_.Resize(number);
+        colorFrames_.resize(number);
 }
 
 void ParticleEffect::SetFaceCameraMode(FaceCameraMode mode)
@@ -654,16 +657,16 @@ void ParticleEffect::SetFaceCameraMode(FaceCameraMode mode)
 
 void ParticleEffect::SortColorFrames()
 {
-    Vector<ColorFrame> cf = colorFrames_;
-    colorFrames_.Clear();
-    for (unsigned i = 0; i < cf.Size(); i++)
+    ea::vector<ColorFrame> cf = colorFrames_;
+    colorFrames_.clear();
+    for (unsigned i = 0; i < cf.size(); i++)
         AddColorFrame(cf[i]);
 }
 
 void ParticleEffect::AddTextureTime(const Rect& uv, const float time)
 {
-    unsigned s = textureFrames_.Size();
-    textureFrames_.Resize(s + 1);
+    unsigned s = textureFrames_.size();
+    textureFrames_.resize(s + 1);
 
     for (unsigned i = 0; i < s; i++)
     {
@@ -692,7 +695,7 @@ void ParticleEffect::AddTextureFrame(const TextureFrame& textureFrame)
 
 void ParticleEffect::RemoveTextureFrame(unsigned index)
 {
-    unsigned s = textureFrames_.Size();
+    unsigned s = textureFrames_.size();
 
     for (unsigned i = index; i < s - 1; i++)
     {
@@ -700,39 +703,39 @@ void ParticleEffect::RemoveTextureFrame(unsigned index)
         textureFrames_[i].time_ = textureFrames_[i + 1].time_;
     }
 
-    textureFrames_.Resize(s - 1);
+    textureFrames_.resize(s - 1);
 }
 
-void ParticleEffect::SetTextureFrames(const Vector<TextureFrame>& textureFrames)
+void ParticleEffect::SetTextureFrames(const ea::vector<TextureFrame>& textureFrames)
 {
     textureFrames_ = textureFrames;
 }
 
 void ParticleEffect::SetTextureFrame(unsigned index, const TextureFrame& textureFrame)
 {
-    if (textureFrames_.Size() < index + 1)
-        textureFrames_.Resize(index + 1);
+    if (textureFrames_.size() < index + 1)
+        textureFrames_.resize(index + 1);
     textureFrames_[index] = textureFrame;
 }
 
 void ParticleEffect::SetNumTextureFrames(unsigned number)
 {
-    unsigned s = textureFrames_.Size();
+    unsigned s = textureFrames_.size();
     if (s != number)
-        textureFrames_.Resize(number);
+        textureFrames_.resize(number);
 }
 
 void ParticleEffect::SortTextureFrames()
 {
-    Vector<TextureFrame> tf = textureFrames_;
-    textureFrames_.Clear();
-    for (unsigned i = 0; i < tf.Size(); i++)
+    ea::vector<TextureFrame> tf = textureFrames_;
+    textureFrames_.clear();
+    for (unsigned i = 0; i < tf.size(); i++)
         AddTextureFrame(tf[i]);
 }
 
-SharedPtr<ParticleEffect> ParticleEffect::Clone(const String& cloneName) const
+SharedPtr<ParticleEffect> ParticleEffect::Clone(const ea::string& cloneName) const
 {
-    SharedPtr<ParticleEffect> ret(new ParticleEffect(context_));
+    SharedPtr<ParticleEffect> ret(context_->CreateObject<ParticleEffect>());
 
     ret->SetName(cloneName);
     ret->material_ = material_;
@@ -776,12 +779,12 @@ SharedPtr<ParticleEffect> ParticleEffect::Clone(const String& cloneName) const
 
 const ColorFrame* ParticleEffect::GetColorFrame(unsigned index) const
 {
-    return index < colorFrames_.Size() ? &colorFrames_[index] : nullptr;
+    return index < colorFrames_.size() ? &colorFrames_[index] : nullptr;
 }
 
 const TextureFrame* ParticleEffect::GetTextureFrame(unsigned index) const
 {
-    return index < textureFrames_.Size() ? &textureFrames_[index] : nullptr;
+    return index < textureFrames_.size() ? &textureFrames_[index] : nullptr;
 }
 
 Vector3 ParticleEffect::GetRandomDirection() const

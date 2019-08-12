@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -151,10 +151,10 @@ public:
     PhysicsWorld* GetPhysicsWorld() const { return physicsWorld_; }
 
     /// Return Bullet rigid body.
-    btRigidBody* GetBody() const { return body_.Get(); }
+    btRigidBody* GetBody() const { return body_.get(); }
 
     /// Return Bullet compound collision shape.
-    btCompoundShape* GetCompoundShape() const { return compoundShape_.Get(); }
+    btCompoundShape* GetCompoundShape() const { return compoundShape_.get(); }
 
     /// Return mass.
     float GetMass() const { return mass_; }
@@ -224,7 +224,7 @@ public:
     CollisionEventMode GetCollisionEventMode() const { return collisionEventMode_; }
 
     /// Return colliding rigid bodies from the last simulation step. Only returns collisions that were sent as events (depends on collision event mode) and excludes e.g. static-static collisions.
-    void GetCollidingBodies(PODVector<RigidBody*>& result) const;
+    void GetCollidingBodies(ea::vector<RigidBody*>& result) const;
 
     /// Apply new world transform after a simulation step. Called internally.
     void ApplyWorldTransform(const Vector3& newWorldPosition, const Quaternion& newWorldRotation);
@@ -233,9 +233,9 @@ public:
     /// Update gravity parameters to the Bullet rigid body.
     void UpdateGravity();
     /// Set network angular velocity attribute.
-    void SetNetAngularVelocityAttr(const PODVector<unsigned char>& value);
+    void SetNetAngularVelocityAttr(const ea::vector<unsigned char>& value);
     /// Return network angular velocity attribute.
-    const PODVector<unsigned char>& GetNetAngularVelocityAttr() const;
+    const ea::vector<unsigned char>& GetNetAngularVelocityAttr() const;
     /// Add a constraint that refers to this rigid body.
     void AddConstraint(Constraint* constraint);
     /// Remove a constraint that refers to this rigid body.
@@ -264,17 +264,17 @@ private:
     void MarkBodyDirty() { readdBody_ = true; }
 
     /// Bullet rigid body.
-    UniquePtr<btRigidBody> body_;
+    ea::unique_ptr<btRigidBody> body_;
     /// Bullet compound collision shape.
-    UniquePtr<btCompoundShape> compoundShape_;
+    ea::unique_ptr<btCompoundShape> compoundShape_;
     /// Compound collision shape with center of mass offset applied.
-    UniquePtr<btCompoundShape> shiftedCompoundShape_;
+    ea::unique_ptr<btCompoundShape> shiftedCompoundShape_;
     /// Physics world.
     WeakPtr<PhysicsWorld> physicsWorld_;
     /// Smoothed transform, if has one.
     WeakPtr<SmoothedTransform> smoothedTransform_;
     /// Constraints that refer to this rigid body.
-    PODVector<Constraint*> constraints_;
+    ea::vector<Constraint*> constraints_;
     /// Gravity override vector.
     Vector3 gravityOverride_;
     /// Center of mass offset.

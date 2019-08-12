@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,9 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
+
+#include <EASTL/shared_array.h>
+
 #include "../Resource/Resource.h"
 
 namespace Urho3D
@@ -67,10 +69,10 @@ public:
     SharedPtr<SoundStream> GetDecoderStream() const;
 
     /// Return shared sound data.
-    SharedArrayPtr<signed char> GetData() const { return data_; }
+    ea::shared_array<signed char> GetData() const { return data_; }
 
     /// Return sound data start.
-    signed char* GetStart() const { return data_.Get(); }
+    signed char* GetStart() const { return data_.get(); }
 
     /// Return loop start.
     signed char* GetRepeat() const { return repeat_; }
@@ -113,7 +115,7 @@ private:
     void LoadParameters();
 
     /// Sound data.
-    SharedArrayPtr<signed char> data_;
+    ea::shared_array<signed char> data_;
     /// Loop start.
     signed char* repeat_;
     /// Sound data end.

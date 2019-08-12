@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,6 @@
 #pragma once
 
 #include "../../Container/Ptr.h"
-#include "../../Container/Vector.h"
 #include "../../Graphics/GraphicsDefs.h"
 
 #include <d3d9.h>
@@ -54,11 +53,11 @@ class URHO3D_API VertexDeclaration : public RefCounted
 {
 public:
     /// Construct with a single buffer's vertex element list.
-    VertexDeclaration(Graphics* graphics, const PODVector<VertexElement>& srcElements);
+    VertexDeclaration(Graphics* graphics, const ea::vector<VertexElement>& srcElements);
     /// Construct with vertex buffers to base declaration on. Higher index buffers will override semantics on lower indices.
-    VertexDeclaration(Graphics* graphics, const PODVector<VertexBuffer*>& buffers);
+    VertexDeclaration(Graphics* graphics, const ea::vector<VertexBuffer*>& buffers);
     /// Construct with vertex buffers (shared pointer vector) to base declaration on. Higher index buffers will override semantics on lower indices.
-    VertexDeclaration(Graphics* graphics, const Vector<SharedPtr<VertexBuffer> >& buffers);
+    VertexDeclaration(Graphics* graphics, const ea::vector<SharedPtr<VertexBuffer> >& buffers);
     /// Destruct.
     ~VertexDeclaration();
 
@@ -67,7 +66,7 @@ public:
 
 private:
     /// Create declaration.
-    void Create(Graphics* graphics, const PODVector<VertexDeclarationElement>& elements);
+    void Create(Graphics* graphics, const ea::vector<VertexDeclarationElement>& elements);
     /// Release declaration.
     void Release();
 

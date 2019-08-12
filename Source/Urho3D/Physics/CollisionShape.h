@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
+#include <EASTL/shared_array.h>
+
 #include "../Math/BoundingBox.h"
 #include "../Math/Quaternion.h"
 #include "../Scene/Component.h"
@@ -68,7 +69,7 @@ struct CollisionGeometryData : public RefCounted
 
 /// Cache of collision geometry data.
 /// \todo Remove duplicate declaration
-using CollisionGeometryDataCache = HashMap<Pair<Model*, unsigned>, SharedPtr<CollisionGeometryData> >;
+using CollisionGeometryDataCache = ea::unordered_map<ea::pair<Model*, unsigned>, SharedPtr<CollisionGeometryData> >;
 
 /// Triangle mesh geometry data.
 struct TriangleMeshData : public CollisionGeometryData
@@ -79,11 +80,11 @@ struct TriangleMeshData : public CollisionGeometryData
     explicit TriangleMeshData(CustomGeometry* custom);
 
     /// Bullet triangle mesh interface.
-    UniquePtr<TriangleMeshInterface> meshInterface_;
+    ea::unique_ptr<TriangleMeshInterface> meshInterface_;
     /// Bullet triangle mesh collision shape.
-    UniquePtr<btBvhTriangleMeshShape> shape_;
+    ea::unique_ptr<btBvhTriangleMeshShape> shape_;
     /// Bullet triangle info map.
-    UniquePtr<btTriangleInfoMap> infoMap_;
+    ea::unique_ptr<btTriangleInfoMap> infoMap_;
 };
 
 /// Triangle mesh geometry data.
@@ -95,7 +96,7 @@ struct GImpactMeshData : public CollisionGeometryData
     explicit GImpactMeshData(CustomGeometry* custom);
 
     /// Bullet triangle mesh interface.
-    UniquePtr<TriangleMeshInterface> meshInterface_;
+    ea::unique_ptr<TriangleMeshInterface> meshInterface_;
 };
 
 /// Convex hull geometry data.
@@ -107,14 +108,14 @@ struct ConvexData : public CollisionGeometryData
     explicit ConvexData(CustomGeometry* custom);
 
     /// Build the convex hull from vertices.
-    void BuildHull(const PODVector<Vector3>& vertices);
+    void BuildHull(const ea::vector<Vector3>& vertices);
 
     /// Vertex data.
-    SharedArrayPtr<Vector3> vertexData_;
+    ea::shared_array<Vector3> vertexData_;
     /// Number of vertices.
     unsigned vertexCount_{};
     /// Index data.
-    SharedArrayPtr<unsigned> indexData_;
+    ea::shared_array<unsigned> indexData_;
     /// Number of indices.
     unsigned indexCount_{};
 };
@@ -126,7 +127,7 @@ struct HeightfieldData : public CollisionGeometryData
     HeightfieldData(Terrain* terrain, unsigned lodLevel);
 
     /// Height data. On LOD level 0 the original height data will be used.
-    SharedArrayPtr<float> heightData_;
+    ea::shared_array<float> heightData_;
     /// Vertex spacing.
     Vector3 spacing_;
     /// Heightmap size.
@@ -207,7 +208,7 @@ public:
     void SetLodLevel(unsigned lodLevel);
 
     /// Return Bullet collision shape.
-    btCollisionShape* GetCollisionShape() const { return shape_.Get(); }
+    btCollisionShape* GetCollisionShape() const { return shape_.get(); }
 
     /// Return the shared geometry data.
     CollisionGeometryData* GetGeometryData() const { return geometry_; }
@@ -293,7 +294,7 @@ private:
     /// Shared geometry data.
     SharedPtr<CollisionGeometryData> geometry_;
     /// Bullet collision shape.
-    UniquePtr<btCollisionShape> shape_;
+    ea::unique_ptr<btCollisionShape> shape_;
     /// Collision shape type.
     ShapeType shapeType_;
     /// Offset position.

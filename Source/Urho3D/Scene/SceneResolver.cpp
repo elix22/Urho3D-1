@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -38,8 +38,8 @@ SceneResolver::~SceneResolver() = default;
 
 void SceneResolver::Reset()
 {
-    nodes_.Clear();
-    components_.Clear();
+    nodes_.clear();
+    components_.clear();
 }
 
 void SceneResolver::AddNode(unsigned oldID, Node* node)
@@ -57,24 +57,25 @@ void SceneResolver::AddComponent(unsigned oldID, Component* component)
 void SceneResolver::Resolve()
 {
     // Nodes do not have component or node ID attributes, so only have to go through components
-    HashSet<StringHash> noIDAttributes;
-    for (HashMap<unsigned, WeakPtr<Component> >::ConstIterator i = components_.Begin(); i != components_.End(); ++i)
+    ea::hash_set<StringHash> noIDAttributes;
+    for (auto i = components_.begin(); i !=
+        components_.end(); ++i)
     {
-        Component* component = i->second_;
-        if (!component || noIDAttributes.Contains(component->GetType()))
+        Component* component = i->second;
+        if (!component || noIDAttributes.contains(component->GetType()))
             continue;
 
         bool hasIDAttributes = false;
-        const Vector<AttributeInfo>* attributes = component->GetAttributes();
+        const ea::vector<AttributeInfo>* attributes = component->GetAttributes();
         if (!attributes)
         {
-            noIDAttributes.Insert(component->GetType());
+            noIDAttributes.insert(component->GetType());
             continue;
         }
 
-        for (unsigned j = 0; j < attributes->Size(); ++j)
+        for (unsigned j = 0; j < attributes->size(); ++j)
         {
-            const AttributeInfo& info = attributes->At(j);
+            const AttributeInfo& info = attributes->at(j);
             if (info.mode_ & AM_NODEID)
             {
                 hasIDAttributes = true;
@@ -82,15 +83,15 @@ void SceneResolver::Resolve()
 
                 if (oldNodeID)
                 {
-                    HashMap<unsigned, WeakPtr<Node> >::ConstIterator k = nodes_.Find(oldNodeID);
+                    auto k = nodes_.find(oldNodeID);
 
-                    if (k != nodes_.End() && k->second_)
+                    if (k != nodes_.end() && k->second)
                     {
-                        unsigned newNodeID = k->second_->GetID();
+                        unsigned newNodeID = k->second->GetID();
                         component->SetAttribute(j, Variant(newNodeID));
                     }
                     else
-                        URHO3D_LOGWARNING("Could not resolve node ID " + String(oldNodeID));
+                        URHO3D_LOGWARNING("Could not resolve node ID " + ea::to_string(oldNodeID));
                 }
             }
             else if (info.mode_ & AM_COMPONENTID)
@@ -100,15 +101,16 @@ void SceneResolver::Resolve()
 
                 if (oldComponentID)
                 {
-                    HashMap<unsigned, WeakPtr<Component> >::ConstIterator k = components_.Find(oldComponentID);
+                    auto k = components_.find(
+                        oldComponentID);
 
-                    if (k != components_.End() && k->second_)
+                    if (k != components_.end() && k->second)
                     {
-                        unsigned newComponentID = k->second_->GetID();
+                        unsigned newComponentID = k->second->GetID();
                         component->SetAttribute(j, Variant(newComponentID));
                     }
                     else
-                        URHO3D_LOGWARNING("Could not resolve component ID " + String(oldComponentID));
+                        URHO3D_LOGWARNING("Could not resolve component ID " + ea::to_string(oldComponentID));
                 }
             }
             else if (info.mode_ & AM_NODEIDVECTOR)
@@ -117,25 +119,25 @@ void SceneResolver::Resolve()
                 Variant attrValue = component->GetAttribute(j);
                 const VariantVector& oldNodeIDs = attrValue.GetVariantVector();
 
-                if (oldNodeIDs.Size())
+                if (oldNodeIDs.size())
                 {
                     // The first index stores the number of IDs redundantly. This is for editing
                     unsigned numIDs = oldNodeIDs[0].GetUInt();
                     VariantVector newIDs;
-                    newIDs.Push(numIDs);
+                    newIDs.push_back(numIDs);
 
-                    for (unsigned k = 1; k < oldNodeIDs.Size(); ++k)
+                    for (unsigned k = 1; k < oldNodeIDs.size(); ++k)
                     {
                         unsigned oldNodeID = oldNodeIDs[k].GetUInt();
-                        HashMap<unsigned, WeakPtr<Node> >::ConstIterator l = nodes_.Find(oldNodeID);
+                        auto l = nodes_.find(oldNodeID);
 
-                        if (l != nodes_.End() && l->second_)
-                            newIDs.Push(l->second_->GetID());
+                        if (l != nodes_.end() && l->second)
+                            newIDs.push_back(l->second->GetID());
                         else
                         {
                             // If node was not found, retain number of elements, just store ID 0
-                            newIDs.Push(0);
-                            URHO3D_LOGWARNING("Could not resolve node ID " + String(oldNodeID));
+                            newIDs.push_back(0);
+                            URHO3D_LOGWARNING("Could not resolve node ID " + ea::to_string(oldNodeID));
                         }
                     }
 
@@ -146,7 +148,7 @@ void SceneResolver::Resolve()
 
         // If component type had no ID attributes, cache this fact for optimization
         if (!hasIDAttributes)
-            noIDAttributes.Insert(component->GetType());
+            noIDAttributes.insert(component->GetType());
     }
 
     // Attributes have been resolved, so no need to remember the nodes after this

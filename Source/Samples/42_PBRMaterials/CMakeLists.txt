@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2018 the Urho3D project.
+# Copyright (c) 2008-2019 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,8 +21,10 @@
 #
 
 # Emscripten build does not copy the PBR resources, and would not support the shaders
-if (EMSCRIPTEN)
+if (WEB)
     return ()
 endif ()
 
-add_sample (42_PBRMaterials)
+file (GLOB SAMPLE_CODE *.h *.cpp)
+list (APPEND SOURCE_CODE ${SAMPLE_CODE})
+set (SOURCE_CODE "${SOURCE_CODE}" PARENT_SCOPE)

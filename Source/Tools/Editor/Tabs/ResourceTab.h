@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,35 +23,45 @@
 #pragma once
 
 
+#include <EASTL/utility.h>
+
 #include <Toolbox/SystemUI/ResourceBrowser.h>
-#include "Assets/Inspector/ResourceInspector.h"
+#include "Inspector/ResourceInspector.h"
 #include "Tabs/Tab.h"
 
 
 namespace Urho3D
 {
 
+/// Resource browser tab.
 class ResourceTab : public Tab, public IInspectorProvider
 {
     URHO3D_OBJECT(ResourceTab, Tab)
 public:
+    /// Construct.
     explicit ResourceTab(Context* context);
 
+    /// Render content of tab window. Returns false if tab was closed.
     bool RenderWindowContent() override;
-
-    /// Render inspector window.
-    virtual void RenderInspector();
+    /// Clears selection of this tab and it's inspector sub-providers.
+    void ClearSelection() override;
+    /// Render inspector content.
+    void RenderInspector(const char* filter) override;
 
 protected:
-    String GetNewResourcePath(const String& name);
-    template<typename TInspector, typename TResource>
-    void OpenResourceInspector(const String& resourcePath);
+    /// Constructs a name for newly created resource based on specified template name.
+    ea::string GetNewResourcePath(const ea::string& name);
+    /// Select current item in attribute inspector.
+    void SelectCurrentItemInspector();
 
-    String resourcePath_;
-    String resourceSelection_;
+    /// Current open resource path.
+    ea::string resourcePath_;
+    /// Current selected resource file name.
+    ea::string resourceSelection_;
+    /// Resource browser flags.
     ResourceBrowserFlags flags_{RBF_NONE};
-    HashMap<StringHash, SharedPtr<ResourceInspector>> inspectors_;
-    StringHash currentInspector_;
+    /// Inspector provider of current selected resource.
+    ea::pair<SharedPtr<RefCounted>, IInspectorProvider*> inspector_;
 };
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -51,7 +51,7 @@ void ShaderVariation::OnDeviceLost()
 {
     GPUObject::OnDeviceLost();
 
-    compilerOutput_.Clear();
+    compilerOutput_.clear();
 }
 
 void ShaderVariation::Release()
@@ -81,7 +81,7 @@ void ShaderVariation::Release()
         graphics_->CleanupShaderPrograms(this);
     }
 
-    compilerOutput_.Clear();
+    compilerOutput_.clear();
 }
 
 bool ShaderVariation::Create()
@@ -101,18 +101,18 @@ bool ShaderVariation::Create()
         return false;
     }
 
-    const String& originalShaderCode = owner_->GetSourceCode(type_);
-    String shaderCode;
+    const ea::string& originalShaderCode = owner_->GetSourceCode(type_);
+    ea::string shaderCode;
 
     // Check if the shader code contains a version define
-    unsigned verStart = originalShaderCode.Find('#');
+    unsigned verStart = originalShaderCode.find('#');
     unsigned verEnd = 0;
-    if (verStart != String::NPOS)
+    if (verStart != ea::string::npos)
     {
-        if (originalShaderCode.Substring(verStart + 1, 7) == "version")
+        if (originalShaderCode.substr(verStart + 1, 7) == "version")
         {
             verEnd = verStart + 9;
-            while (verEnd < originalShaderCode.Length())
+            while (verEnd < originalShaderCode.length())
             {
                 if (IsDigit((unsigned)originalShaderCode[verEnd]))
                     ++verEnd;
@@ -120,32 +120,43 @@ bool ShaderVariation::Create()
                     break;
             }
             // If version define found, insert it first
-            String versionDefine = originalShaderCode.Substring(verStart, verEnd - verStart);
+            ea::string versionDefine = originalShaderCode.substr(verStart, verEnd - verStart);
             shaderCode += versionDefine + "\n";
         }
     }
     // Force GLSL version 150 if no version define and GL3 is being used
     if (!verEnd && Graphics::GetGL3Support())
+    {
+#ifdef MOBILE_GRAPHICS
+        shaderCode += "#version 300 es\n";
+#else
         shaderCode += "#version 150\n";
+#endif
+    }
+#if defined(DESKTOP_GRAPHICS)
+    shaderCode += "#define DESKTOP_GRAPHICS\n";
+#elif defined(MOBILE_GRAPHICS)
+    shaderCode += "#define MOBILE_GRAPHICS\n";
+#endif
 
     // Distinguish between VS and PS compile in case the shader code wants to include/omit different things
     shaderCode += type_ == VS ? "#define COMPILEVS\n" : "#define COMPILEPS\n";
 
     // Add define for the maximum number of supported bones
-    shaderCode += "#define MAXBONES " + String(Graphics::GetMaxBones()) + "\n";
+    shaderCode += "#define MAXBONES " + ea::to_string(Graphics::GetMaxBones()) + "\n";
 
     // Prepend the defines to the shader code
-    Vector<String> defineVec = defines_.Split(' ');
-    for (unsigned i = 0; i < defineVec.Size(); ++i)
+    ea::vector<ea::string> defineVec = defines_.split(' ');
+    for (unsigned i = 0; i < defineVec.size(); ++i)
     {
         // Add extra space for the checking code below
-        String defineString = "#define " + defineVec[i].Replaced('=', ' ') + " \n";
+        ea::string defineString = "#define " + defineVec[i].replaced('=', ' ') + " \n";
         shaderCode += defineString;
 
         // In debug mode, check that all defines are referenced by the shader code
 #ifdef _DEBUG
-        String defineCheck = defineString.Substring(8, defineString.Find(' ', 8) - 8);
-        if (originalShaderCode.Find(defineCheck) == String::NPOS)
+        ea::string defineCheck = defineString.substr(8, defineString.find(' ', 8) - 8);
+        if (originalShaderCode.find(defineCheck) == ea::string::npos)
             URHO3D_LOGWARNING("Shader " + GetFullName() + " does not use the define " + defineCheck);
 #endif
     }
@@ -162,11 +173,11 @@ bool ShaderVariation::Create()
 
     // When version define found, do not insert it a second time
     if (verEnd > 0)
-        shaderCode += (originalShaderCode.CString() + verEnd);
+        shaderCode += (originalShaderCode.c_str() + verEnd);
     else
         shaderCode += originalShaderCode;
 
-    const char* shaderCStr = shaderCode.CString();
+    const char* shaderCStr = shaderCode.c_str();
     glShaderSource(object_.name_, 1, &shaderCStr, nullptr);
     glCompileShader(object_.name_);
 
@@ -175,28 +186,28 @@ bool ShaderVariation::Create()
     if (!compiled)
     {
         glGetShaderiv(object_.name_, GL_INFO_LOG_LENGTH, &length);
-        compilerOutput_.Resize((unsigned)length);
+        compilerOutput_.resize((unsigned) length);
         int outLength;
         glGetShaderInfoLog(object_.name_, length, &outLength, &compilerOutput_[0]);
         glDeleteShader(object_.name_);
         object_.name_ = 0;
     }
     else
-        compilerOutput_.Clear();
+        compilerOutput_.clear();
 
     return object_.name_ != 0;
 }
 
-void ShaderVariation::SetDefines(const String& defines)
+void ShaderVariation::SetDefines(const ea::string& defines)
 {
     defines_ = defines;
 }
 
 // These methods are no-ops for OpenGL
-bool ShaderVariation::LoadByteCode(const String& binaryShaderName) { return false; }
+bool ShaderVariation::LoadByteCode(const ea::string& binaryShaderName) { return false; }
 bool ShaderVariation::Compile() { return false; }
 void ShaderVariation::ParseParameters(unsigned char* bufData, unsigned bufSize) {}
-void ShaderVariation::SaveByteCode(const String& binaryShaderName) {}
+void ShaderVariation::SaveByteCode(const ea::string& binaryShaderName) {}
 void ShaderVariation::CalculateConstantBufferSizes() {}
 
 }

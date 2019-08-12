@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -53,13 +53,13 @@ void SpriteSheet2D::RegisterObject(Context* context)
 
 bool SpriteSheet2D::BeginLoad(Deserializer& source)
 {
-    if (GetName().Empty())
+    if (GetName().empty())
         SetName(source.GetName());
 
-    loadTextureName_.Clear();
-    spriteMapping_.Clear();
+    loadTextureName_.clear();
+    spriteMapping_.clear();
 
-    String extension = GetExtension(source.GetName());
+    ea::string extension = GetExtension(source.GetName());
     if (extension == ".plist")
         return BeginLoadFromPListFile(source);
 
@@ -90,11 +90,11 @@ bool SpriteSheet2D::EndLoad()
 
 void SpriteSheet2D::SetTexture(Texture2D* texture)
 {
-    loadTextureName_.Clear();
+    loadTextureName_.clear();
     texture_ = texture;
 }
 
-void SpriteSheet2D::DefineSprite(const String& name, const IntRect& rectangle, const Vector2& hotSpot, const IntVector2& offset)
+void SpriteSheet2D::DefineSprite(const ea::string& name, const IntRect& rectangle, const Vector2& hotSpot, const IntVector2& offset)
 {
     if (!texture_)
         return;
@@ -102,7 +102,7 @@ void SpriteSheet2D::DefineSprite(const String& name, const IntRect& rectangle, c
     if (GetSprite(name))
         return;
 
-    SharedPtr<Sprite2D> sprite(new Sprite2D(context_));
+    SharedPtr<Sprite2D> sprite(context_->CreateObject<Sprite2D>());
     sprite->SetName(name);
     sprite->SetTexture(texture_);
     sprite->SetRectangle(rectangle);
@@ -113,18 +113,18 @@ void SpriteSheet2D::DefineSprite(const String& name, const IntRect& rectangle, c
     spriteMapping_[name] = sprite;
 }
 
-Sprite2D* SpriteSheet2D::GetSprite(const String& name) const
+Sprite2D* SpriteSheet2D::GetSprite(const ea::string& name) const
 {
-    HashMap<String, SharedPtr<Sprite2D> >::ConstIterator i = spriteMapping_.Find(name);
-    if (i == spriteMapping_.End())
+    auto i = spriteMapping_.find(name);
+    if (i == spriteMapping_.end())
         return nullptr;
 
-    return i->second_;
+    return i->second;
 }
 
 bool SpriteSheet2D::BeginLoadFromPListFile(Deserializer& source)
 {
-    loadPListFile_ = new PListFile(context_);
+    loadPListFile_ = context_->CreateObject<PListFile>();
     if (!loadPListFile_->Load(source))
     {
         URHO3D_LOGERROR("Could not load sprite sheet");
@@ -135,8 +135,23 @@ bool SpriteSheet2D::BeginLoadFromPListFile(Deserializer& source)
     SetMemoryUse(source.GetSize());
 
     const PListValueMap& root = loadPListFile_->GetRoot();
-    const PListValueMap& metadata = root["metadata"]->GetValueMap();
-    const String& textureFileName = metadata["realTextureFileName"]->GetString();
+
+    auto rootIt = root.find("metadata");
+    if (rootIt != root.end())
+    {
+        URHO3D_LOGERROR("Sprite sheet does not have metadata");
+        return false;
+    }
+
+    const PListValueMap& metadata = rootIt->second.GetValueMap();
+    auto metadataIt = metadata.find("realTextureFileName");
+    if (metadataIt != metadata.end())
+    {
+        URHO3D_LOGERROR("Sprite sheet does not have realTextureFileName");
+        return false;
+    }
+
+    const ea::string& textureFileName = metadataIt->second.GetString();
 
     // If we're async loading, request the texture now. Finish during EndLoad().
     loadTextureName_ = GetParentPath(GetName()) + textureFileName;
@@ -154,34 +169,63 @@ bool SpriteSheet2D::EndLoadFromPListFile()
     {
         URHO3D_LOGERROR("Could not load texture " + loadTextureName_);
         loadPListFile_.Reset();
-        loadTextureName_.Clear();
+        loadTextureName_.clear();
         return false;
     }
 
     const PListValueMap& root = loadPListFile_->GetRoot();
-    const PListValueMap& frames = root["frames"]->GetValueMap();
-    for (PListValueMap::ConstIterator i = frames.Begin(); i != frames.End(); ++i)
+    auto framesIt = root.find("frames");
+    if (framesIt == root.end())
     {
-        String name = i->first_.Split('.')[0];
+        URHO3D_LOGWARNING("Sprite does not have frames section");
+        return false;
+    }
 
-        const PListValueMap& frameInfo = i->second_.GetValueMap();
-        if (frameInfo["rotated"]->GetBool())
+    const PListValueMap& frames = framesIt->second.GetValueMap();
+    for (auto i = frames.begin(); i != frames.end(); ++i)
+    {
+        ea::string name = i->first.split('.')[0];
+
+        const PListValueMap& frameInfo = i->second.GetValueMap();
+        auto rotatedIt = frameInfo.find("rotated");
+        if (rotatedIt != frameInfo.end() && rotatedIt->second.GetBool())
         {
             URHO3D_LOGWARNING("Rotated sprite is not support now");
             continue;
         }
 
-        IntRect rectangle = frameInfo["frame"]->GetIntRect();
+        auto frameIt = frameInfo.find("frame");
+        if (frameIt == frameInfo.end())
+        {
+            URHO3D_LOGERROR("Sprite is missing frame section");
+            continue;
+        }
+
+        IntRect rectangle = frameIt->second.GetIntRect();
         Vector2 hotSpot(0.5f, 0.5f);
         IntVector2 offset(0, 0);
 
-        IntRect sourceColorRect = frameInfo["sourceColorRect"]->GetIntRect();
+        auto sourceColorRectIt = frameInfo.find("sourceColorRect");
+        if (sourceColorRectIt == frameInfo.end())
+        {
+            URHO3D_LOGERROR("Sprite is missing sourceColorRect section");
+            continue;
+        }
+
+        IntRect sourceColorRect = sourceColorRectIt->second.GetIntRect();
         if (sourceColorRect.left_ != 0 && sourceColorRect.top_ != 0)
         {
             offset.x_ = -sourceColorRect.left_;
             offset.y_ = -sourceColorRect.top_;
 
-            IntVector2 sourceSize = frameInfo["sourceSize"]->GetIntVector2();
+            auto sourceSizeIt = frameInfo.find("sourceSize");
+            if (sourceSizeIt == frameInfo.end())
+            {
+                URHO3D_LOGERROR("Sprite is missing sourceSizeIt section");
+                continue;
+            }
+
+            IntVector2 sourceSize = sourceSizeIt->second.GetIntVector2();
             hotSpot.x_ = (offset.x_ + sourceSize.x_ / 2.f) / rectangle.Width();
             hotSpot.y_ = 1.0f - (offset.y_ + sourceSize.y_ / 2.f) / rectangle.Height();
         }
@@ -190,13 +234,13 @@ bool SpriteSheet2D::EndLoadFromPListFile()
     }
 
     loadPListFile_.Reset();
-    loadTextureName_.Clear();
+    loadTextureName_.clear();
     return true;
 }
 
 bool SpriteSheet2D::BeginLoadFromXMLFile(Deserializer& source)
 {
-    loadXMLFile_ = new XMLFile(context_);
+    loadXMLFile_ = context_->CreateObject<XMLFile>();
     if (!loadXMLFile_->Load(source))
     {
         URHO3D_LOGERROR("Could not load sprite sheet");
@@ -230,7 +274,7 @@ bool SpriteSheet2D::EndLoadFromXMLFile()
     {
         URHO3D_LOGERROR("Could not load texture " + loadTextureName_);
         loadXMLFile_.Reset();
-        loadTextureName_.Clear();
+        loadTextureName_.clear();
         return false;
     }
 
@@ -238,7 +282,7 @@ bool SpriteSheet2D::EndLoadFromXMLFile()
     XMLElement subTextureElem = rootElem.GetChild("SubTexture");
     while (subTextureElem)
     {
-        String name = subTextureElem.GetAttribute("name");
+        ea::string name = subTextureElem.GetAttribute("name");
 
         int x = subTextureElem.GetInt("x");
         int y = subTextureElem.GetInt("y");
@@ -264,13 +308,13 @@ bool SpriteSheet2D::EndLoadFromXMLFile()
     }
 
     loadXMLFile_.Reset();
-    loadTextureName_.Clear();
+    loadTextureName_.clear();
     return true;
 }
 
 bool SpriteSheet2D::BeginLoadFromJSONFile(Deserializer& source)
 {
-    loadJSONFile_ = new JSONFile(context_);
+    loadJSONFile_ = context_->CreateObject<JSONFile>();
     if (!loadJSONFile_->Load(source))
     {
         URHO3D_LOGERROR("Could not load sprite sheet");
@@ -304,17 +348,17 @@ bool SpriteSheet2D::EndLoadFromJSONFile()
     {
         URHO3D_LOGERROR("Could not load texture " + loadTextureName_);
         loadJSONFile_.Reset();
-        loadTextureName_.Clear();
+        loadTextureName_.clear();
         return false;
     }
 
     JSONValue rootVal = loadJSONFile_->GetRoot();
     JSONArray subTextureArray = rootVal.Get("subtextures").GetArray();
 
-    for (unsigned i = 0; i < subTextureArray.Size(); i++)
+    for (unsigned i = 0; i < subTextureArray.size(); i++)
     {
-        const JSONValue& subTextureVal = subTextureArray.At(i);
-        String name = subTextureVal.Get("name").GetString();
+        const JSONValue& subTextureVal = subTextureArray.at(i);
+        ea::string name = subTextureVal.Get("name").GetString();
 
         int x = subTextureVal.Get("x").GetInt();
         int y = subTextureVal.Get("y").GetInt();
@@ -342,7 +386,7 @@ bool SpriteSheet2D::EndLoadFromJSONFile()
     }
 
     loadJSONFile_.Reset();
-    loadTextureName_.Clear();
+    loadTextureName_.clear();
     return true;
 }
 

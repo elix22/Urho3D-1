@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -40,37 +40,39 @@ public:
     ~Localization() override;
 
     /// Return the number of languages.
-    int GetNumLanguages() const { return (int)languages_.Size(); }
+    int GetNumLanguages() const { return (int) languages_.size(); }
 
     /// Return the index number of current language. The index is determined by the order of loading.
     int GetLanguageIndex() const { return languageIndex_; }
 
     /// Return the index number of language. The index is determined by the order of loading.
-    int GetLanguageIndex(const String& language);
+    int GetLanguageIndex(const ea::string& language);
     /// Return the name of current language.
-    String GetLanguage();
+    ea::string GetLanguage();
     /// Return the name of language.
-    String GetLanguage(int index);
+    ea::string GetLanguage(int index);
     /// Set current language.
     void SetLanguage(int index);
     /// Set current language.
-    void SetLanguage(const String& language);
-    /// Return a string in the current language. Returns String::EMPTY if id is empty. Returns id if translation is not found and logs a warning. Optionally specify index of lanuguage.
-    String Get(const String& id, int index=-1);
+    void SetLanguage(const ea::string& language);
+    /// Return a string in the current language. Returns EMPTY_STRING if id is empty. Returns id if translation is not found and logs a warning.
+    ea::string Get(const ea::string& id, int index=-1);
     /// Clear all loaded strings.
     void Reset();
-    /// Load strings from JSONValue.
-    void LoadJSON(const JSONValue& source);
     /// Load strings from JSONFile. The file should be UTF8 without BOM.
-    void LoadJSONFile(const String& name);
+    void LoadJSONFile(const ea::string& name, const ea::string language = EMPTY_STRING);
+    /// Load strings from JSONValue.
+    void LoadMultipleLanguageJSON(const JSONValue& source);
+    /// Load strings from JSONValue for specific language.
+    void LoadSingleLanguageJSON(const JSONValue& source, const ea::string& language = EMPTY_STRING);
 
 private:
     /// Language names.
-    Vector<String> languages_;
+    ea::vector<ea::string> languages_;
     /// Index of current language.
     int languageIndex_;
     /// Storage strings: <Language <StringId, Value> >.
-    HashMap<StringHash, HashMap<StringHash, String> > strings_;
+    ea::unordered_map<StringHash, ea::unordered_map<StringHash, ea::string> > strings_;
 };
 
 }

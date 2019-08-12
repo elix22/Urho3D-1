@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -45,7 +45,7 @@ FontFace::~FontFace()
     {
         // When a face is unloaded, deduct the used texture data size from the parent font
         unsigned totalTextureSize = 0;
-        for (unsigned i = 0; i < textures_.Size(); ++i)
+        for (unsigned i = 0; i < textures_.size(); ++i)
             totalTextureSize += textures_[i]->GetWidth() * textures_[i]->GetHeight();
         font_->SetMemoryUse(font_->GetMemoryUse() - totalTextureSize);
     }
@@ -53,10 +53,10 @@ FontFace::~FontFace()
 
 const FontGlyph* FontFace::GetGlyph(unsigned c)
 {
-    HashMap<unsigned, FontGlyph>::Iterator i = glyphMapping_.Find(c);
-    if (i != glyphMapping_.End())
+    auto i = glyphMapping_.find(c);
+    if (i != glyphMapping_.end())
     {
-        FontGlyph& glyph = i->second_;
+        FontGlyph& glyph = i->second;
         glyph.used_ = true;
         return &glyph;
     }
@@ -66,7 +66,7 @@ const FontGlyph* FontFace::GetGlyph(unsigned c)
 
 float FontFace::GetKerning(unsigned c, unsigned d) const
 {
-    if (kerningMapping_.Empty())
+    if (kerningMapping_.empty())
         return 0;
 
     if (c == '\n' || d == '\n')
@@ -77,16 +77,16 @@ float FontFace::GetKerning(unsigned c, unsigned d) const
 
     unsigned value = (c << 16u) + d;
 
-    HashMap<unsigned, float>::ConstIterator i = kerningMapping_.Find(value);
-    if (i != kerningMapping_.End())
-        return i->second_;
+    auto i = kerningMapping_.find(value);
+    if (i != kerningMapping_.end())
+        return i->second;
 
     return 0;
 }
 
 bool FontFace::IsDataLost() const
 {
-    for (unsigned i = 0; i < textures_.Size(); ++i)
+    for (unsigned i = 0; i < textures_.size(); ++i)
     {
         if (textures_[i]->IsDataLost())
             return true;
@@ -97,7 +97,7 @@ bool FontFace::IsDataLost() const
 
 SharedPtr<Texture2D> FontFace::CreateFaceTexture()
 {
-    SharedPtr<Texture2D> texture(new Texture2D(font_->GetContext()));
+    SharedPtr<Texture2D> texture(font_->GetContext()->CreateObject<Texture2D>());
     texture->SetMipsToSkip(QUALITY_LOW, 0); // No quality reduction
     texture->SetNumLevels(1); // No mipmaps
     texture->SetAddressMode(COORD_U, ADDRESS_BORDER);

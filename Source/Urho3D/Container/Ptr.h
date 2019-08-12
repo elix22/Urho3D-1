@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,10 @@
 
 #pragma once
 
+#include <EASTL/internal/thread_support.h>
+#include <EASTL/utility.h>
+
 #include "../Container/RefCounted.h"
-#include "../Container/Swap.h"
 
 #include <cassert>
 #include <cstddef>
@@ -145,10 +147,14 @@ public:
     operator T*() const { return ptr_; }    // NOLINT(google-explicit-constructor)
 
     /// Swap with another SharedPtr.
-    void Swap(SharedPtr& rhs) { Urho3D::Swap(ptr_, rhs.ptr_); }
+    void Swap(SharedPtr<T>& rhs) { ea::swap(ptr_, rhs.ptr_); }
 
-    /// Reset to null and release the object reference.
-    void Reset() { ReleaseRef(); }
+    /// Reset with another pointer.
+    void Reset(T* ptr = nullptr)
+    {
+        SharedPtr<T> copy(ptr);
+        Swap(copy);
+    }
 
     /// Detach without destroying the object even if the refcount goes zero. To be used for scripting language interoperation.
     T* Detach()
@@ -157,9 +163,9 @@ public:
         if (ptr_)
         {
             RefCount* refCount = RefCountPtr();
-            ++refCount->refs_; // 2 refs
+            ea::Internal::atomic_increment(&refCount->refs_); // 2 refs
             Reset(); // 1 ref
-            --refCount->refs_; // 0 refs
+            ea::Internal::atomic_decrement(&refCount->refs_); // 0 refs
         }
         return ptr;
     }
@@ -404,8 +410,19 @@ public:
     /// Convert to a raw pointer, null if the object is expired.
     operator T*() const { return Get(); }   // NOLINT(google-explicit-constructor)
 
-    /// Reset to null and release the weak reference.
-    void Reset() { ReleaseRef(); }
+    /// Swap with another WeakPtr.
+    void Swap(WeakPtr<T>& rhs)
+    {
+        ea::swap(ptr_, rhs.ptr_);
+        ea::swap(refCount_, rhs.refCount_);
+    }
+
+    /// Reset with another pointer.
+    void Reset(T* ptr = nullptr)
+    {
+        WeakPtr<T> copy(ptr);
+        Swap(copy);
+    }
 
     /// Perform a static cast from a weak pointer of another type.
     template <class U> void StaticCast(const WeakPtr<U>& rhs)
@@ -467,7 +484,7 @@ private:
         if (refCount_)
         {
             assert(refCount_->weakRefs_ >= 0);
-            ++(refCount_->weakRefs_);
+            ea::Internal::atomic_increment(&refCount_->weakRefs_);
         }
     }
 
@@ -477,10 +494,10 @@ private:
         if (refCount_)
         {
             assert(refCount_->weakRefs_ > 0);
-            --(refCount_->weakRefs_);
+            int weakRefs = ea::Internal::atomic_decrement(&refCount_->weakRefs_);
 
-            if (Expired() && !refCount_->weakRefs_)
-                delete refCount_;
+            if (Expired() && weakRefs == 0)
+                RefCount::Free(refCount_);
         }
 
         ptr_ = nullptr;
@@ -492,149 +509,6 @@ private:
     /// Pointer to the RefCount structure.
     RefCount* refCount_;
 };
-
-/// Perform a static cast from one weak pointer type to another.
-template <class T, class U> WeakPtr<T> StaticCast(const WeakPtr<U>& ptr)
-{
-    WeakPtr<T> ret;
-    ret.StaticCast(ptr);
-    return ret;
-}
-
-/// Perform a dynamic cast from one weak pointer type to another.
-template <class T, class U> WeakPtr<T> DynamicCast(const WeakPtr<U>& ptr)
-{
-    WeakPtr<T> ret;
-    ret.DynamicCast(ptr);
-    return ret;
-}
-
-/// Delete object of type T. T must be complete. See boost::checked_delete.
-template<class T> inline void CheckedDelete(T* x)
-{
-    // intentionally complex - simplification causes regressions
-    using type_must_be_complete = char[sizeof(T) ? 1 : -1];
-    (void) sizeof(type_must_be_complete);
-    delete x;
-}
-
-/// Unique pointer template class.
-template <class T> class UniquePtr
-{
-public:
-    /// Construct empty.
-    UniquePtr() : ptr_(nullptr) { }
-
-    /// Construct from pointer.
-    explicit UniquePtr(T* ptr) : ptr_(ptr) { }
-
-    /// Prevent copy construction.
-    UniquePtr(const UniquePtr&) = delete;
-    /// Prevent assignment.
-    UniquePtr& operator=(const UniquePtr&) = delete;
-
-    /// Assign from pointer.
-    UniquePtr& operator = (T* ptr)
-    {
-        Reset(ptr);
-        return *this;
-    }
-
-    /// Construct empty.
-    UniquePtr(std::nullptr_t) { }   // NOLINT(google-explicit-constructor)
-
-    /// Move-construct from UniquePtr.
-    UniquePtr(UniquePtr&& up) noexcept :
-        ptr_(up.Detach()) {}
-
-    /// Move-assign from UniquePtr.
-    UniquePtr& operator =(UniquePtr&& up) noexcept
-    {
-        Reset(up.Detach());
-        return *this;
-    }
-
-    /// Point to the object.
-    T* operator ->() const
-    {
-        assert(ptr_);
-        return ptr_;
-    }
-
-    /// Dereference the object.
-    T& operator *() const
-    {
-        assert(ptr_);
-        return *ptr_;
-    }
-
-    /// Test for less than with another unique pointer.
-    template <class U>
-    bool operator <(const UniquePtr<U>& rhs) const { return ptr_ < rhs.ptr_; }
-
-    /// Test for equality with another unique pointer.
-    template <class U>
-    bool operator ==(const UniquePtr<U>& rhs) const { return ptr_ == rhs.ptr_; }
-
-    /// Test for inequality with another unique pointer.
-    template <class U>
-    bool operator !=(const UniquePtr<U>& rhs) const { return ptr_ != rhs.ptr_; }
-
-    /// Cast pointer to bool.
-    operator bool() const { return !!ptr_; }    // NOLINT(google-explicit-constructor)
-
-    /// Swap with another UniquePtr.
-    void Swap(UniquePtr& up) { Urho3D::Swap(ptr_, up.ptr_); }
-
-    /// Detach pointer from UniquePtr without destroying.
-    T* Detach()
-    {
-        T* ptr = ptr_;
-        ptr_ = nullptr;
-        return ptr;
-    }
-
-    /// Check if the pointer is null.
-    bool Null() const { return ptr_ == 0; }
-
-    /// Check if the pointer is not null.
-    bool NotNull() const { return ptr_ != 0; }
-
-    /// Return the raw pointer.
-    T* Get() const { return ptr_; }
-
-    /// Reset.
-    void Reset(T* ptr = nullptr)
-    {
-        CheckedDelete(ptr_);
-        ptr_ = ptr;
-    }
-
-    /// Return hash value for HashSet & HashMap.
-    unsigned ToHash() const { return (unsigned)((size_t)ptr_ / sizeof(T)); }
-
-    /// Destruct.
-    ~UniquePtr()
-    {
-        Reset();
-    }
-
-private:
-    T* ptr_;
-
-};
-
-/// Swap two UniquePtr-s.
-template <class T> void Swap(UniquePtr<T>& first, UniquePtr<T>& second)
-{
-    first.Swap(second);
-}
-
-/// Construct UniquePtr.
-template <class T, class ... Args> UniquePtr<T> MakeUnique(Args && ... args)
-{
-    return UniquePtr<T>(new T(std::forward<Args>(args)...));
-}
 
 /// Construct SharedPtr.
 template <class T, class ... Args> SharedPtr<T> MakeShared(Args && ... args)

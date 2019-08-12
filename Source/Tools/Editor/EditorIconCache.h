@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -43,11 +43,11 @@ public:
     /// Reads EditorIcons.xml and stores information for later use by imgui.
     explicit EditorIconCache(Context* context);
     /// Return pointer to icon data.
-    IconData* GetIconData(const String& name);
+    IconData* GetIconData(const ea::string& name);
 
 protected:
     /// Editor icon cache.
-    HashMap<String, IconData> iconCache_;
+    ea::unordered_map<ea::string, IconData> iconCache_;
 };
 
 }

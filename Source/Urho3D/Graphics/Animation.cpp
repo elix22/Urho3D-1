@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #include "../Precompiled.h"
 
-#include "../Container/Sort.h"
+#include <EASTL/sort.h>
+
 #include "../Core/Context.h"
 #include "../Core/Profiler.h"
 #include "../Graphics/Animation.h"
@@ -39,54 +40,54 @@
 namespace Urho3D
 {
 
-inline bool CompareTriggers(AnimationTriggerPoint& lhs, AnimationTriggerPoint& rhs)
+inline bool CompareTriggers(const AnimationTriggerPoint& lhs, const AnimationTriggerPoint& rhs)
 {
     return lhs.time_ < rhs.time_;
 }
 
-inline bool CompareKeyFrames(AnimationKeyFrame& lhs, AnimationKeyFrame& rhs)
+inline bool CompareKeyFrames(const AnimationKeyFrame& lhs, const AnimationKeyFrame& rhs)
 {
     return lhs.time_ < rhs.time_;
 }
 
 void AnimationTrack::SetKeyFrame(unsigned index, const AnimationKeyFrame& keyFrame)
 {
-    if (index < keyFrames_.Size())
+    if (index < keyFrames_.size())
     {
         keyFrames_[index] = keyFrame;
-        Urho3D::Sort(keyFrames_.Begin(), keyFrames_.End(), CompareKeyFrames);
+        ea::quick_sort(keyFrames_.begin(), keyFrames_.end(), CompareKeyFrames);
     }
-    else if (index == keyFrames_.Size())
+    else if (index == keyFrames_.size())
         AddKeyFrame(keyFrame);
 }
 
 void AnimationTrack::AddKeyFrame(const AnimationKeyFrame& keyFrame)
 {
-    bool needSort = keyFrames_.Size() ? keyFrames_.Back().time_ > keyFrame.time_ : false;
-    keyFrames_.Push(keyFrame);
+    bool needSort = keyFrames_.size() ? keyFrames_.back().time_ > keyFrame.time_ : false;
+    keyFrames_.push_back(keyFrame);
     if (needSort)
-        Urho3D::Sort(keyFrames_.Begin(), keyFrames_.End(), CompareKeyFrames);
+        ea::quick_sort(keyFrames_.begin(), keyFrames_.end(), CompareKeyFrames);
 }
 
 void AnimationTrack::InsertKeyFrame(unsigned index, const AnimationKeyFrame& keyFrame)
 {
-    keyFrames_.Insert(index, keyFrame);
-    Urho3D::Sort(keyFrames_.Begin(), keyFrames_.End(), CompareKeyFrames);
+    keyFrames_.insert_at(index, keyFrame);
+    ea::quick_sort(keyFrames_.begin(), keyFrames_.end(), CompareKeyFrames);
 }
 
 void AnimationTrack::RemoveKeyFrame(unsigned index)
 {
-    keyFrames_.Erase(index);
+    keyFrames_.erase_at(index);
 }
 
 void AnimationTrack::RemoveAllKeyFrames()
 {
-    keyFrames_.Clear();
+    keyFrames_.clear();
 }
 
 AnimationKeyFrame* AnimationTrack::GetKeyFrame(unsigned index)
 {
-    return index < keyFrames_.Size() ? &keyFrames_[index] : nullptr;
+    return index < keyFrames_.size() ? &keyFrames_[index] : nullptr;
 }
 
 void AnimationTrack::GetKeyFrameIndex(float time, unsigned& index) const
@@ -94,15 +95,15 @@ void AnimationTrack::GetKeyFrameIndex(float time, unsigned& index) const
     if (time < 0.0f)
         time = 0.0f;
 
-    if (index >= keyFrames_.Size())
-        index = keyFrames_.Size() - 1;
+    if (index >= keyFrames_.size())
+        index = keyFrames_.size() - 1;
 
     // Check for being too far ahead
     while (index && time < keyFrames_[index].time_)
         --index;
 
     // Check for being too far behind
-    while (index < keyFrames_.Size() - 1 && time >= keyFrames_[index + 1].time_)
+    while (index < keyFrames_.size() - 1 && time >= keyFrames_[index + 1].time_)
         ++index;
 }
 
@@ -134,7 +135,7 @@ bool Animation::BeginLoad(Deserializer& source)
     animationName_ = source.ReadString();
     animationNameHash_ = animationName_;
     length_ = source.ReadFloat();
-    tracks_.Clear();
+    tracks_.clear();
 
     unsigned tracks = source.ReadUInt();
     memoryUse += tracks * sizeof(AnimationTrack);
@@ -146,7 +147,7 @@ bool Animation::BeginLoad(Deserializer& source)
         newTrack->channelMask_ = AnimationChannelFlags(source.ReadUByte());
 
         unsigned keyFrames = source.ReadUInt();
-        newTrack->keyFrames_.Resize(keyFrames);
+        newTrack->keyFrames_.resize(keyFrames);
         memoryUse += keyFrames * sizeof(AnimationKeyFrame);
 
         // Read keyframes of the track
@@ -165,7 +166,7 @@ bool Animation::BeginLoad(Deserializer& source)
 
     // Optionally read triggers from an XML file
     auto* cache = GetSubsystem<ResourceCache>();
-    String xmlName = ReplaceExtension(GetName(), ".xml");
+    ea::string xmlName = ReplaceExtension(GetName(), ".xml");
 
     SharedPtr<XMLFile> file(cache->GetTempResource<XMLFile>(xmlName, false));
     if (file)
@@ -181,13 +182,13 @@ bool Animation::BeginLoad(Deserializer& source)
 
         LoadMetadataFromXML(rootElem);
 
-        memoryUse += triggers_.Size() * sizeof(AnimationTriggerPoint);
+        memoryUse += triggers_.size() * sizeof(AnimationTriggerPoint);
         SetMemoryUse(memoryUse);
         return true;
     }
 
     // Optionally read triggers from a JSON file
-    String jsonName = ReplaceExtension(GetName(), ".json");
+    ea::string jsonName = ReplaceExtension(GetName(), ".json");
 
     SharedPtr<JSONFile> jsonFile(cache->GetTempResource<JSONFile>(jsonName, false));
     if (jsonFile)
@@ -195,9 +196,9 @@ bool Animation::BeginLoad(Deserializer& source)
         const JSONValue& rootVal = jsonFile->GetRoot();
         const JSONArray& triggerArray = rootVal.Get("triggers").GetArray();
 
-        for (unsigned i = 0; i < triggerArray.Size(); i++)
+        for (unsigned i = 0; i < triggerArray.size(); i++)
         {
-            const JSONValue& triggerValue = triggerArray.At(i);
+            const JSONValue& triggerValue = triggerArray.at(i);
             JSONValue normalizedTimeValue = triggerValue.Get("normalizedTime");
             if (!normalizedTimeValue.IsNull())
                 AddTrigger(normalizedTimeValue.GetFloat(), true, triggerValue.GetVariant());
@@ -212,7 +213,7 @@ bool Animation::BeginLoad(Deserializer& source)
         const JSONArray& metadataArray = rootVal.Get("metadata").GetArray();
         LoadMetadataFromJSON(metadataArray);
 
-        memoryUse += triggers_.Size() * sizeof(AnimationTriggerPoint);
+        memoryUse += triggers_.size() * sizeof(AnimationTriggerPoint);
         SetMemoryUse(memoryUse);
         return true;
     }
@@ -229,16 +230,16 @@ bool Animation::Save(Serializer& dest) const
     dest.WriteFloat(length_);
 
     // Write tracks
-    dest.WriteUInt(tracks_.Size());
-    for (HashMap<StringHash, AnimationTrack>::ConstIterator i = tracks_.Begin(); i != tracks_.End(); ++i)
+    dest.WriteUInt(tracks_.size());
+    for (auto i = tracks_.begin(); i != tracks_.end(); ++i)
     {
-        const AnimationTrack& track = i->second_;
+        const AnimationTrack& track = i->second;
         dest.WriteString(track.name_);
         dest.WriteUByte(track.channelMask_);
-        dest.WriteUInt(track.keyFrames_.Size());
+        dest.WriteUInt(track.keyFrames_.size());
 
         // Write keyframes of the track
-        for (unsigned j = 0; j < track.keyFrames_.Size(); ++j)
+        for (unsigned j = 0; j < track.keyFrames_.size(); ++j)
         {
             const AnimationKeyFrame& keyFrame = track.keyFrames_[j];
             dest.WriteFloat(keyFrame.time_);
@@ -252,17 +253,17 @@ bool Animation::Save(Serializer& dest) const
     }
 
     // If triggers have been defined, write an XML file for them
-    if (!triggers_.Empty() || HasMetadata())
+    if (!triggers_.empty() || HasMetadata())
     {
         auto* destFile = dynamic_cast<File*>(&dest);
         if (destFile)
         {
-            String xmlName = ReplaceExtension(destFile->GetName(), ".xml");
+            ea::string xmlName = ReplaceExtension(destFile->GetName(), ".xml");
 
-            SharedPtr<XMLFile> xml(new XMLFile(context_));
+            SharedPtr<XMLFile> xml(context_->CreateObject<XMLFile>());
             XMLElement rootElem = xml->CreateRoot("animation");
 
-            for (unsigned i = 0; i < triggers_.Size(); ++i)
+            for (unsigned i = 0; i < triggers_.size(); ++i)
             {
                 XMLElement triggerElem = rootElem.CreateChild("trigger");
                 triggerElem.SetFloat("time", triggers_[i].time_);
@@ -281,7 +282,7 @@ bool Animation::Save(Serializer& dest) const
     return true;
 }
 
-void Animation::SetAnimationName(const String& name)
+void Animation::SetAnimationName(const ea::string& name)
 {
     animationName_ = name;
     animationNameHash_ = StringHash(name);
@@ -292,7 +293,7 @@ void Animation::SetLength(float length)
     length_ = Max(length, 0.0f);
 }
 
-AnimationTrack* Animation::CreateTrack(const String& name)
+AnimationTrack* Animation::CreateTrack(const ea::string& name)
 {
     /// \todo When tracks / keyframes are created dynamically, memory use is not updated
     StringHash nameHash(name);
@@ -306,12 +307,12 @@ AnimationTrack* Animation::CreateTrack(const String& name)
     return &newTrack;
 }
 
-bool Animation::RemoveTrack(const String& name)
+bool Animation::RemoveTrack(const ea::string& name)
 {
-    HashMap<StringHash, AnimationTrack>::Iterator i = tracks_.Find(StringHash(name));
-    if (i != tracks_.End())
+    auto i = tracks_.find(StringHash(name));
+    if (i != tracks_.end())
     {
-        tracks_.Erase(i);
+        tracks_.erase(i);
         return true;
     }
     else
@@ -320,24 +321,24 @@ bool Animation::RemoveTrack(const String& name)
 
 void Animation::RemoveAllTracks()
 {
-    tracks_.Clear();
+    tracks_.clear();
 }
 
 void Animation::SetTrigger(unsigned index, const AnimationTriggerPoint& trigger)
 {
-    if (index == triggers_.Size())
+    if (index == triggers_.size())
         AddTrigger(trigger);
-    else if (index < triggers_.Size())
+    else if (index < triggers_.size())
     {
         triggers_[index] = trigger;
-        Sort(triggers_.Begin(), triggers_.End(), CompareTriggers);
+        ea::quick_sort(triggers_.begin(), triggers_.end(), CompareTriggers);
     }
 }
 
 void Animation::AddTrigger(const AnimationTriggerPoint& trigger)
 {
-    triggers_.Push(trigger);
-    Sort(triggers_.Begin(), triggers_.End(), CompareTriggers);
+    triggers_.push_back(trigger);
+    ea::quick_sort(triggers_.begin(), triggers_.end(), CompareTriggers);
 }
 
 void Animation::AddTrigger(float time, bool timeIsNormalized, const Variant& data)
@@ -345,30 +346,30 @@ void Animation::AddTrigger(float time, bool timeIsNormalized, const Variant& dat
     AnimationTriggerPoint newTrigger;
     newTrigger.time_ = timeIsNormalized ? time * length_ : time;
     newTrigger.data_ = data;
-    triggers_.Push(newTrigger);
+    triggers_.push_back(newTrigger);
 
-    Sort(triggers_.Begin(), triggers_.End(), CompareTriggers);
+    ea::quick_sort(triggers_.begin(), triggers_.end(), CompareTriggers);
 }
 
 void Animation::RemoveTrigger(unsigned index)
 {
-    if (index < triggers_.Size())
-        triggers_.Erase(index);
+    if (index < triggers_.size())
+        triggers_.erase_at(index);
 }
 
 void Animation::RemoveAllTriggers()
 {
-    triggers_.Clear();
+    triggers_.clear();
 }
 
 void Animation::SetNumTriggers(unsigned num)
 {
-    triggers_.Resize(num);
+    triggers_.resize(num);
 }
 
-SharedPtr<Animation> Animation::Clone(const String& cloneName) const
+SharedPtr<Animation> Animation::Clone(const ea::string& cloneName) const
 {
-    SharedPtr<Animation> ret(new Animation(context_));
+    SharedPtr<Animation> ret(context_->CreateObject<Animation>());
 
     ret->SetName(cloneName);
     ret->SetAnimationName(animationName_);
@@ -387,10 +388,10 @@ AnimationTrack* Animation::GetTrack(unsigned index)
         return nullptr;
 
     int j = 0;
-    for(HashMap<StringHash, AnimationTrack>::Iterator i = tracks_.Begin(); i != tracks_.End(); ++i)
+    for(auto i = tracks_.begin(); i != tracks_.end(); ++i)
     {
         if (j == index)
-            return &i->second_;
+            return &i->second;
 
         ++j;
     }
@@ -398,28 +399,28 @@ AnimationTrack* Animation::GetTrack(unsigned index)
     return nullptr;
 }
 
-AnimationTrack* Animation::GetTrack(const String& name)
+AnimationTrack* Animation::GetTrack(const ea::string& name)
 {
-    HashMap<StringHash, AnimationTrack>::Iterator i = tracks_.Find(StringHash(name));
-    return i != tracks_.End() ? &i->second_ : nullptr;
+    auto i = tracks_.find(StringHash(name));
+    return i != tracks_.end() ? &i->second : nullptr;
 }
 
 AnimationTrack* Animation::GetTrack(StringHash nameHash)
 {
-    HashMap<StringHash, AnimationTrack>::Iterator i = tracks_.Find(nameHash);
-    return i != tracks_.End() ? &i->second_ : nullptr;
+    auto i = tracks_.find(nameHash);
+    return i != tracks_.end() ? &i->second : nullptr;
 }
 
 AnimationTriggerPoint* Animation::GetTrigger(unsigned index)
 {
-    return index < triggers_.Size() ? &triggers_[index] : nullptr;
+    return index < triggers_.size() ? &triggers_[index] : nullptr;
 }
 
-void Animation::SetTracks(const Vector<AnimationTrack>& tracks)
+void Animation::SetTracks(const ea::vector<AnimationTrack>& tracks)
 {
-    tracks_.Clear();
+    tracks_.clear();
 
-    for (Vector<AnimationTrack>::ConstIterator itr = tracks.Begin(); itr != tracks.End(); itr++)
+    for (auto itr = tracks.begin(); itr != tracks.end(); itr++)
     {
         tracks_[itr->name_] = *itr;
     }

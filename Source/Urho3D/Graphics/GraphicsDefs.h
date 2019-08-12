@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,6 @@
 #pragma once
 
 #include "../Container/FlagSet.h"
-#include "../Container/HashBase.h"
 #include "../Math/StringHash.h"
 
 namespace Urho3D
@@ -234,6 +233,16 @@ enum TextureFilterMode
     FILTER_NEAREST_ANISOTROPIC,
     FILTER_DEFAULT,
     MAX_FILTERMODES
+};
+
+static const char* textureFilterModeNames[] = {
+    "NEAREST",
+    "BILINEAR",
+    "TRILINEAR",
+    "ANISOTROPIC",
+    "NEAREST_ANISOTROPIC",
+    "DEFAULT",
+    nullptr,
 };
 
 /// Texture addressing mode.

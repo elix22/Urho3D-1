@@ -1,5 +1,5 @@
 ﻿//
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,6 +19,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
+
+using System;
 
 namespace Urho3DNet
 {
@@ -114,7 +116,7 @@ namespace Urho3DNet
             return new Variant(value);
         }
 
-        public static implicit operator Variant(VariantVector value)
+        public static implicit operator Variant(VariantList value)
         {
             return new Variant(value);
         }
@@ -124,7 +126,7 @@ namespace Urho3DNet
             return new Variant(value);
         }
 
-        public static implicit operator Variant(StringVector value)
+        public static implicit operator Variant(StringList value)
         {
             return new Variant(value);
         }
@@ -167,6 +169,63 @@ namespace Urho3DNet
         public static implicit operator Variant(global::Urho3DNet.Matrix4 value)
         {
             return new Variant(value);
+        }
+
+        public static VariantType GetVariantType(Type type)
+        {
+            if (type == typeof(sbyte) || type == typeof(short) || type == typeof(int))
+                return VariantType.VarInt;
+            if (type == typeof(bool))
+                return VariantType.VarBool;
+            if (type == typeof(float))
+                return VariantType.VarFloat;
+            if (type == typeof(Vector2))
+                return VariantType.VarVector2;
+            if (type == typeof(Vector3))
+                return VariantType.VarVector3;
+            if (type == typeof(Vector4))
+                return VariantType.VarVector4;
+            if (type == typeof(Quaternion))
+                return VariantType.VarQuaternion;
+            if (type == typeof(Color))
+                return VariantType.VarColor;
+            if (type == typeof(string))
+                return VariantType.VarString;
+            if (type == typeof(UCharArray))
+                return VariantType.VarBuffer;
+            if (type == typeof(IntPtr))
+                return VariantType.VarVoidPtr;
+            if (type == typeof(ResourceRef))
+                return VariantType.VarResourceRef;
+            if (type == typeof(ResourceRefList))
+                return VariantType.VarResourceRefList;
+            if (type == typeof(VariantList))
+                return VariantType.VarVariantVector;
+            if (type == typeof(VariantMap))
+                return VariantType.VarVariantMap;
+            if (type == typeof(IntRect))
+                return VariantType.VarIntRect;
+            if (type == typeof(IntVector2))
+                return VariantType.VarIntVector2;
+            if (type == typeof(RefCounted))
+                return VariantType.VarPtr;
+            if (type == typeof(Matrix3))
+                return VariantType.VarMatrix3;
+            if (type == typeof(Matrix3x4))
+                return VariantType.VarMatrix3x4;
+            if (type == typeof(Matrix4))
+                return VariantType.VarMatrix4;
+            if (type == typeof(double))
+                return VariantType.VarDouble;
+            if (type == typeof(StringList))
+                return VariantType.VarStringVector;
+            if (type == typeof(Rect))
+                return VariantType.VarRect;
+            if (type == typeof(IntVector3))
+                return VariantType.VarIntVector3;
+            if (type == typeof(long))
+                return VariantType.VarInt64;
+            return VariantType.VarNone;
         }
     }
 }

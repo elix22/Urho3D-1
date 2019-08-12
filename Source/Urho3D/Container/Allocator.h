@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -29,7 +29,7 @@
 #endif
 
 #include <cstddef>
-#include <utility>
+#include <EASTL/utility.h>
 
 
 namespace Urho3D
@@ -99,7 +99,7 @@ public:
         if (!allocator_)
             allocator_ = AllocatorInitialize((unsigned)sizeof(T));
         auto* newObject = static_cast<T*>(AllocatorReserve(allocator_));
-        new(newObject) T(std::forward<Args>(args)...);
+        new(newObject) T(ea::forward<Args>(args)...);
 
         return newObject;
     }

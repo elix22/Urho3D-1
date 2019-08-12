@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -78,8 +78,8 @@ public:
     void Update(float timeStep);
     /// Update the UI for rendering. Called by HandleRenderUpdate().
     void RenderUpdate();
-    /// Render the UI. If renderUICommand is false (default), is assumed to be the default UI render to backbuffer called by Engine, and will be performed only once. Additional UI renders to a different rendertarget may be triggered from the renderpath.
-    void Render(bool renderUICommand = false);
+    /// Render the UI batches. Returns true if call rendered anything. Rendering succeeds only once per frame.
+    void Render();
     /// Debug draw a UI element.
     void DebugDraw(UIElement* element);
     /// Load a UI layout from an XML file. Optionally specify another XML file for element style. Return the root element.
@@ -89,7 +89,7 @@ public:
     /// Save a UI layout to an XML file. Return true if successful.
     bool SaveLayout(Serializer& dest, UIElement* element);
     /// Set clipboard text.
-    void SetClipboardText(const String& text);
+    void SetClipboardText(const ea::string& text);
     /// Set UI element double click interval in seconds.
     void SetDoubleClickInterval(float interval);
     /// Set max screen distance in pixels between double click clicks.
@@ -131,9 +131,13 @@ public:
 
     /// Return root UI element.
     UIElement* GetRoot() const { return rootElement_; }
+    /// Sets new root UI element.
+    void SetRoot(UIElement* root);
 
     /// Return root modal element.
     UIElement* GetRootModalElement() const { return rootModalElement_; }
+    /// Sets new root UI element for modals.
+    void SetRootModalElement(UIElement* rootModal);
 
     /// Return cursor.
     Cursor* GetCursor() const { return cursor_; }
@@ -153,7 +157,7 @@ public:
     /// Return topmost enabled root-level non-modal element.
     UIElement* GetFrontElement() const;
     /// Return currently dragged elements.
-    const PODVector<UIElement*>& GetDragElements();
+    const ea::vector<UIElement*>& GetDragElements();
 
     /// Return the number of currently dragged elements.
     unsigned GetNumDragElements() const { return (unsigned)dragConfirmedCount_; }
@@ -161,7 +165,7 @@ public:
     /// Return the drag element at index.
     UIElement* GetDragElement(unsigned index);
     /// Return clipboard text.
-    const String& GetClipboardText() const;
+    const ea::string& GetClipboardText() const;
 
     /// Return UI element double click interval in seconds.
     float GetDoubleClickInterval() const { return doubleClickInterval_; }
@@ -217,8 +221,18 @@ public:
     /// Return root element custom size. Returns 0,0 when custom size is not being used and automatic resizing according to window size is in use instead (default.)
     const IntVector2& GetCustomSize() const { return customSize_; }
 
-    /// Set texture to which element will be rendered.
-    void SetElementRenderTexture(UIElement* element, Texture2D* texture);
+    /// Set texture to which entire UI will be rendered.
+    void SetRenderTarget(Texture2D* texture, Color clearColor = Color::TRANSPARENT_BLACK);
+    /// Returns texture to which this UI is rendered.
+    Texture2D* GetRenderTarget() const { return texture_; }
+
+    /// Returns true if thus UI is already rendered in this frame.
+    bool IsRendered() const { return uiRendered_; }
+
+    /// Set to true when UI is rendered as part of SystemUI. This will allow input to function properly.
+    void SetRenderInSystemUI(bool isSystemUIElement) { partOfSystemUI_ = isSystemUIElement; }
+    /// Return true when UI is set to render as part of SystemUI.
+    bool GetRenderInSystemUI() const { return partOfSystemUI_; }
 
     /// Data structure used to represent the drag data associated to a UIElement.
     struct DragData
@@ -238,37 +252,16 @@ public:
     };
 
 private:
-    /// Data structured used to hold data of UI elements that are rendered to texture.
-    struct RenderToTextureData
-    {
-        /// UIElement to be rendered into texture.
-        WeakPtr<UIElement> rootElement_;
-        /// Texture that UIElement will be rendered into.
-        SharedPtr<Texture2D> texture_;
-        /// UI rendering batches.
-        PODVector<UIBatch> batches_;
-        /// UI rendering vertex data.
-        PODVector<float> vertexData_;
-        /// UI vertex buffer.
-        SharedPtr<VertexBuffer> vertexBuffer_;
-        /// UI rendering batches for debug draw.
-        PODVector<UIBatch> debugDrawBatches_;
-        /// UI rendering vertex data for debug draw.
-        PODVector<float> debugVertexData_;
-        /// UI debug geometry vertex buffer.
-        SharedPtr<VertexBuffer> debugVertexBuffer_;
-    };
-
     /// Initialize when screen mode initially set.
     void Initialize();
     /// Update UI element logic recursively.
     void Update(float timeStep, UIElement* element);
     /// Upload UI geometry into a vertex buffer.
-    void SetVertexData(VertexBuffer* dest, const PODVector<float>& vertexData);
+    void SetVertexData(VertexBuffer* dest, const ea::vector<float>& vertexData);
     /// Render UI batches to the current rendertarget. Geometry must have been uploaded first.
-    void Render(VertexBuffer* buffer, const PODVector<UIBatch>& batches, unsigned batchStart, unsigned batchEnd);
+    void Render(VertexBuffer* buffer, const ea::vector<UIBatch>& batches, unsigned batchStart, unsigned batchEnd);
     /// Generate batches from an UI element recursively. Skip the cursor element.
-    void GetBatches(PODVector<UIBatch>& batches, PODVector<float>& vertexData, UIElement* element, IntRect currentScissor);
+    void GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, UIElement* element, IntRect currentScissor);
     /// Return UI element at global screen coordinates. Return position converted to element's screen coordinates.
     UIElement* GetElementAt(const IntVector2& position, bool enabledOnly, IntVector2* elementScreenPosition);
     /// Return UI element at screen position recursively.
@@ -330,8 +323,12 @@ private:
     void HandleRenderUpdate(StringHash eventType, VariantMap& eventData);
     /// Handle a file being drag-dropped into the application window.
     void HandleDropFile(StringHash eventType, VariantMap& eventData);
+    /// Handle off-screen UI subsystems gaining focus.
+    void HandleFocused(StringHash eventType, VariantMap& eventData);
+    /// Handle rendering to a texture.
+    void HandleEndAllViewsRender(StringHash eventType, VariantMap& eventData);
     /// Remove drag data and return next iterator.
-    HashMap<WeakPtr<UIElement>, DragData*>::Iterator DragElementErase(HashMap<WeakPtr<UIElement>, DragData*>::Iterator i);
+    ea::unordered_map<WeakPtr<UIElement>, DragData*>::iterator DragElementErase(ea::unordered_map<WeakPtr<UIElement>, DragData*>::iterator i);
     /// Handle clean up on a drag cancel.
     void ProcessDragCancel();
     /// Sum touch positions and return the begin position ready to send.
@@ -340,6 +337,8 @@ private:
     void ResizeRootElement();
     /// Return effective size of the root element, according to UI scale and resolution / custom size.
     IntVector2 GetEffectiveRootElementSize(bool applyScale = true) const;
+    /// Return true when subsystem should not process any mouse/keyboard input.
+    bool ShouldIgnoreInput() const;
 
     /// Graphics subsystem.
     WeakPtr<Graphics> graphics_;
@@ -352,21 +351,21 @@ private:
     /// Currently focused element.
     WeakPtr<UIElement> focusElement_;
     /// UI rendering batches.
-    PODVector<UIBatch> batches_;
+    ea::vector<UIBatch> batches_;
     /// UI rendering vertex data.
-    PODVector<float> vertexData_;
+    ea::vector<float> vertexData_;
     /// UI rendering batches for debug draw.
-    PODVector<UIBatch> debugDrawBatches_;
+    ea::vector<UIBatch> debugDrawBatches_;
     /// UI rendering vertex data for debug draw.
-    PODVector<float> debugVertexData_;
+    ea::vector<float> debugVertexData_;
     /// UI vertex buffer.
     SharedPtr<VertexBuffer> vertexBuffer_;
     /// UI debug geometry vertex buffer.
     SharedPtr<VertexBuffer> debugVertexBuffer_;
     /// UI element query vector.
-    PODVector<UIElement*> tempElements_;
+    ea::vector<UIElement*> tempElements_;
     /// Clipboard text.
-    mutable String clipBoard_;
+    mutable ea::string clipBoard_;
     /// Seconds between clicks to register a double click.
     float doubleClickInterval_;
     /// Seconds from mouse button down to begin a drag if there has been no movement exceeding pixel threshold.
@@ -416,23 +415,27 @@ private:
     /// Max screen distance the first click in a double click can be from the second click in a double click.
     float maxDoubleClickDist_;
     /// Currently hovered elements.
-    HashMap<WeakPtr<UIElement>, bool> hoveredElements_;
+    ea::unordered_map<WeakPtr<UIElement>, bool> hoveredElements_;
     /// Currently dragged elements.
-    HashMap<WeakPtr<UIElement>, DragData*> dragElements_;
+    ea::unordered_map<WeakPtr<UIElement>, DragData*> dragElements_;
     /// Number of elements in dragElements_.
     int dragElementsCount_;
     /// Number of elements in dragElements_ with dragPending = false.
     int dragConfirmedCount_;
     /// UI elements that are being touched with touch input.
-    HashMap<WeakPtr<UIElement>, MouseButtonFlags> touchDragElements_;
+    ea::unordered_map<WeakPtr<UIElement>, MouseButtonFlags> touchDragElements_;
     /// Confirmed drag elements cache.
-    PODVector<UIElement*> dragElementsConfirmed_;
+    ea::vector<UIElement*> dragElementsConfirmed_;
     /// Current scale of UI.
     float uiScale_;
     /// Root element custom size. 0,0 for automatic resizing (default.)
     IntVector2 customSize_;
-    /// Elements that should be rendered to textures.
-    HashMap<UIElement*, RenderToTextureData> renderToTexture_;
+    /// Texture that UI will be rendered into.
+    WeakPtr<Texture2D> texture_;
+    /// Color which will be used to clear target texture.
+    Color clearColor_ = Color::TRANSPARENT_BLACK;
+    /// Flag indicating that UI should process input when mouse cursor hovers SystemUI elements.
+    bool partOfSystemUI_ = false;
 };
 
 /// Register UI library objects.

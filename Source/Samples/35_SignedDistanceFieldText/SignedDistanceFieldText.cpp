@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -41,7 +41,6 @@
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(SignedDistanceFieldText)
 
 SignedDistanceFieldText::SignedDistanceFieldText(Context* context) :
     Sample(context)
@@ -117,7 +116,7 @@ void SignedDistanceFieldText::CreateScene()
         Node* mushroomTitleNode = mushroomNode->CreateChild("MushroomTitle");
         mushroomTitleNode->SetPosition(Vector3(0.0f, 1.2f, 0.0f));
         auto* mushroomTitleText = mushroomTitleNode->CreateComponent<Text3D>();
-        mushroomTitleText->SetText("Mushroom " + String(i));
+        mushroomTitleText->SetText("Mushroom " + ea::to_string(i));
         mushroomTitleText->SetFont(cache->GetResource<Font>("Fonts/BlueHighway.sdf"), 24);
 
         mushroomTitleText->SetColor(Color::RED);

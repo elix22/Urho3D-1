@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,6 @@ static const unsigned NUM_SPRITES = 100;
 // Custom variable identifier for storing sprite velocity within the UI element
 static const StringHash VAR_VELOCITY("Velocity");
 
-URHO3D_DEFINE_APPLICATION_MAIN(Sprites)
 
 Sprites::Sprites(Context* context) :
     Sample(context)
@@ -100,7 +99,7 @@ void Sprites::CreateSprites()
         sprite->SetVar(VAR_VELOCITY, Vector2(Random(200.0f) - 100.0f, Random(200.0f) - 100.0f));
 
         // Store sprites to our own container for easy movement update iteration
-        sprites_.Push(sprite);
+        sprites_.push_back(sprite);
     }
 }
 
@@ -111,7 +110,7 @@ void Sprites::MoveSprites(float timeStep)
     auto height = (float)graphics->GetHeight();
 
     // Go through all sprites
-    for (unsigned i = 0; i < sprites_.Size(); ++i)
+    for (unsigned i = 0; i < sprites_.size(); ++i)
     {
         Sprite* sprite = sprites_[i];
 

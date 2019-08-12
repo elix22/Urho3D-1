@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -49,13 +49,13 @@ const int PACKER_NUM_NODES = 4096;
 const int MAX_TEXTURE_SIZE = 2048;
 
 int main(int argc, char** argv);
-void Run(Vector<String>& arguments);
+void Run(ea::vector<ea::string>& arguments);
 
 class PackerInfo : public RefCounted
 {
 public:
-    String path;
-    String name;
+    ea::string path;
+    ea::string name;
     int x{};
     int y{};
     int offsetX{};
@@ -65,7 +65,7 @@ public:
     int frameWidth{};
     int frameHeight{};
 
-    PackerInfo(const String& path_, const String& name_) :
+    PackerInfo(const ea::string& path_, const ea::string& name_) :
         path(path_),
         name(name_)
     {
@@ -93,7 +93,7 @@ void Help()
 
 int main(int argc, char** argv)
 {
-    Vector<String> arguments;
+    ea::vector<ea::string> arguments;
 
 #ifdef WIN32
     arguments = ParseArguments(GetCommandLineW());
@@ -105,9 +105,9 @@ int main(int argc, char** argv)
     return 0;
 }
 
-void Run(Vector<String>& arguments)
+void Run(ea::vector<ea::string>& arguments)
 {
-    if (arguments.Size() < 2)
+    if (arguments.size() < 2)
         Help();
 
     SharedPtr<Context> context(new Context());
@@ -115,9 +115,9 @@ void Run(Vector<String>& arguments)
     context->RegisterSubsystem(new Log(context));
     auto* fileSystem = context->GetSubsystem<FileSystem>();
 
-    Vector<String> inputFiles;
-    String outputFile;
-    String spriteSheetFileName;
+    ea::vector<ea::string> inputFiles;
+    ea::string outputFile;
+    ea::string spriteSheetFileName;
     bool debug = false;
     unsigned padX = 0;
     unsigned padY = 0;
@@ -128,57 +128,64 @@ void Run(Vector<String>& arguments)
     bool help = false;
     bool trim = false;
 
-    while (arguments.Size() > 0)
+    while (arguments.size() > 0)
     {
-        String arg = arguments[0];
-        arguments.Erase(0);
+        ea::string arg = arguments[0];
+        arguments.pop_front();
 
-        if (arg.Empty())
+        if (arg.empty())
             continue;
 
-        if (arg.StartsWith("-"))
+        if (arg.starts_with("-"))
         {
-            if (arg == "-px")      { padX = ToUInt(arguments[0]); arguments.Erase(0); }
-            else if (arg == "-py") { padY = ToUInt(arguments[0]); arguments.Erase(0); }
-            else if (arg == "-ox") { offsetX = ToUInt(arguments[0]); arguments.Erase(0); }
-            else if (arg == "-oy") { offsetY = ToUInt(arguments[0]); arguments.Erase(0); }
-            else if (arg == "-frameWidth") { frameWidth = ToUInt(arguments[0]); arguments.Erase(0); }
-            else if (arg == "-frameHeight") { frameHeight = ToUInt(arguments[0]); arguments.Erase(0); }
+            if (arg == "-px")      { padX = ToUInt(arguments[0]);
+                arguments.pop_front(); }
+            else if (arg == "-py") { padY = ToUInt(arguments[0]);
+                arguments.pop_front(); }
+            else if (arg == "-ox") { offsetX = ToUInt(arguments[0]);
+                arguments.pop_front(); }
+            else if (arg == "-oy") { offsetY = ToUInt(arguments[0]);
+                arguments.pop_front(); }
+            else if (arg == "-frameWidth") { frameWidth = ToUInt(arguments[0]);
+                arguments.pop_front(); }
+            else if (arg == "-frameHeight") { frameHeight = ToUInt(arguments[0]);
+                arguments.pop_front(); }
             else if (arg == "-trim") { trim = true; }
-            else if (arg == "-xml")  { spriteSheetFileName = arguments[0]; arguments.Erase(0); }
+            else if (arg == "-xml")  { spriteSheetFileName = arguments[0];
+                arguments.pop_front(); }
             else if (arg == "-h")  { help = true; break; }
             else if (arg == "-debug")  { debug = true; }
         }
         else
-            inputFiles.Push(arg);
+            inputFiles.push_back(arg);
     }
 
     if (help)
         Help();
 
-    if (inputFiles.Size() < 2)
+    if (inputFiles.size() < 2)
         ErrorExit("An input and output file must be specified.");
 
     if (frameWidth ^ frameHeight)
         ErrorExit("Both frameHeight and frameWidth must be omitted or specified.");
 
     // take last input file as output
-    if (inputFiles.Size() > 1)
+    if (inputFiles.size() > 1)
     {
-        outputFile = inputFiles[inputFiles.Size() - 1];
+        outputFile = inputFiles[inputFiles.size() - 1];
         URHO3D_LOGINFO("Output file set to " + outputFile + ".");
-        inputFiles.Erase(inputFiles.Size() - 1);
+        inputFiles.erase_at(inputFiles.size() - 1);
     }
 
     // set spritesheet name to outputfile.xml if not specified
-    if (spriteSheetFileName.Empty())
+    if (spriteSheetFileName.empty())
         spriteSheetFileName = ReplaceExtension(outputFile, ".xml");
 
     if (GetParentPath(spriteSheetFileName) != GetParentPath(outputFile))
         ErrorExit("Both output xml and png must be in the same folder");
 
     // check all input files exist
-    for (unsigned i = 0; i < inputFiles.Size(); ++i)
+    for (unsigned i = 0; i < inputFiles.size(); ++i)
     {
         URHO3D_LOGINFO("Checking " + inputFiles[i] + " to see if file exists.");
         if (!fileSystem->FileExists(inputFiles[i]))
@@ -189,12 +196,12 @@ void Run(Vector<String>& arguments)
     offsetX = Min((int)offsetX, (int)padX);
     offsetY = Min((int)offsetY, (int)padY);
 
-    Vector<SharedPtr<PackerInfo > > packerInfos;
+    ea::vector<SharedPtr<PackerInfo > > packerInfos;
 
-    for (unsigned i = 0; i < inputFiles.Size(); ++i)
+    for (unsigned i = 0; i < inputFiles.size(); ++i)
     {
-        String path = inputFiles[i];
-        String name = ReplaceExtension(GetFileName(path), "");
+        ea::string path = inputFiles[i];
+        ea::string name = ReplaceExtension(GetFileName(path), "");
         File file(context, path);
         Image image(context);
 
@@ -253,23 +260,23 @@ void Run(Vector<String>& arguments)
         packerInfo->height = adjustedHeight;
         packerInfo->offsetX -= trimOffsetX;
         packerInfo->offsetY -= trimOffsetY;
-        packerInfos.Push(packerInfo);
+        packerInfos.push_back(packerInfo);
     }
 
     int packedWidth = MAX_TEXTURE_SIZE;
     int packedHeight = MAX_TEXTURE_SIZE;
     {
         // fill up an list of tries in increasing size and take the first win
-        Vector<IntVector2> tries;
+        ea::vector<IntVector2> tries;
         for(unsigned x=2; x<11; ++x)
         {
             for(unsigned y=2; y<11; ++y)
-                tries.Push(IntVector2((1u<<x), (1u<<y)));
+                tries.push_back(IntVector2((1u << x), (1u << y)));
         }
 
         // load rectangles
-        auto* packerRects = new stbrp_rect[packerInfos.Size()];
-        for (unsigned i = 0; i < packerInfos.Size(); ++i)
+        auto* packerRects = new stbrp_rect[packerInfos.size()];
+        for (unsigned i = 0; i < packerInfos.size(); ++i)
         {
             PackerInfo* packerInfo = packerInfos[i];
             stbrp_rect* packerRect = &packerRects[i];
@@ -279,10 +286,10 @@ void Run(Vector<String>& arguments)
         }
 
         bool success = false;
-        while (tries.Size() > 0)
+        while (tries.size() > 0)
         {
             IntVector2 size = tries[0];
-            tries.Erase(0);
+            tries.pop_front();
             bool fit = true;
             int textureHeight = size.y_;
             int textureWidth = size.x_;
@@ -291,11 +298,11 @@ void Run(Vector<String>& arguments)
 
             stbrp_context packerContext;
             stbrp_node packerMemory[PACKER_NUM_NODES];
-            stbrp_init_target(&packerContext, textureWidth, textureHeight, packerMemory, packerInfos.Size());
-            stbrp_pack_rects(&packerContext, packerRects, packerInfos.Size());
+            stbrp_init_target(&packerContext, textureWidth, textureHeight, packerMemory, packerInfos.size());
+            stbrp_pack_rects(&packerContext, packerRects, packerInfos.size());
 
             // check to see if everything fit
-            for (unsigned i = 0; i < packerInfos.Size(); ++i)
+            for (unsigned i = 0; i < packerInfos.size(); ++i)
             {
                 stbrp_rect* packerRect = &packerRects[i];
                 if (!packerRect->was_packed)
@@ -308,7 +315,7 @@ void Run(Vector<String>& arguments)
             {
                 success = true;
                 // distribute values to packer info
-                for (unsigned i = 0; i < packerInfos.Size(); ++i)
+                for (unsigned i = 0; i < packerInfos.size(); ++i)
                 {
                     stbrp_rect* packerRect = &packerRects[i];
                     PackerInfo* packerInfo = packerInfos[packerRect->id];
@@ -321,7 +328,7 @@ void Run(Vector<String>& arguments)
         }
         delete[] packerRects;
         if (!success)
-            ErrorExit("Could not allocate for all images.  The max sprite sheet texture size is " + String(MAX_TEXTURE_SIZE) + "x" + String(MAX_TEXTURE_SIZE) + ".");
+            ErrorExit("Could not allocate for all images.  The max sprite sheet texture size is " + ea::to_string(MAX_TEXTURE_SIZE) + "x" + ea::to_string(MAX_TEXTURE_SIZE) + ".");
     }
 
     // create image for spritesheet
@@ -335,7 +342,7 @@ void Run(Vector<String>& arguments)
     XMLElement root = xml.CreateRoot("TextureAtlas");
     root.SetAttribute("imagePath", GetFileNameAndExtension(outputFile));
 
-    for (unsigned i = 0; i < packerInfos.Size(); ++i)
+    for (unsigned i = 0; i < packerInfos.size(); ++i)
     {
         SharedPtr<PackerInfo> packerInfo = packerInfos[i];
         XMLElement subTexture = root.CreateChild("SubTexture");
@@ -378,7 +385,7 @@ void Run(Vector<String>& arguments)
         unsigned INNER_BOUNDS_DEBUG_COLOR = Color::GREEN.ToUInt();
 
         URHO3D_LOGINFO("Drawing debug information.");
-        for (unsigned i = 0; i < packerInfos.Size(); ++i)
+        for (unsigned i = 0; i < packerInfos.size(); ++i)
         {
             SharedPtr<PackerInfo> packerInfo = packerInfos[i];
 

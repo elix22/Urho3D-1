@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,11 +22,12 @@
 
 #pragma once
 
+#include <EASTL/list.h>
+#include <EASTL/unique_ptr.h>
+
 #include "../Container/FlagSet.h"
-#include "../Container/HashSet.h"
 #include "../Core/Mutex.h"
 #include "../Core/Object.h"
-#include "../Container/List.h"
 #include "../Input/InputEvents.h"
 #include "../UI/Cursor.h"
 
@@ -83,25 +84,25 @@ struct URHO3D_API JoystickState
     bool IsController() const { return controller_ != nullptr; }
 
     /// Return number of buttons.
-    unsigned GetNumButtons() const { return buttons_.Size(); }
+    unsigned GetNumButtons() const { return buttons_.size(); }
 
     /// Return number of axes.
-    unsigned GetNumAxes() const { return axes_.Size(); }
+    unsigned GetNumAxes() const { return axes_.size(); }
 
     /// Return number of hats.
-    unsigned GetNumHats() const { return hats_.Size(); }
+    unsigned GetNumHats() const { return hats_.size(); }
 
     /// Check if a button is held down.
-    bool GetButtonDown(unsigned index) const { return index < buttons_.Size() ? buttons_[index] : false; }
+    bool GetButtonDown(unsigned index) const { return index < buttons_.size() ? buttons_[index] : false; }
 
     /// Check if a button has been pressed on this frame.
-    bool GetButtonPress(unsigned index) const { return index < buttonPress_.Size() ? buttonPress_[index] : false; }
+    bool GetButtonPress(unsigned index) const { return index < buttonPress_.size() ? buttonPress_[index] : false; }
 
     /// Return axis position.
-    float GetAxisPosition(unsigned index) const { return index < axes_.Size() ? axes_[index] : 0.0f; }
+    float GetAxisPosition(unsigned index) const { return index < axes_.size() ? axes_[index] : 0.0f; }
 
     /// Return hat position.
-    int GetHatPosition(unsigned index) const { return index < hats_.Size() ? hats_[index] : HAT_CENTER; }
+    int GetHatPosition(unsigned index) const { return index < hats_.size() ? hats_[index] : HAT_CENTER; }
 
     /// SDL joystick.
     SDL_Joystick* joystick_{};
@@ -112,15 +113,15 @@ struct URHO3D_API JoystickState
     /// UI element containing the screen joystick.
     UIElement* screenJoystick_{};
     /// Joystick name.
-    String name_;
+    ea::string name_;
     /// Button up/down state.
-    PODVector<bool> buttons_;
+    ea::vector<bool> buttons_;
     /// Button pressed on this frame.
-    PODVector<bool> buttonPress_;
+    ea::vector<bool> buttonPress_;
     /// Axis position from -1 to 1.
-    PODVector<float> axes_;
+    ea::vector<float> axes_;
     /// POV hat bits.
-    PODVector<int> hats_;
+    ea::vector<int> hats_;
 };
 
 #ifdef __EMSCRIPTEN__
@@ -213,17 +214,17 @@ public:
     void CenterMousePosition();
 
     /// Return keycode from key name.
-    Key GetKeyFromName(const String& name) const;
+    Key GetKeyFromName(const ea::string& name) const;
     /// Return keycode from scancode.
     Key GetKeyFromScancode(Scancode scancode) const;
     /// Return name of key from keycode.
-    String GetKeyName(Key key) const;
+    ea::string GetKeyName(Key key) const;
     /// Return scancode from keycode.
     Scancode GetScancodeFromKey(Key key) const;
     /// Return scancode from key name.
-    Scancode GetScancodeFromName(const String& name) const;
+    Scancode GetScancodeFromName(const ea::string& name) const;
     /// Return name of key from scancode.
-    String GetScancodeName(Scancode scancode) const;
+    ea::string GetScancodeName(Scancode scancode) const;
     /// Check if a key is held down.
     bool GetKeyDown(Key key) const;
     /// Check if a key has been pressed on this frame.
@@ -258,18 +259,18 @@ public:
     Vector2 GetInputScale() const { return inputScale_; }
 
     /// Return number of active finger touches.
-    unsigned GetNumTouches() const { return touches_.Size(); }
+    unsigned GetNumTouches() const { return touches_.size(); }
     /// Return active finger touch by index.
     TouchState* GetTouch(unsigned index) const;
 
     /// Return number of connected joysticks.
-    unsigned GetNumJoysticks() const { return joysticks_.Size(); }
+    unsigned GetNumJoysticks() const { return joysticks_.size(); }
     /// Return joystick state by ID, or null if does not exist.
     JoystickState* GetJoystick(SDL_JoystickID id);
     /// Return joystick state by index, or null if does not exist. 0 = first connected joystick.
     JoystickState* GetJoystickByIndex(unsigned index);
     /// Return joystick state by name, or null if does not exist.
-    JoystickState* GetJoystickByName(const String& name);
+    JoystickState* GetJoystickByName(const ea::string& name);
 
     /// Return whether fullscreen toggle is enabled.
     bool GetToggleFullscreen() const { return toggleFullscreen_; }
@@ -299,6 +300,11 @@ public:
 
     /// Return whether application window is minimized.
     bool IsMinimized() const;
+
+    /// Return whether user should ignore input events.
+    bool ShouldIgnoreInput() const { return shouldIgnoreInput_; }
+    /// Set a flag indicating that user should ignore input.
+    void SetShouldIgnoreInput(bool ignore) { shouldIgnoreInput_ = ignore; }
 
 private:
     /// Initialize when screen mode initially set.
@@ -363,23 +369,23 @@ private:
     /// Graphics subsystem.
     WeakPtr<Graphics> graphics_;
     /// Key down state.
-    HashSet<int> keyDown_;
+    ea::hash_set<int> keyDown_;
     /// Key pressed state.
-    HashSet<int> keyPress_;
+    ea::hash_set<int> keyPress_;
     /// Key down state by scancode.
-    HashSet<int> scancodeDown_;
+    ea::hash_set<int> scancodeDown_;
     /// Key pressed state by scancode.
-    HashSet<int> scancodePress_;
+    ea::hash_set<int> scancodePress_;
     /// Active finger touches.
-    HashMap<int, TouchState> touches_;
+    ea::unordered_map<int, TouchState> touches_;
     /// List that maps between event touch IDs and normalised touch IDs
-    List<int> availableTouchIDs_;
+    ea::list<int> availableTouchIDs_;
     /// Mapping of touch indices
-    HashMap<int, int> touchIDMap_;
+    ea::unordered_map<int, int> touchIDMap_;
     /// String for text input.
-    String textInput_;
+    ea::string textInput_;
     /// Opened joysticks.
-    HashMap<SDL_JoystickID, JoystickState> joysticks_;
+    ea::unordered_map<SDL_JoystickID, JoystickState> joysticks_;
     /// Mouse buttons' down state.
     MouseButtonFlags mouseButtonDown_;
     /// Mouse buttons' pressed state.
@@ -437,7 +443,7 @@ private:
 
 #ifdef __EMSCRIPTEN__
     /// Emscripten Input glue instance.
-    UniquePtr<EmscriptenInput> emscriptenInput_;
+    ea::unique_ptr<EmscriptenInput> emscriptenInput_;
     /// Flag used to detect mouse jump when exiting pointer-lock.
     bool emscriptenExitingPointerLock_;
     /// Flag used to detect mouse jump on initial mouse click when entering pointer-lock.
@@ -445,6 +451,8 @@ private:
     /// Flag indicating current pointer-lock status.
     bool emscriptenPointerLock_;
 #endif
+    /// Whether user should suspend input handling.
+    bool shouldIgnoreInput_ = false;
 };
 
 }

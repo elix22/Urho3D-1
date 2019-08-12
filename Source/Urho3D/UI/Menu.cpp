@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -78,8 +78,8 @@ void Menu::Update(float timeStep)
 
     if (popup_ && showPopup_)
     {
-        const Vector<SharedPtr<UIElement> >& children = popup_->GetChildren();
-        for (unsigned i = 0; i < children.Size(); ++i)
+        const ea::vector<SharedPtr<UIElement> >& children = popup_->GetChildren();
+        for (unsigned i = 0; i < children.size(); ++i)
         {
             auto* menu = dynamic_cast<Menu*>(children[i].Get());
             if (menu && !menu->autoPopup_ && !menu->IsHovering())
@@ -127,19 +127,19 @@ void Menu::OnShowPopup()
 bool Menu::LoadXML(const XMLElement& source, XMLFile* styleFile)
 {
     // Get style override if defined
-    String styleName = source.GetAttribute("style");
+    ea::string styleName = source.GetAttribute("style");
 
     // Apply the style first, if the style file is available
     if (styleFile)
     {
         // If not defined, use type name
-        if (styleName.Empty())
+        if (styleName.empty())
             styleName = GetTypeName();
 
         SetStyle(styleName, styleFile);
     }
     // The 'style' attribute value in the style file cannot be equals to original's applied style to prevent infinite loop
-    else if (!styleName.Empty() && styleName != appliedStyle_)
+    else if (!styleName.empty() && styleName != appliedStyle_)
     {
         // Attempt to use the default style file
         styleFile = GetDefaultStyle();
@@ -147,7 +147,7 @@ bool Menu::LoadXML(const XMLElement& source, XMLFile* styleFile)
         if (styleFile)
         {
             // Remember the original applied style
-            String appliedStyle(appliedStyle_);
+            ea::string appliedStyle(appliedStyle_);
             SetStyle(styleName, styleFile);
             appliedStyle_ = appliedStyle;
         }
@@ -165,8 +165,8 @@ bool Menu::LoadXML(const XMLElement& source, XMLFile* styleFile)
     {
         bool internalElem = childElem.GetBool("internal");
         bool popupElem = childElem.GetBool("popup");
-        String typeName = childElem.GetAttribute("type");
-        if (typeName.Empty())
+        ea::string typeName = childElem.GetAttribute("type");
+        if (typeName.empty())
             typeName = "UIElement";
         unsigned index = childElem.HasAttribute("index") ? childElem.GetUInt("index") : M_MAX_UNSIGNED;
         UIElement* child = nullptr;
@@ -174,7 +174,7 @@ bool Menu::LoadXML(const XMLElement& source, XMLFile* styleFile)
         if (!internalElem)
         {
             if (!popupElem)
-                child = CreateChild(typeName, String::EMPTY, index);
+                child = CreateChild(typeName, EMPTY_STRING, index);
             else
             {
                 // Do not add the popup element as a child even temporarily, as that can break layouts
@@ -184,7 +184,7 @@ bool Menu::LoadXML(const XMLElement& source, XMLFile* styleFile)
                 else
                 {
                     child = popup;
-                    SetPopup(popup);
+                    SetPopup(popup.Get());
                 }
             }
         }
@@ -195,7 +195,7 @@ bool Menu::LoadXML(const XMLElement& source, XMLFile* styleFile)
                 child = popup_;
             else
             {
-                for (unsigned i = nextInternalChild; i < children_.Size(); ++i)
+                for (unsigned i = nextInternalChild; i < children_.size(); ++i)
                 {
                     if (children_[i]->IsInternal() && children_[i]->GetTypeName() == typeName)
                     {
@@ -311,9 +311,9 @@ void Menu::ShowPopup(bool enable)
         OnHidePopup();
 
         // If the popup has child menus, hide their popups as well
-        PODVector<UIElement*> children;
+        ea::vector<UIElement*> children;
         popup_->GetChildren(children, true);
-        for (PODVector<UIElement*>::ConstIterator i = children.Begin(); i != children.End(); ++i)
+        for (auto i = children.begin(); i != children.end(); ++i)
         {
             auto* menu = dynamic_cast<Menu*>(*i);
             if (menu)
@@ -321,7 +321,7 @@ void Menu::ShowPopup(bool enable)
         }
 
         static_cast<Window*>(popup_.Get())->SetModal(false);
-        const_cast<VariantMap&>(popup_->GetVars()).Erase(VAR_ORIGIN);
+        const_cast<VariantMap&>(popup_->GetVars()).erase(VAR_ORIGIN);
 
         popup_->SetVisible(false);
         popup_->Remove();
@@ -408,7 +408,7 @@ void Menu::HandleFocusChanged(StringHash eventType, VariantMap& eventData)
     // In that case, do not hide
     while (element)
     {
-        if (element == this || element == popup_)
+        if (element == this || element == popup_.Get())
             return;
         if (element->GetParent() == root)
             element = static_cast<UIElement*>(element->GetVar(VAR_ORIGIN).GetPtr());

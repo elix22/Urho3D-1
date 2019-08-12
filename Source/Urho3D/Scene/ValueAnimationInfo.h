@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,9 +22,9 @@
 
 #pragma once
 
+#include <EASTL/vector.h>
+
 #include "../Container/Ptr.h"
-#include "../Container/RefCounted.h"
-#include "../Container/Vector.h"
 #include "../Scene/AnimationDefs.h"
 
 namespace Urho3D
@@ -80,7 +80,7 @@ protected:
     /// Calculate scaled time.
     float CalculateScaledTime(float currentTime, bool& finished) const;
     /// Return event frames.
-    void GetEventFrames(float beginTime, float endTime, PODVector<const VAnimEventFrame*>& eventFrames);
+    void GetEventFrames(float beginTime, float endTime, ea::vector<const VAnimEventFrame*>& eventFrames);
 
     /// Target object.
     WeakPtr<Object> target_;

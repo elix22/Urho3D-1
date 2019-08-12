@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
+#include <EASTL/shared_array.h>
+
 #include "../Core/Object.h"
 #include "../IO/AbstractFile.h"
 
@@ -34,16 +35,17 @@ namespace Urho3D
 {
 
 #ifdef __ANDROID__
-extern const char* APK;
-
+static const char* APK = "/apk/";
 // Macro for checking if a given pathname is inside APK's assets directory
-#define URHO3D_IS_ASSET(p) p.StartsWith(APK)
+#define URHO3D_IS_ASSET(p) p.starts_with(APK)
 // Macro for truncating the APK prefix string from the asset pathname and at the same time patching the directory name components (see custom_rules.xml)
 #ifdef ASSET_DIR_INDICATOR
-#define URHO3D_ASSET(p) p.Substring(5).Replaced("/", ASSET_DIR_INDICATOR "/").CString()
+#define URHO3D_ASSET(p) p.Substring(5).Replaced("/", ASSET_DIR_INDICATOR "/").c_str()
 #else
-#define URHO3D_ASSET(p) p.Substring(5).CString()
+#define URHO3D_ASSET(p) p.substr(5).c_str()
 #endif
+#else
+static const char* APK = "";
 #endif
 
 /// File open mode.
@@ -65,9 +67,9 @@ public:
     /// Construct.
     explicit File(Context* context);
     /// Construct and open a filesystem file.
-    File(Context* context, const String& fileName, FileMode mode = FILE_READ);
+    File(Context* context, const ea::string& fileName, FileMode mode = FILE_READ);
     /// Construct and open from a package file.
-    File(Context* context, PackageFile* package, const String& fileName);
+    File(Context* context, PackageFile* package, const ea::string& fileName);
     /// Destruct. Close the file if open.
     ~File() override;
 
@@ -79,21 +81,21 @@ public:
     unsigned Write(const void* data, unsigned size) override;
 
     /// Return the file name.
-    const String& GetName() const override { return fileName_; }
+    const ea::string& GetName() const override { return fileName_; }
 
     /// Return a checksum of the file contents using the SDBM hash algorithm.
     unsigned GetChecksum() override;
 
     /// Open a filesystem file. Return true if successful.
-    bool Open(const String& fileName, FileMode mode = FILE_READ);
+    bool Open(const ea::string& fileName, FileMode mode = FILE_READ);
     /// Open from within a package file. Return true if successful.
-    bool Open(PackageFile* package, const String& fileName);
+    bool Open(PackageFile* package, const ea::string& fileName);
     /// Close the file.
     void Close();
     /// Flush any buffered output to the file.
     void Flush();
     /// Change the file name. Used by the resource system.
-    void SetName(const String& name);
+    void SetName(const ea::string& name);
 
     /// Return the open mode.
     FileMode GetMode() const { return mode_; }
@@ -107,11 +109,17 @@ public:
     /// Return whether the file originates from a package.
     bool IsPackaged() const { return offset_ != 0; }
 
-    /// Reads a text file, ensuring data from file is 0 terminated
-    virtual void ReadText(String& text);
+    /// Reads a binary file to buffer.
+    void ReadBinary(ea::vector<unsigned char>& buffer);
+
+    /// Reads a binary file to buffer.
+    ea::vector<unsigned char> ReadBinary() { ea::vector<unsigned char> retValue; ReadBinary(retValue); return retValue; }
 
     /// Reads a text file, ensuring data from file is 0 terminated
-    virtual String ReadText() { String retValue; ReadText(retValue); return retValue; }
+    virtual void ReadText(ea::string& text);
+
+    /// Reads a text file, ensuring data from file is 0 terminated
+    virtual ea::string ReadText() { ea::string retValue; ReadText(retValue); return retValue; }
 
     /// Copy a file from a source file, must be opened and FILE_WRITE
     /// Unlike FileSystem.Copy this copy works when the source file is in a package file
@@ -119,14 +127,14 @@ public:
 
 private:
     /// Open file internally using either C standard IO functions or SDL RWops for Android asset files. Return true if successful.
-    bool OpenInternal(const String& fileName, FileMode mode, bool fromPackage = false);
+    bool OpenInternal(const ea::string& fileName, FileMode mode, bool fromPackage = false);
     /// Perform the file read internally using either C standard IO functions or SDL RWops for Android asset files. Return true if successful. This does not handle compressed package file reading.
     bool ReadInternal(void* dest, unsigned size);
     /// Seek in file internally using either C standard IO functions or SDL RWops for Android asset files.
     void SeekInternal(unsigned newPosition);
 
     /// File name.
-    String fileName_;
+    ea::string fileName_;
     /// Open mode.
     FileMode mode_;
     /// File handle.
@@ -136,9 +144,9 @@ private:
     SDL_RWops* assetHandle_;
 #endif
     /// Read buffer for Android asset or compressed file loading.
-    SharedArrayPtr<unsigned char> readBuffer_;
+    ea::shared_array<unsigned char> readBuffer_;
     /// Decompression input buffer for compressed file loading.
-    SharedArrayPtr<unsigned char> inputBuffer_;
+    ea::shared_array<unsigned char> inputBuffer_;
     /// Read buffer position.
     unsigned readBufferOffset_;
     /// Bytes in the current read buffer.

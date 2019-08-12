@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -71,18 +71,18 @@ void IntRect::Merge(const IntRect& rect)
     }
 }
 
-String Rect::ToString() const
+ea::string Rect::ToString() const
 {
     char tempBuffer[CONVERSION_BUFFER_LENGTH];
     sprintf(tempBuffer, "%g %g %g %g", min_.x_, min_.y_, max_.x_, max_.y_);
-    return String(tempBuffer);
+    return ea::string(tempBuffer);
 }
 
-String IntRect::ToString() const
+ea::string IntRect::ToString() const
 {
     char tempBuffer[CONVERSION_BUFFER_LENGTH];
     sprintf(tempBuffer, "%d %d %d %d", left_, top_, right_, bottom_);
-    return String(tempBuffer);
+    return ea::string(tempBuffer);
 }
 
 void Rect::Clip(const Rect& rect)

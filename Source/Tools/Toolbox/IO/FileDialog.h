@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,10 +35,10 @@ enum FileDialogResult
     DIALOG_CANCEL
 };
 
-URHO3D_API FileDialogResult OpenDialog(const String& filterList, const String& defaultPath, String& outPath);
-URHO3D_API FileDialogResult OpenDialogMultiple(const String& filterList, const String& defaultPath,
-                                               Vector<String>& outPaths);
-URHO3D_API FileDialogResult SaveDialog(const String& filterList, const String& defaultPath, String& outPath);
-URHO3D_API FileDialogResult PickFolder(const String& defaultPath, String& outPath);
+URHO3D_API FileDialogResult OpenDialog(const ea::string& filterList, const ea::string& defaultPath, ea::string& outPath);
+URHO3D_API FileDialogResult OpenDialogMultiple(const ea::string& filterList, const ea::string& defaultPath,
+                                               ea::vector<ea::string>& outPaths);
+URHO3D_API FileDialogResult SaveDialog(const ea::string& filterList, const ea::string& defaultPath, ea::string& outPath);
+URHO3D_API FileDialogResult PickFolder(const ea::string& defaultPath, ea::string& outPath);
 
 }

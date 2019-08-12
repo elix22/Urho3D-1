@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
+#include <EASTL/shared_array.h>
+
 #include "../Container/Ptr.h"
 #include "../Graphics/GraphicsDefs.h"
 #include "../Graphics/Skeleton.h"
@@ -47,7 +48,7 @@ struct VertexBufferMorph
     /// Morphed vertices data size as bytes.
     unsigned dataSize_;
     /// Morphed vertices. Stored packed as <index, data> pairs.
-    SharedArrayPtr<unsigned char> morphData_;
+    ea::shared_array<unsigned char> morphData_;
 };
 
 /// Definition of a model's vertex morph.
@@ -66,13 +67,13 @@ struct ModelMorph
     }
 
     /// Morph name.
-    String name_;
+    ea::string name_;
     /// Morph name hash.
     StringHash nameHash_;
     /// Current morph weight.
     float weight_;
     /// Morph data per vertex buffer.
-    HashMap<unsigned, VertexBufferMorph> buffers_;
+    ea::unordered_map<unsigned, VertexBufferMorph> buffers_;
 };
 
 /// Description of vertex buffer data for asynchronous loading.
@@ -81,11 +82,11 @@ struct VertexBufferDesc
     /// Vertex count.
     unsigned vertexCount_;
     /// Vertex declaration.
-    PODVector<VertexElement> vertexElements_;
+    ea::vector<VertexElement> vertexElements_;
     /// Vertex data size.
     unsigned dataSize_;
     /// Vertex data.
-    SharedArrayPtr<unsigned char> data_;
+    ea::shared_array<unsigned char> data_;
 };
 
 /// Description of index buffer data for asynchronous loading.
@@ -98,7 +99,7 @@ struct IndexBufferDesc
     /// Index data size.
     unsigned dataSize_;
     /// Index data.
-    SharedArrayPtr<unsigned char> data_;
+    ea::shared_array<unsigned char> data_;
 };
 
 /// Description of a geometry for asynchronous loading.
@@ -139,10 +140,10 @@ public:
     /// Set local-space bounding box.
     void SetBoundingBox(const BoundingBox& box);
     /// Set vertex buffers and their morph ranges.
-    bool SetVertexBuffers(const Vector<SharedPtr<VertexBuffer> >& buffers, const PODVector<unsigned>& morphRangeStarts,
-        const PODVector<unsigned>& morphRangeCounts);
+    bool SetVertexBuffers(const ea::vector<SharedPtr<VertexBuffer> >& buffers, const ea::vector<unsigned>& morphRangeStarts,
+        const ea::vector<unsigned>& morphRangeCounts);
     /// Set index buffers.
-    bool SetIndexBuffers(const Vector<SharedPtr<IndexBuffer> >& buffers);
+    bool SetIndexBuffers(const ea::vector<SharedPtr<IndexBuffer> >& buffers);
     /// Set number of geometries.
     void SetNumGeometries(unsigned num);
     /// Set number of LOD levels in a geometry.
@@ -154,11 +155,11 @@ public:
     /// Set skeleton.
     void SetSkeleton(const Skeleton& skeleton);
     /// Set bone mappings when model has more bones than the skinning shader can handle.
-    void SetGeometryBoneMappings(const Vector<PODVector<unsigned> >& geometryBoneMappings);
+    void SetGeometryBoneMappings(const ea::vector<ea::vector<unsigned> >& geometryBoneMappings);
     /// Set vertex morphs.
-    void SetMorphs(const Vector<ModelMorph>& morphs);
+    void SetMorphs(const ea::vector<ModelMorph>& morphs);
     /// Clone the model. The geometry data is deep-copied and can be modified in the clone without affecting the original.
-    SharedPtr<Model> Clone(const String& cloneName = String::EMPTY) const;
+    SharedPtr<Model> Clone(const ea::string& cloneName = EMPTY_STRING) const;
 
     /// Return bounding box.
     const BoundingBox& GetBoundingBox() const { return boundingBox_; }
@@ -167,22 +168,22 @@ public:
     Skeleton& GetSkeleton() { return skeleton_; }
 
     /// Return vertex buffers.
-    const Vector<SharedPtr<VertexBuffer> >& GetVertexBuffers() const { return vertexBuffers_; }
+    const ea::vector<SharedPtr<VertexBuffer> >& GetVertexBuffers() const { return vertexBuffers_; }
 
     /// Return index buffers.
-    const Vector<SharedPtr<IndexBuffer> >& GetIndexBuffers() const { return indexBuffers_; }
+    const ea::vector<SharedPtr<IndexBuffer> >& GetIndexBuffers() const { return indexBuffers_; }
 
     /// Return number of geometries.
-    unsigned GetNumGeometries() const { return geometries_.Size(); }
+    unsigned GetNumGeometries() const { return geometries_.size(); }
 
     /// Return number of LOD levels in geometry.
     unsigned GetNumGeometryLodLevels(unsigned index) const;
 
     /// Return geometry pointers.
-    const Vector<Vector<SharedPtr<Geometry> > >& GetGeometries() const { return geometries_; }
+    const ea::vector<ea::vector<SharedPtr<Geometry> > >& GetGeometries() const { return geometries_; }
 
     /// Return geometry center points.
-    const PODVector<Vector3>& GetGeometryCenters() const { return geometryCenters_; }
+    const ea::vector<Vector3>& GetGeometryCenters() const { return geometryCenters_; }
 
     /// Return geometry by index and LOD level. The LOD level is clamped if out of range.
     Geometry* GetGeometry(unsigned index, unsigned lodLevel) const;
@@ -190,22 +191,22 @@ public:
     /// Return geometry center by index.
     const Vector3& GetGeometryCenter(unsigned index) const
     {
-        return index < geometryCenters_.Size() ? geometryCenters_[index] : Vector3::ZERO;
+        return index < geometryCenters_.size() ? geometryCenters_[index] : Vector3::ZERO;
     }
 
     /// Return geometery bone mappings.
-    const Vector<PODVector<unsigned> >& GetGeometryBoneMappings() const { return geometryBoneMappings_; }
+    const ea::vector<ea::vector<unsigned> >& GetGeometryBoneMappings() const { return geometryBoneMappings_; }
 
     /// Return vertex morphs.
-    const Vector<ModelMorph>& GetMorphs() const { return morphs_; }
+    const ea::vector<ModelMorph>& GetMorphs() const { return morphs_; }
 
     /// Return number of vertex morphs.
-    unsigned GetNumMorphs() const { return morphs_.Size(); }
+    unsigned GetNumMorphs() const { return morphs_.size(); }
 
     /// Return vertex morph by index.
     const ModelMorph* GetMorph(unsigned index) const;
     /// Return vertex morph by name.
-    const ModelMorph* GetMorph(const String& name) const;
+    const ModelMorph* GetMorph(const ea::string& name) const;
     /// Return vertex morph by name hash.
     const ModelMorph* GetMorph(StringHash nameHash) const;
     /// Return vertex buffer morph range start.
@@ -219,27 +220,27 @@ private:
     /// Skeleton.
     Skeleton skeleton_;
     /// Vertex buffers.
-    Vector<SharedPtr<VertexBuffer> > vertexBuffers_;
+    ea::vector<SharedPtr<VertexBuffer> > vertexBuffers_;
     /// Index buffers.
-    Vector<SharedPtr<IndexBuffer> > indexBuffers_;
+    ea::vector<SharedPtr<IndexBuffer> > indexBuffers_;
     /// Geometries.
-    Vector<Vector<SharedPtr<Geometry> > > geometries_;
+    ea::vector<ea::vector<SharedPtr<Geometry> > > geometries_;
     /// Geometry bone mappings.
-    Vector<PODVector<unsigned> > geometryBoneMappings_;
+    ea::vector<ea::vector<unsigned> > geometryBoneMappings_;
     /// Geometry centers.
-    PODVector<Vector3> geometryCenters_;
+    ea::vector<Vector3> geometryCenters_;
     /// Vertex morphs.
-    Vector<ModelMorph> morphs_;
+    ea::vector<ModelMorph> morphs_;
     /// Vertex buffer morph range start.
-    PODVector<unsigned> morphRangeStarts_;
+    ea::vector<unsigned> morphRangeStarts_;
     /// Vertex buffer morph range vertex count.
-    PODVector<unsigned> morphRangeCounts_;
+    ea::vector<unsigned> morphRangeCounts_;
     /// Vertex buffer data for asynchronous loading.
-    Vector<VertexBufferDesc> loadVBData_;
+    ea::vector<VertexBufferDesc> loadVBData_;
     /// Index buffer data for asynchronous loading.
-    Vector<IndexBufferDesc> loadIBData_;
+    ea::vector<IndexBufferDesc> loadIBData_;
     /// Geometry definitions for asynchronous loading.
-    Vector<PODVector<GeometryDesc> > loadGeometries_;
+    ea::vector<ea::vector<GeometryDesc> > loadGeometries_;
 };
 
 }

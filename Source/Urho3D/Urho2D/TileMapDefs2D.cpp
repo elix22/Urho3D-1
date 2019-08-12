@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -146,18 +146,18 @@ void PropertySet2D::Load(const XMLElement& element)
         nameToValueMapping_[propertyElem.GetAttribute("name")] = propertyElem.GetAttribute("value");
 }
 
-bool PropertySet2D::HasProperty(const String& name) const
+bool PropertySet2D::HasProperty(const ea::string& name) const
 {
-    return nameToValueMapping_.Find(name) != nameToValueMapping_.End();
+    return nameToValueMapping_.find(name) != nameToValueMapping_.end();
 }
 
-const String& PropertySet2D::GetProperty(const String& name) const
+const ea::string& PropertySet2D::GetProperty(const ea::string& name) const
 {
-    HashMap<String, String>::ConstIterator i = nameToValueMapping_.Find(name);
-    if (i == nameToValueMapping_.End())
-        return String::EMPTY;
+    auto i = nameToValueMapping_.find(name);
+    if (i == nameToValueMapping_.end())
+        return EMPTY_STRING;
 
-    return i->second_;
+    return i->second;
 }
 
 Tile2D::Tile2D() :
@@ -170,17 +170,17 @@ Sprite2D* Tile2D::GetSprite() const
     return sprite_;
 }
 
-bool Tile2D::HasProperty(const String& name) const
+bool Tile2D::HasProperty(const ea::string& name) const
 {
     if (!propertySet_)
         return false;
     return propertySet_->HasProperty(name);
 }
 
-const String& Tile2D::GetProperty(const String& name) const
+const ea::string& Tile2D::GetProperty(const ea::string& name) const
 {
     if (!propertySet_)
-        return String::EMPTY;
+        return EMPTY_STRING;
 
     return propertySet_->GetProperty(name);
 }
@@ -189,12 +189,12 @@ TileMapObject2D::TileMapObject2D() = default;
 
 unsigned TileMapObject2D::GetNumPoints() const
 {
-    return points_.Size();
+    return points_.size();
 }
 
 const Vector2& TileMapObject2D::GetPoint(unsigned index) const
 {
-    if (index >= points_.Size())
+    if (index >= points_.size())
         return Vector2::ZERO;
 
     return points_[index];
@@ -205,17 +205,17 @@ Sprite2D* TileMapObject2D::GetTileSprite() const
     return sprite_;
 }
 
-bool TileMapObject2D::HasProperty(const String& name) const
+bool TileMapObject2D::HasProperty(const ea::string& name) const
 {
     if (!propertySet_)
         return false;
     return propertySet_->HasProperty(name);
 }
 
-const String& TileMapObject2D::GetProperty(const String& name) const
+const ea::string& TileMapObject2D::GetProperty(const ea::string& name) const
 {
     if (!propertySet_)
-        return String::EMPTY;
+        return EMPTY_STRING;
     return propertySet_->GetProperty(name);
 }
 

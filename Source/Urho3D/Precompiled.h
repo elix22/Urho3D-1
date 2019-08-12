@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,10 +25,10 @@
 #ifndef URHO3D_PCH_INCLUDED
 #define URHO3D_PCH_INCLUDED
 
-#include "Container/HashMap.h"
-#include "Container/HashSet.h"
-#include "Container/Sort.h"
-#include "Container/Str.h"
+#include <EASTL/string.h>
+#include <EASTL/vector.h>
+#include <EASTL/unordered_map.h>
+#include <EASTL/utility.h>
 
 #endif
 

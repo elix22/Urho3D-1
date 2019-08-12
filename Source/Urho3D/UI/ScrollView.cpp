@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -125,9 +125,9 @@ void ScrollView::Update(float timeStep)
 
     if (GetSubsystem<UI>()->IsDragging())
     {
-        const PODVector<UIElement*>& dragElements = GetSubsystem<UI>()->GetDragElements();
+        const ea::vector<UIElement*>& dragElements = GetSubsystem<UI>()->GetDragElements();
 
-        for (unsigned i = 0; i < dragElements.Size(); i++)
+        for (unsigned i = 0; i < dragElements.size(); i++)
         {
             UIElement* dragElement = dragElements[i];
             int dragButtons = dragElement->GetDragButtonCombo();
@@ -408,7 +408,7 @@ bool ScrollView::FilterImplicitAttributes(XMLElement& dest) const
     return true;
 }
 
-bool ScrollView::FilterScrollBarImplicitAttributes(XMLElement& dest, const String& name) const
+bool ScrollView::FilterScrollBarImplicitAttributes(XMLElement& dest, const ea::string& name) const
 {
     if (!dest)
         return false;

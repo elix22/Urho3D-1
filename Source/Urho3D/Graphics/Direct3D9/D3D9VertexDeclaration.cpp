@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -57,12 +57,12 @@ const BYTE d3dElementUsage[] =
     D3DDECLUSAGE_TEXCOORD // Object index (not supported by D3D9)
 };
 
-VertexDeclaration::VertexDeclaration(Graphics* graphics, const PODVector<VertexElement>& srcElements) :
+VertexDeclaration::VertexDeclaration(Graphics* graphics, const ea::vector<VertexElement>& srcElements) :
     declaration_(nullptr)
 {
-    PODVector<VertexDeclarationElement> elements;
+    ea::vector<VertexDeclarationElement> elements;
 
-    for (unsigned i = 0; i < srcElements.Size(); ++i)
+    for (unsigned i = 0; i < srcElements.size(); ++i)
     {
         const VertexElement& srcElement = srcElements[i];
 
@@ -78,27 +78,27 @@ VertexDeclaration::VertexDeclaration(Graphics* graphics, const PODVector<VertexE
         element.index_ = srcElement.index_;
         element.streamIndex_ = 0;
         element.offset_ = srcElement.offset_;
-        elements.Push(element);
+        elements.emplace_back(element);
     }
 
     Create(graphics, elements);
 }
 
-VertexDeclaration::VertexDeclaration(Graphics* graphics, const PODVector<VertexBuffer*>& buffers) :
+VertexDeclaration::VertexDeclaration(Graphics* graphics, const ea::vector<VertexBuffer*>& buffers) :
     declaration_(nullptr)
 {
-    PODVector<VertexDeclarationElement> elements;
+    ea::vector<VertexDeclarationElement> elements;
     unsigned prevBufferElements = 0;
 
-    for (unsigned i = 0; i < buffers.Size(); ++i)
+    for (unsigned i = 0; i < buffers.size(); ++i)
     {
         if (!buffers[i])
             continue;
 
-        const PODVector<VertexElement>& srcElements = buffers[i]->GetElements();
+        const ea::vector<VertexElement>& srcElements = buffers[i]->GetElements();
         bool isExisting = false;
 
-        for (unsigned j = 0; j < srcElements.Size(); ++j)
+        for (unsigned j = 0; j < srcElements.size(); ++j)
         {
             const VertexElement& srcElement = srcElements[j];
 
@@ -129,30 +129,30 @@ VertexDeclaration::VertexDeclaration(Graphics* graphics, const PODVector<VertexB
             element.index_ = srcElement.index_;
             element.streamIndex_ = i;
             element.offset_ = srcElement.offset_;
-            elements.Push(element);
+            elements.emplace_back(element);
         }
 
-        prevBufferElements = elements.Size();
+        prevBufferElements = elements.size();
     }
 
     Create(graphics, elements);
 }
 
-VertexDeclaration::VertexDeclaration(Graphics* graphics, const Vector<SharedPtr<VertexBuffer> >& buffers) :
+VertexDeclaration::VertexDeclaration(Graphics* graphics, const ea::vector<SharedPtr<VertexBuffer> >& buffers) :
     declaration_(nullptr)
 {
-    PODVector<VertexDeclarationElement> elements;
+    ea::vector<VertexDeclarationElement> elements;
     unsigned prevBufferElements = 0;
 
-    for (unsigned i = 0; i < buffers.Size(); ++i)
+    for (unsigned i = 0; i < buffers.size(); ++i)
     {
         if (!buffers[i])
             continue;
 
-        const PODVector<VertexElement>& srcElements = buffers[i]->GetElements();
+        const ea::vector<VertexElement>& srcElements = buffers[i]->GetElements();
         bool isExisting = false;
 
-        for (unsigned j = 0; j < srcElements.Size(); ++j)
+        for (unsigned j = 0; j < srcElements.size(); ++j)
         {
             const VertexElement& srcElement = srcElements[j];
 
@@ -183,10 +183,10 @@ VertexDeclaration::VertexDeclaration(Graphics* graphics, const Vector<SharedPtr<
             element.index_ = srcElement.index_;
             element.streamIndex_ = i;
             element.offset_ = srcElement.offset_;
-            elements.Push(element);
+            elements.emplace_back(element);
         }
 
-        prevBufferElements = elements.Size();
+        prevBufferElements = elements.size();
     }
 
     Create(graphics, elements);
@@ -197,12 +197,12 @@ VertexDeclaration::~VertexDeclaration()
     Release();
 }
 
-void VertexDeclaration::Create(Graphics* graphics, const PODVector<VertexDeclarationElement>& elements)
+void VertexDeclaration::Create(Graphics* graphics, const ea::vector<VertexDeclarationElement>& elements)
 {
-    SharedArrayPtr<D3DVERTEXELEMENT9> elementArray(new D3DVERTEXELEMENT9[elements.Size() + 1]);
+    ea::shared_array<D3DVERTEXELEMENT9> elementArray(new D3DVERTEXELEMENT9[elements.size() + 1]);
 
-    D3DVERTEXELEMENT9* dest = elementArray;
-    for (Vector<VertexDeclarationElement>::ConstIterator i = elements.Begin(); i != elements.End(); ++i)
+    D3DVERTEXELEMENT9* dest = elementArray.get();
+    for (auto i = elements.begin(); i != elements.end(); ++i)
     {
         dest->Stream = (WORD)i->streamIndex_;
         dest->Offset = (WORD)i->offset_;
@@ -221,7 +221,7 @@ void VertexDeclaration::Create(Graphics* graphics, const PODVector<VertexDeclara
     dest->UsageIndex = 0;
 
     IDirect3DDevice9* device = graphics->GetImpl()->GetDevice();
-    HRESULT hr = device->CreateVertexDeclaration(elementArray, &declaration_);
+    HRESULT hr = device->CreateVertexDeclaration(elementArray.get(), &declaration_);
     if (FAILED(hr))
     {
         URHO3D_SAFE_RELEASE(declaration_);

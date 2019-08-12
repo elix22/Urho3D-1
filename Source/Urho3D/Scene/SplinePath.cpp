@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -74,14 +74,14 @@ void SplinePath::ApplyAttributes()
 
     // Remove all old instance nodes before searching for new. Can not call RemoveAllInstances() as that would modify
     // the ID list on its own
-    for (unsigned i = 0; i < controlPoints_.Size(); ++i)
+    for (unsigned i = 0; i < controlPoints_.size(); ++i)
     {
         Node* node = controlPoints_[i];
         if (node)
             node->RemoveListener(this);
     }
 
-    controlPoints_.Clear();
+    controlPoints_.clear();
     spline_.Clear();
 
     Scene* scene = GetScene();
@@ -89,14 +89,14 @@ void SplinePath::ApplyAttributes()
     if (scene)
     {
         // The first index stores the number of IDs redundantly. This is for editing
-        for (unsigned i = 1; i < controlPointIdsAttr_.Size(); ++i)
+        for (unsigned i = 1; i < controlPointIdsAttr_.size(); ++i)
         {
             Node* node = scene->GetNode(controlPointIdsAttr_[i].GetUInt());
             if (node)
             {
                 WeakPtr<Node> controlPoint(node);
                 node->AddListener(this);
-                controlPoints_.Push(controlPoint);
+                controlPoints_.push_back(controlPoint);
                 spline_.AddKnot(node->GetWorldPosition());
             }
         }
@@ -117,7 +117,7 @@ void SplinePath::DrawDebugGeometry(DebugRenderer* debug, bool /*depthTest*/)
 {
     if (debug && node_ && IsEnabledEffective())
     {
-        if (spline_.GetKnots().Size() > 1)
+        if (spline_.GetKnots().size() > 1)
         {
             Vector3 a = spline_.GetPoint(0.f).GetVector3();
             for (auto i = 1; i <= 100; ++i)
@@ -128,11 +128,11 @@ void SplinePath::DrawDebugGeometry(DebugRenderer* debug, bool /*depthTest*/)
             }
         }
 
-        for (Vector<WeakPtr<Node> >::ConstIterator i = controlPoints_.Begin(); i != controlPoints_.End(); ++i)
-            debug->AddNode(*i);
+        for (auto i = controlPoints_.begin(); i != controlPoints_.end(); ++i)
+            debug->AddNode(i->Get());
 
         if (controlledNode_)
-            debug->AddNode(controlledNode_);
+            debug->AddNode(controlledNode_.Get());
     }
 }
 
@@ -144,7 +144,7 @@ void SplinePath::AddControlPoint(Node* point, unsigned index)
     WeakPtr<Node> controlPoint(point);
 
     point->AddListener(this);
-    controlPoints_.Insert(index, controlPoint);
+    controlPoints_.insert_at(index, controlPoint);
     spline_.AddKnot(point->GetWorldPosition(), index);
 
     UpdateNodeIds();
@@ -160,11 +160,11 @@ void SplinePath::RemoveControlPoint(Node* point)
 
     point->RemoveListener(this);
 
-    for (unsigned i = 0; i < controlPoints_.Size(); ++i)
+    for (unsigned i = 0; i < controlPoints_.size(); ++i)
     {
-        if (controlPoints_[i] == controlPoint)
+        if (controlPoints_[i] == controlPoint.Get())
         {
-            controlPoints_.Erase(i);
+            controlPoints_.erase_at(i);
             spline_.RemoveKnot(i);
             break;
         }
@@ -176,14 +176,14 @@ void SplinePath::RemoveControlPoint(Node* point)
 
 void SplinePath::ClearControlPoints()
 {
-    for (unsigned i = 0; i < controlPoints_.Size(); ++i)
+    for (unsigned i = 0; i < controlPoints_.size(); ++i)
     {
         Node* node = controlPoints_[i];
         if (node)
             node->RemoveListener(this);
     }
 
-    controlPoints_.Clear();
+    controlPoints_.clear();
     spline_.Clear();
 
     UpdateNodeIds();
@@ -221,7 +221,7 @@ Vector3 SplinePath::GetPoint(float factor) const
 
 void SplinePath::Move(float timeStep)
 {
-    if (traveled_ >= 1.0f || length_ <= 0.0f || controlledNode_.Null())
+    if (traveled_ >= 1.0f || length_ <= 0.0f || !controlledNode_)
         return;
 
     elapsedTime_ += timeStep;
@@ -243,9 +243,9 @@ void SplinePath::SetControlPointIdsAttr(const VariantVector& value)
 {
     // Just remember the node IDs. They need to go through the SceneResolver, and we actually find the nodes during
     // ApplyAttributes()
-    if (value.Size())
+    if (value.size())
     {
-        controlPointIdsAttr_.Clear();
+        controlPointIdsAttr_.clear();
 
         unsigned index = 0;
         unsigned numInstances = value[index++].GetUInt();
@@ -253,22 +253,22 @@ void SplinePath::SetControlPointIdsAttr(const VariantVector& value)
         if (numInstances > M_MAX_INT)
             numInstances = 0;
 
-        controlPointIdsAttr_.Push(numInstances);
+        controlPointIdsAttr_.push_back(numInstances);
         while (numInstances--)
         {
             // If vector contains less IDs than should, fill the rest with zeros
-            if (index < value.Size())
-                controlPointIdsAttr_.Push(value[index++].GetUInt());
+            if (index < value.size())
+                controlPointIdsAttr_.push_back(value[index++].GetUInt());
             else
-                controlPointIdsAttr_.Push(0);
+                controlPointIdsAttr_.push_back(0);
         }
 
         dirty_ = true;
     }
     else
     {
-        controlPointIdsAttr_.Clear();
-        controlPointIdsAttr_.Push(0);
+        controlPointIdsAttr_.clear();
+        controlPointIdsAttr_.push_back(0);
 
         dirty_ = true;
     }
@@ -289,9 +289,9 @@ void SplinePath::OnMarkedDirty(Node* point)
 
     WeakPtr<Node> controlPoint(point);
 
-    for (unsigned i = 0; i < controlPoints_.Size(); ++i)
+    for (unsigned i = 0; i < controlPoints_.size(); ++i)
     {
-        if (controlPoints_[i] == controlPoint)
+        if (controlPoints_[i] == controlPoint.Get())
         {
             spline_.SetKnot(point->GetWorldPosition(), i);
             break;
@@ -308,9 +308,9 @@ void SplinePath::OnNodeSetEnabled(Node* point)
 
     WeakPtr<Node> controlPoint(point);
 
-    for (unsigned i = 0; i < controlPoints_.Size(); ++i)
+    for (unsigned i = 0; i < controlPoints_.size(); ++i)
     {
-        if (controlPoints_[i] == controlPoint)
+        if (controlPoints_[i] == controlPoint.Get())
         {
             if (point->IsEnabled())
                 spline_.AddKnot(point->GetWorldPosition(), i);
@@ -326,21 +326,21 @@ void SplinePath::OnNodeSetEnabled(Node* point)
 
 void SplinePath::UpdateNodeIds()
 {
-    unsigned numInstances = controlPoints_.Size();
+    unsigned numInstances = controlPoints_.size();
 
-    controlPointIdsAttr_.Clear();
-    controlPointIdsAttr_.Push(numInstances);
+    controlPointIdsAttr_.clear();
+    controlPointIdsAttr_.push_back(numInstances);
 
     for (unsigned i = 0; i < numInstances; ++i)
     {
         Node* node = controlPoints_[i];
-        controlPointIdsAttr_.Push(node ? node->GetID() : 0);
+        controlPointIdsAttr_.push_back(node ? node->GetID() : 0);
     }
 }
 
 void SplinePath::CalculateLength()
 {
-    if (spline_.GetKnots().Size() <= 0)
+    if (spline_.GetKnots().size() <= 0)
         return;
 
     length_ = 0.f;

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
+#include <EASTL/shared_array.h>
+
 #include "../Resource/Resource.h"
 
 namespace Urho3D
@@ -58,7 +59,7 @@ public:
     /// Load resource from stream. May be called from a worker thread. Return true if successful.
     bool BeginLoad(Deserializer& source) override;
     /// Save resource as a new bitmap font type in XML format. Return true if successful.
-    bool SaveXML(Serializer& dest, int pointSize, bool usedGlyphs = false, const String& indentation = "\t");
+    bool SaveXML(Serializer& dest, int pointSize, bool usedGlyphs = false, const ea::string& indentation = "\t");
     /// Set absolute (in pixels) position adjustment for glyphs.
     void SetAbsoluteGlyphOffset(const IntVector2& offset);
     /// Set point size scaled position adjustment for glyphs.
@@ -94,9 +95,9 @@ private:
     FontFace* GetFaceBitmap(float pointSize);
 
     /// Created faces.
-    HashMap<int, SharedPtr<FontFace> > faces_;
+    ea::unordered_map<int, SharedPtr<FontFace> > faces_;
     /// Font data.
-    SharedArrayPtr<unsigned char> fontData_;
+    ea::shared_array<unsigned char> fontData_;
     /// Size of font data.
     unsigned fontDataSize_;
     /// Absolute position adjustment for glyphs.

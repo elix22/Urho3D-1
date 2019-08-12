@@ -1,3 +1,26 @@
+//
+// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2017-2019 the rbfx project.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+
 using System;
 using System.Runtime.InteropServices;
 
@@ -30,13 +53,13 @@ namespace Urho3DNet
             Define(box);
         }
 
-        /// Construct from a frustum.
-        public Sphere(in Frustum frustum)
-        {
-            Center = Vector3.Zero;
-            Radius = 0;
-            Define(frustum);
-        }
+//        /// Construct from a frustum.
+//        public Sphere(in Frustum frustum)
+//        {
+//            Center = Vector3.Zero;
+//            Radius = 0;
+//            Define(frustum);
+//        }
 
 //        /// Construct from a polyhedron.
 //        public Sphere(in Polyhedron poly)
@@ -92,10 +115,10 @@ namespace Urho3DNet
             Merge(max);
         }
         /// Define from a frustum.
-        public void Define(in Frustum frustum)
-        {
-            Define(frustum.vertices_);
-        }
+//        public void Define(in Frustum frustum)
+//        {
+//            Define(frustum.Vertices);
+//        }
 //        /// Define from a polyhedron.
 //        public void Define(in Polyhedron poly)
 //        {
@@ -146,16 +169,16 @@ namespace Urho3DNet
             Merge(max);
         }
         /// Merge a frustum.
-        public void Merge(in Frustum frustum)
-        {
-            Merge(frustum.vertices_);
-        }
+//        public void Merge(in Frustum frustum)
+//        {
+//            Merge(frustum.Vertices);
+//        }
 //        /// Merge a polyhedron.
 //        public void Merge(in Polyhedron poly)
 //        {
 //            for (unsigned i = 0; i < poly.faces_.Size(); ++i)
 //            {
-//                const PODVector<Vector3>& face = poly.faces_[i];
+//                const ea::vector<Vector3>& face = poly.faces_[i];
 //                if (!face.Empty())
 //                    Merge(&face[0], face.Size());
 //            }

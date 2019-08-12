@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -39,7 +39,7 @@ void UISelectable::RegisterObject(Context* context)
     URHO3D_ATTRIBUTE("Hover Color", Color, hoverColor_, Color::TRANSPARENT_BLACK, AM_FILE);
 }
 
-void UISelectable::GetBatches(PODVector<UIBatch>& batches, PODVector<float>& vertexData, const IntRect & currentScissor)
+void UISelectable::GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, const IntRect & currentScissor)
 {
     // Hovering and/or whole selection batch
     if ((hovering_ && hoverColor_.a_ > 0.0) || (selected_ && selectionColor_.a_ > 0.0f))

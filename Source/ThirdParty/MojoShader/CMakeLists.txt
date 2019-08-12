@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2018 the Urho3D project.
+# Copyright (c) 2008-2019 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -30,8 +30,6 @@ target_include_directories(MojoShader
     PRIVATE   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/MojoShader>
 )
 
-install (TARGETS MojoShader EXPORT Urho3D
-    LIBRARY DESTINATION ${DEST_LIBRARY_DIR}
-    RUNTIME DESTINATION ${DEST_BIN_DIR}
-    ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR}
-)
+if (NOT URHO3D_MERGE_STATIC_LIBS)
+    install (TARGETS MojoShader EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
+endif ()

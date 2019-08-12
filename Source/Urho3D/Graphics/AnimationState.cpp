@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -72,16 +72,17 @@ AnimationState::AnimationState(Node* node, Animation* animation) :
         // Setup animation track to scene node mapping
         if (node_)
         {
-            const HashMap<StringHash, AnimationTrack>& tracks = animation_->GetTracks();
-            stateTracks_.Clear();
+            const ea::unordered_map<StringHash, AnimationTrack>& tracks = animation_->GetTracks();
+            stateTracks_.clear();
 
-            for (HashMap<StringHash, AnimationTrack>::ConstIterator i = tracks.Begin(); i != tracks.End(); ++i)
+            for (auto i = tracks.begin(); i !=
+                tracks.end(); ++i)
             {
-                const StringHash& nameHash = i->second_.nameHash_;
+                const StringHash& nameHash = i->second.nameHash_;
                 AnimationStateTrack stateTrack;
-                stateTrack.track_ = &i->second_;
+                stateTrack.track_ = &i->second;
 
-                if (node_->GetNameHash() == nameHash || tracks.Size() == 1)
+                if (node_->GetNameHash() == nameHash || tracks.size() == 1)
                     stateTrack.node_ = node_;
                 else
                 {
@@ -89,11 +90,11 @@ AnimationState::AnimationState(Node* node, Animation* animation) :
                     if (targetNode)
                         stateTrack.node_ = targetNode;
                     else
-                        URHO3D_LOGWARNING("Node " + i->second_.name_ + " not found for node animation " + animation_->GetName());
+                        URHO3D_LOGWARNING("Node " + i->second.name_ + " not found for node animation " + animation_->GetName());
                 }
 
                 if (stateTrack.node_)
-                    stateTracks_.Push(stateTrack);
+                    stateTracks_.push_back(stateTrack);
             }
         }
     }
@@ -117,25 +118,25 @@ void AnimationState::SetStartBone(Bone* startBone)
     }
 
     // Do not reassign if the start bone did not actually change, and we already have valid bone nodes
-    if (startBone == startBone_ && !stateTracks_.Empty())
+    if (startBone == startBone_ && !stateTracks_.empty())
         return;
 
     startBone_ = startBone;
 
-    const HashMap<StringHash, AnimationTrack>& tracks = animation_->GetTracks();
-    stateTracks_.Clear();
+    const ea::unordered_map<StringHash, AnimationTrack>& tracks = animation_->GetTracks();
+    stateTracks_.clear();
 
     if (!startBone->node_)
         return;
 
-    for (HashMap<StringHash, AnimationTrack>::ConstIterator i = tracks.Begin(); i != tracks.End(); ++i)
+    for (auto i = tracks.begin(); i != tracks.end(); ++i)
     {
         AnimationStateTrack stateTrack;
-        stateTrack.track_ = &i->second_;
+        stateTrack.track_ = &i->second;
 
         // Include those tracks that are either the start bone itself, or its children
         Bone* trackBone = nullptr;
-        const StringHash& nameHash = i->second_.nameHash_;
+        const StringHash& nameHash = i->second.nameHash_;
 
         if (nameHash == startBone->nameHash_)
             trackBone = startBone;
@@ -150,7 +151,7 @@ void AnimationState::SetStartBone(Bone* startBone)
         {
             stateTrack.bone_ = trackBone;
             stateTrack.node_ = trackBone->node_;
-            stateTracks_.Push(stateTrack);
+            stateTracks_.push_back(stateTrack);
         }
     }
 
@@ -204,7 +205,7 @@ void AnimationState::SetTime(float time)
 
 void AnimationState::SetBoneWeight(unsigned index, float weight, bool recursive)
 {
-    if (index >= stateTracks_.Size())
+    if (index >= stateTracks_.size())
         return;
 
     weight = Clamp(weight, 0.0f, 1.0f);
@@ -221,8 +222,8 @@ void AnimationState::SetBoneWeight(unsigned index, float weight, bool recursive)
         Node* boneNode = stateTracks_[index].node_;
         if (boneNode)
         {
-            const Vector<SharedPtr<Node> >& children = boneNode->GetChildren();
-            for (unsigned i = 0; i < children.Size(); ++i)
+            const ea::vector<SharedPtr<Node> >& children = boneNode->GetChildren();
+            for (unsigned i = 0; i < children.size(); ++i)
             {
                 unsigned childTrackIndex = GetTrackIndex(children[i]);
                 if (childTrackIndex != M_MAX_UNSIGNED)
@@ -232,7 +233,7 @@ void AnimationState::SetBoneWeight(unsigned index, float weight, bool recursive)
     }
 }
 
-void AnimationState::SetBoneWeight(const String& name, float weight, bool recursive)
+void AnimationState::SetBoneWeight(const ea::string& name, float weight, bool recursive)
 {
     SetBoneWeight(GetTrackIndex(name), weight, recursive);
 }
@@ -293,7 +294,7 @@ void AnimationState::AddTime(float delta)
         using namespace AnimationFinished;
 
         WeakPtr<AnimationState> self(this);
-        WeakPtr<Node> senderNode(model_ ? model_->GetNode() : node_);
+        WeakPtr<Node> senderNode(model_ ? model_->GetNode() : node_.Get());
 
         VariantMap& eventData = senderNode->GetEventDataMap();
         eventData[P_NODE] = senderNode;
@@ -329,10 +330,10 @@ void AnimationState::AddTime(float delta)
             }
         }
         if (oldTime > time)
-            Swap(oldTime, time);
+            ea::swap(oldTime, time);
 
-        const Vector<AnimationTriggerPoint>& triggers = animation_->GetTriggers();
-        for (Vector<AnimationTriggerPoint>::ConstIterator i = triggers.Begin(); i != triggers.End(); ++i)
+        const ea::vector<AnimationTriggerPoint>& triggers = animation_->GetTriggers();
+        for (auto i = triggers.begin(); i != triggers.end(); ++i)
         {
             float frameTime = i->time_;
             if (looped_ && wrap)
@@ -343,7 +344,7 @@ void AnimationState::AddTime(float delta)
                 using namespace AnimationTrigger;
 
                 WeakPtr<AnimationState> self(this);
-                WeakPtr<Node> senderNode(model_ ? model_->GetNode() : node_);
+                WeakPtr<Node> senderNode(model_ ? model_->GetNode() : node_.Get());
 
                 VariantMap& eventData = senderNode->GetEventDataMap();
                 eventData[P_NODE] = senderNode;
@@ -388,10 +389,10 @@ Bone* AnimationState::GetStartBone() const
 
 float AnimationState::GetBoneWeight(unsigned index) const
 {
-    return index < stateTracks_.Size() ? stateTracks_[index].weight_ : 0.0f;
+    return index < stateTracks_.size() ? stateTracks_[index].weight_ : 0.0f;
 }
 
-float AnimationState::GetBoneWeight(const String& name) const
+float AnimationState::GetBoneWeight(const ea::string& name) const
 {
     return GetBoneWeight(GetTrackIndex(name));
 }
@@ -401,9 +402,9 @@ float AnimationState::GetBoneWeight(StringHash nameHash) const
     return GetBoneWeight(GetTrackIndex(nameHash));
 }
 
-unsigned AnimationState::GetTrackIndex(const String& name) const
+unsigned AnimationState::GetTrackIndex(const ea::string& name) const
 {
-    for (unsigned i = 0; i < stateTracks_.Size(); ++i)
+    for (unsigned i = 0; i < stateTracks_.size(); ++i)
     {
         Node* node = stateTracks_[i].node_;
         if (node && node->GetName() == name)
@@ -415,7 +416,7 @@ unsigned AnimationState::GetTrackIndex(const String& name) const
 
 unsigned AnimationState::GetTrackIndex(Node* node) const
 {
-    for (unsigned i = 0; i < stateTracks_.Size(); ++i)
+    for (unsigned i = 0; i < stateTracks_.size(); ++i)
     {
         if (stateTracks_[i].node_ == node)
             return i;
@@ -426,7 +427,7 @@ unsigned AnimationState::GetTrackIndex(Node* node) const
 
 unsigned AnimationState::GetTrackIndex(StringHash nameHash) const
 {
-    for (unsigned i = 0; i < stateTracks_.Size(); ++i)
+    for (unsigned i = 0; i < stateTracks_.size(); ++i)
     {
         Node* node = stateTracks_[i].node_;
         if (node && node->GetNameHash() == nameHash)
@@ -454,7 +455,7 @@ void AnimationState::Apply()
 
 void AnimationState::ApplyToModel()
 {
-    for (Vector<AnimationStateTrack>::Iterator i = stateTracks_.Begin(); i != stateTracks_.End(); ++i)
+    for (auto i = stateTracks_.begin(); i != stateTracks_.end(); ++i)
     {
         AnimationStateTrack& stateTrack = *i;
         float finalWeight = weight_ * stateTrack.weight_;
@@ -470,7 +471,7 @@ void AnimationState::ApplyToModel()
 void AnimationState::ApplyToNodes()
 {
     // When applying to a node hierarchy, can only use full weight (nothing to blend to)
-    for (Vector<AnimationStateTrack>::Iterator i = stateTracks_.Begin(); i != stateTracks_.End(); ++i)
+    for (auto i = stateTracks_.begin(); i != stateTracks_.end(); ++i)
         ApplyTrack(*i, 1.0f, false);
 }
 
@@ -479,7 +480,7 @@ void AnimationState::ApplyTrack(AnimationStateTrack& stateTrack, float weight, b
     const AnimationTrack* track = stateTrack.track_;
     Node* node = stateTrack.node_;
 
-    if (track->keyFrames_.Empty() || !node)
+    if (track->keyFrames_.empty() || !node)
         return;
 
     unsigned& frame = stateTrack.keyFrame_;
@@ -488,7 +489,7 @@ void AnimationState::ApplyTrack(AnimationStateTrack& stateTrack, float weight, b
     // Check if next frame to interpolate to is valid, or if wrapping is needed (looping animation only)
     unsigned nextFrame = frame + 1;
     bool interpolate = true;
-    if (nextFrame >= track->keyFrames_.Size())
+    if (nextFrame >= track->keyFrames_.size())
     {
         if (!looped_)
         {

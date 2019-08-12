@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,18 +22,37 @@
 
 #include "../Precompiled.h"
 
-#include "../Container/RefCounted.h"
+#include <cassert>
 
-#include "../DebugNew.h"
+#include <EASTL/internal/thread_support.h>
+
+#include "../Container/RefCounted.h"
+#include "../Core/Macros.h"
+#if URHO3D_CSHARP
+#   include "../Script/Script.h"
+#endif
 
 namespace Urho3D
 {
 
-RefCounted::RefCounted() :
-    refCount_(new RefCount())
+RefCount* RefCount::Allocate()
+{
+    void* const memory = EASTLAlloc(*ea::get_default_allocator((Allocator*)nullptr), sizeof(RefCount));
+    assert(memory != nullptr);
+    return ::new(memory) RefCount();
+}
+
+void RefCount::Free(RefCount* instance)
+{
+    instance->~RefCount();
+    EASTLFree(*ea::get_default_allocator((Allocator*)nullptr), instance, sizeof(RefCount));
+}
+
+RefCounted::RefCounted()
+    : refCount_(RefCount::Allocate())
 {
     // Hold a weak ref to self to avoid possible double delete of the refcount
-    (refCount_->weakRefs_)++;
+    refCount_->weakRefs_++;
 }
 
 RefCounted::~RefCounted()
@@ -44,30 +63,66 @@ RefCounted::~RefCounted()
 
     // Mark object as expired, release the self weak ref and delete the refcount if no other weak refs exist
     refCount_->refs_ = -1;
-    (refCount_->weakRefs_)--;
-    if (!refCount_->weakRefs_)
-        delete refCount_;
+
+    if (ea::Internal::atomic_decrement(&refCount_->weakRefs_) == 0)
+        RefCount::Free(refCount_);
 
     refCount_ = nullptr;
-}
 
-void RefCounted::AddRef()
-{
-    assert(refCount_->refs_ >= 0);
-    (refCount_->refs_)++;
-}
-
-void RefCounted::ReleaseRef()
-{
-    assert(refCount_->refs_ > 0);
-    (refCount_->refs_)--;
-    if (!refCount_->refs_)
+#if URHO3D_CSHARP
+    if (scriptObject_)
     {
-        if (deleter_ != nullptr)
-            deleter_(this);
-        else
-            delete this;
+        // Last reference to this object was released while we still have a handle to managed script. This happens only
+        // when this object is wrapped as a director class and user inherited from it. User lost all managed references
+        // to this class, however engine kept a reference. It is then possible that managed finalizer was executed and
+        // wrapper replaced weak reference with a strong one and resurrected managed object. This happens because native
+        // instance depends on managed instance for logic implementation. So we likely have a strong reference and
+        // therefore we must dispose of managed object, release this strong reference in order to allow garbage
+        // collection of managed object.
+        if (ScriptRuntimeApi* api = Script::GetRuntimeApi())
+        {
+            api->FreeGCHandle(scriptObject_);
+            scriptObject_ = 0;
+        }
     }
+#endif
+}
+
+int RefCounted::AddRef()
+{
+    int refs = ea::Internal::atomic_increment(&refCount_->refs_);
+    assert(refs > 0);
+
+#if URHO3D_CSHARP
+    if (URHO3D_UNLIKELY(refs == 2 && scriptObject_))
+    {
+        // There is at least 1 script reference and 1 engine reference
+        // Convert to strong ref in order to prevent freeing of script object
+        if (ScriptRuntimeApi* api = Script::GetRuntimeApi())
+            scriptObject_ = api->RecreateGCHandle(scriptObject_, true);
+    }
+#endif
+    return refs;
+}
+
+int RefCounted::ReleaseRef()
+{
+    int refs = ea::Internal::atomic_decrement(&refCount_->refs_);
+    assert(refs >= 0);
+
+    if (refs == 0)
+        delete this;
+
+#if URHO3D_CSHARP
+    else if (URHO3D_UNLIKELY(refs == 1 && scriptObject_))
+    {
+        // Only script object holds 1 reference to this native object
+        // Convert to weak ref in order to allow object deletion when script runtime no longer references this object
+        if (ScriptRuntimeApi* api = Script::GetRuntimeApi())
+            scriptObject_ = api->RecreateGCHandle(scriptObject_, false);
+    }
+#endif
+    return refs;
 }
 
 int RefCounted::Refs() const
@@ -80,10 +135,11 @@ int RefCounted::WeakRefs() const
     // Subtract one to not return the internally held reference
     return refCount_->weakRefs_ - 1;
 }
-
-void RefCounted::SetDeleter(std::function<void(RefCounted*)> deleter)
+#if URHO3D_CSHARP
+uintptr_t RefCounted::SwapScriptObject(uintptr_t handle)
 {
-    deleter_ = std::move(deleter);
+    ea::swap(handle, scriptObject_);
+    return handle;
 }
-
+#endif
 }

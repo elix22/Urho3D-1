@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +48,7 @@ static const DXGI_FORMAT d3dElementFormats[] =
 VertexDeclaration::VertexDeclaration(Graphics* graphics, ShaderVariation* vertexShader, VertexBuffer** vertexBuffers) :
     inputLayout_(nullptr)
 {
-    PODVector<D3D11_INPUT_ELEMENT_DESC> elementDescs;
+    ea::vector<D3D11_INPUT_ELEMENT_DESC> elementDescs;
     unsigned prevBufferDescs = 0;
 
     for (unsigned i = 0; i < MAX_VERTEX_STREAMS; ++i)
@@ -56,10 +56,10 @@ VertexDeclaration::VertexDeclaration(Graphics* graphics, ShaderVariation* vertex
         if (!vertexBuffers[i])
             continue;
 
-        const PODVector<VertexElement>& srcElements = vertexBuffers[i]->GetElements();
+        const ea::vector<VertexElement>& srcElements = vertexBuffers[i]->GetElements();
         bool isExisting = false;
 
-        for (unsigned j = 0; j < srcElements.Size(); ++j)
+        for (unsigned j = 0; j < srcElements.size(); ++j)
         {
             const VertexElement& srcElement = srcElements[j];
             const char* semanticName = ShaderVariation::elementSemanticNames[srcElement.semantic_];
@@ -89,24 +89,24 @@ VertexDeclaration::VertexDeclaration(Graphics* graphics, ShaderVariation* vertex
             newDesc.AlignedByteOffset = srcElement.offset_;
             newDesc.InputSlotClass = srcElement.perInstance_ ? D3D11_INPUT_PER_INSTANCE_DATA : D3D11_INPUT_PER_VERTEX_DATA;
             newDesc.InstanceDataStepRate = srcElement.perInstance_ ? 1 : 0;
-            elementDescs.Push(newDesc);
+            elementDescs.push_back(newDesc);
         }
 
-        prevBufferDescs = elementDescs.Size();
+        prevBufferDescs = elementDescs.size();
     }
 
-    if (elementDescs.Empty())
+    if (elementDescs.empty())
         return;
 
-    const PODVector<unsigned char>& byteCode = vertexShader->GetByteCode();
+    const ea::vector<unsigned char>& byteCode = vertexShader->GetByteCode();
 
-    HRESULT hr = graphics->GetImpl()->GetDevice()->CreateInputLayout(&elementDescs[0], (UINT)elementDescs.Size(), &byteCode[0],
-        byteCode.Size(), (ID3D11InputLayout**)&inputLayout_);
+    HRESULT hr = graphics->GetImpl()->GetDevice()->CreateInputLayout(&elementDescs[0], (UINT)elementDescs.size(), &byteCode[0],
+        byteCode.size(), (ID3D11InputLayout**)&inputLayout_);
     if (FAILED(hr))
     {
         URHO3D_SAFE_RELEASE(inputLayout_);
         URHO3D_LOGERRORF("Failed to create input layout for shader %s due to missing vertex element(s) (HRESULT %x)",
-            vertexShader->GetFullName().CString(), (unsigned)hr);
+            vertexShader->GetFullName().c_str(), (unsigned)hr);
     }
 }
 

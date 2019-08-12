@@ -31,7 +31,7 @@ struct power_of_two_hash_policy;
 template<typename T>
 struct nohash
 {
-    size_t operator()( const T& v ) { return (size_t)v; }
+    size_t operator()( const T& v ) const { return (size_t)v; }
     typedef tracy::power_of_two_hash_policy hash_policy;
 };
 
@@ -229,7 +229,7 @@ struct EntryDefaultTable
 template<typename T>
 constexpr const sherwood_v3_entry_constexpr<T> EntryDefaultTable<T>::table[min_lookups];
 
-inline int8_t log2(size_t value)
+inline int8_t log2(uint64_t value)
 {
     static constexpr int8_t table[64] =
     {
@@ -275,7 +275,7 @@ struct AssignIfTrue<T, false>
     }
 };
 
-inline size_t next_power_of_two(size_t i)
+inline size_t next_power_of_two(uint64_t i)
 {
     --i;
     i |= i >> 1;

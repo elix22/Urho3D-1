@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -33,7 +33,6 @@
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(HttpRequestDemo)
 
 HttpRequestDemo::HttpRequestDemo(Context* context) :
     Sample(context)
@@ -84,7 +83,7 @@ void HttpRequestDemo::HandleUpdate(StringHash eventType, VariantMap& eventData)
 {
     auto* network = GetSubsystem<Network>();
 
-    if (httpRequest_.Null())
+    if (httpRequest_ == nullptr)
         httpRequest_ = network->MakeHttpRequest("http://httpbin.org/ip");
     else
     {

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -51,7 +51,7 @@ public:
 
 protected:
     /// Return XML patch instructions for screen joystick layout for a specific sample app, if any.
-    String GetScreenJoystickPatchString() const override { return
+    ea::string GetScreenJoystickPatchString() const override { return
         "<patch>"
         "    <add sel=\"/element/element[./attribute[@name='Name' and @value='Button2']]\">"
         "        <attribute name=\"Is Visible\" value=\"false\" />"
@@ -68,9 +68,9 @@ private:
     /// Subscribe to log message, UI and network events.
     void SubscribeToEvents();
     /// Create a button to the button container.
-    Button* CreateButton(const String& text, int width);
+    Button* CreateButton(const ea::string& text, int width);
     /// Print chat text.
-    void ShowChatText(const String& row);
+    void ShowChatText(const ea::string& row);
     /// Update visibility of buttons according to connection and server status.
     void UpdateButtons();
     /// Handle log message event; pipe it also to the chat display.
@@ -88,7 +88,7 @@ private:
     /// Handle connection status change (just update the buttons that should be shown.)
     void HandleConnectionStatus(StringHash eventType, VariantMap& eventData);
     /// Strings printed so far.
-    Vector<String> chatHistory_;
+    ea::vector<ea::string> chatHistory_;
     /// Chat text element.
     SharedPtr<Text> chatHistoryText_;
     /// Button container element.

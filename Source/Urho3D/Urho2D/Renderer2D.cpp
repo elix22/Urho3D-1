@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,8 @@
 //
 
 #include "../Precompiled.h"
+
+#include <EASTL/sort.h>
 
 #include "../Core/Context.h"
 #include "../Core/Profiler.h"
@@ -46,8 +48,6 @@
 namespace Urho3D
 {
 
-extern const char* blendModeNames[];
-
 static const unsigned MASK_VERTEX2D = MASK_POSITION | MASK_COLOR | MASK_TEXCOORD1;
 
 ViewBatchInfo2D::ViewBatchInfo2D() :
@@ -61,13 +61,13 @@ ViewBatchInfo2D::ViewBatchInfo2D() :
 
 Renderer2D::Renderer2D(Context* context) :
     Drawable(context, DRAWABLE_GEOMETRY),
-    material_(new Material(context)),
-    indexBuffer_(new IndexBuffer(context_)),
+    material_(context->CreateObject<Material>()),
+    indexBuffer_(context_->CreateObject<IndexBuffer>()),
     viewMask_(DEFAULT_VIEWMASK)
 {
     material_->SetName("Urho2D");
 
-    auto* tech = new Technique(context_);
+    auto tech = context_->CreateObject<Technique>();
     Pass* pass = tech->CreatePass("alpha");
     pass->SetVertexShader("Urho2D");
     pass->SetPixelShader("Urho2D");
@@ -88,7 +88,7 @@ void Renderer2D::RegisterObject(Context* context)
     context->RegisterFactory<Renderer2D>();
 }
 
-static inline bool CompareRayQueryResults(RayQueryResult& lr, RayQueryResult& rr)
+static inline bool CompareRayQueryResults(const RayQueryResult& lr, const RayQueryResult& rr)
 {
     auto* lhs = static_cast<Drawable2D*>(lr.drawable_);
     auto* rhs = static_cast<Drawable2D*>(rr.drawable_);
@@ -101,22 +101,22 @@ static inline bool CompareRayQueryResults(RayQueryResult& lr, RayQueryResult& rr
     return lhs->GetID() > rhs->GetID();
 }
 
-void Renderer2D::ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryResult>& results)
+void Renderer2D::ProcessRayQuery(const RayOctreeQuery& query, ea::vector<RayQueryResult>& results)
 {
-    unsigned resultSize = results.Size();
-    for (unsigned i = 0; i < drawables_.Size(); ++i)
+    unsigned resultSize = results.size();
+    for (unsigned i = 0; i < drawables_.size(); ++i)
     {
         if (drawables_[i]->GetViewMask() & query.viewMask_)
             drawables_[i]->ProcessRayQuery(query, results);
     }
 
-    if (results.Size() != resultSize)
-        Sort(results.Begin() + resultSize, results.End(), CompareRayQueryResults);
+    if (results.size() != resultSize)
+        ea::quick_sort(results.begin() + resultSize, results.end(), CompareRayQueryResults);
 }
 
 void Renderer2D::UpdateBatches(const FrameInfo& frame)
 {
-    unsigned count = batches_.Size();
+    unsigned count = batches_.size();
 
     // Update non-thread critical parts of the source batches
     for (unsigned i = 0; i < count; ++i)
@@ -129,10 +129,11 @@ void Renderer2D::UpdateBatches(const FrameInfo& frame)
 void Renderer2D::UpdateGeometry(const FrameInfo& frame)
 {
     unsigned indexCount = 0;
-    for (HashMap<Camera*, ViewBatchInfo2D>::ConstIterator i = viewBatchInfos_.Begin(); i != viewBatchInfos_.End(); ++i)
+    for (auto i = viewBatchInfos_.begin(); i !=
+        viewBatchInfos_.end(); ++i)
     {
-        if (i->second_.batchUpdatedFrameNumber_ == frame_.frameNumber_)
-            indexCount = Max(indexCount, i->second_.indexCount_);
+        if (i->second.batchUpdatedFrameNumber_ == frame_.frameNumber_)
+            indexCount = Max(indexCount, i->second.indexCount_);
     }
 
     // Fill index buffer
@@ -200,13 +201,13 @@ void Renderer2D::UpdateGeometry(const FrameInfo& frame)
             auto* dest = reinterpret_cast<Vertex2D*>(vertexBuffer->Lock(0, vertexCount, true));
             if (dest)
             {
-                const PODVector<const SourceBatch2D*>& sourceBatches = viewBatchInfo.sourceBatches_;
-                for (unsigned b = 0; b < sourceBatches.Size(); ++b)
+                const ea::vector<const SourceBatch2D*>& sourceBatches = viewBatchInfo.sourceBatches_;
+                for (unsigned b = 0; b < sourceBatches.size(); ++b)
                 {
-                    const Vector<Vertex2D>& vertices = sourceBatches[b]->vertices_;
-                    for (unsigned i = 0; i < vertices.Size(); ++i)
+                    const ea::vector<Vertex2D>& vertices = sourceBatches[b]->vertices_;
+                    for (unsigned i = 0; i < vertices.size(); ++i)
                         dest[i] = vertices[i];
-                    dest += vertices.Size();
+                    dest += vertices.size();
                 }
 
                 vertexBuffer->Unlock();
@@ -229,7 +230,7 @@ void Renderer2D::AddDrawable(Drawable2D* drawable)
     if (!drawable)
         return;
 
-    drawables_.Push(drawable);
+    drawables_.push_back(drawable);
 }
 
 void Renderer2D::RemoveDrawable(Drawable2D* drawable)
@@ -237,7 +238,7 @@ void Renderer2D::RemoveDrawable(Drawable2D* drawable)
     if (!drawable)
         return;
 
-    drawables_.Remove(drawable);
+    drawables_.erase_first(drawable);
 }
 
 Material* Renderer2D::GetMaterial(Texture2D* texture, BlendMode blendMode)
@@ -245,18 +246,19 @@ Material* Renderer2D::GetMaterial(Texture2D* texture, BlendMode blendMode)
     if (!texture)
         return material_;
 
-    HashMap<Texture2D*, HashMap<int, SharedPtr<Material> > >::Iterator t = cachedMaterials_.Find(texture);
-    if (t == cachedMaterials_.End())
+    auto t = cachedMaterials_.find(
+        texture);
+    if (t == cachedMaterials_.end())
     {
         SharedPtr<Material> newMaterial = CreateMaterial(texture, blendMode);
         cachedMaterials_[texture][blendMode] = newMaterial;
         return newMaterial;
     }
 
-    HashMap<int, SharedPtr<Material> >& materials = t->second_;
-    HashMap<int, SharedPtr<Material> >::Iterator b = materials.Find(blendMode);
-    if (b != materials.End())
-        return b->second_;
+    ea::unordered_map<int, SharedPtr<Material> >& materials = t->second;
+    auto b = materials.find(blendMode);
+    if (b != materials.end())
+        return b->second;
 
     SharedPtr<Material> newMaterial = CreateMaterial(texture, blendMode);
     materials[blendMode] = newMaterial;
@@ -284,19 +286,19 @@ SharedPtr<Material> Renderer2D::CreateMaterial(Texture2D* texture, BlendMode ble
 {
     SharedPtr<Material> newMaterial = material_->Clone();
 
-    HashMap<int, SharedPtr<Technique> >::Iterator techIt = cachedTechniques_.Find((int)blendMode);
-    if (techIt == cachedTechniques_.End())
+    auto techIt = cachedTechniques_.find((int) blendMode);
+    if (techIt == cachedTechniques_.end())
     {
-        SharedPtr<Technique> tech(new Technique(context_));
+        SharedPtr<Technique> tech(context_->CreateObject<Technique>());
         Pass* pass = tech->CreatePass("alpha");
         pass->SetVertexShader("Urho2D");
         pass->SetPixelShader("Urho2D");
         pass->SetDepthWrite(false);
         pass->SetBlendMode(blendMode);
-        techIt = cachedTechniques_.Insert(MakePair((int)blendMode, tech));
+        techIt = cachedTechniques_.insert(ea::make_pair((int) blendMode, tech)).first;
     }
 
-    newMaterial->SetTechnique(0, techIt->second_.Get());
+    newMaterial->SetTechnique(0, techIt->second.Get());
     newMaterial->SetName(texture->GetName() + "_" + blendModeNames[blendMode]);
     newMaterial->SetTexture(TU_DIFFUSE, texture);
 
@@ -340,9 +342,9 @@ void Renderer2D::HandleBeginViewUpdate(StringHash eventType, VariantMap& eventDa
 
         auto* queue = GetSubsystem<WorkQueue>();
         int numWorkItems = queue->GetNumThreads() + 1; // Worker threads + main thread
-        int drawablesPerItem = drawables_.Size() / numWorkItems;
+        int drawablesPerItem = drawables_.size() / numWorkItems;
 
-        PODVector<Drawable2D*>::Iterator start = drawables_.Begin();
+        auto start = drawables_.begin();
         for (int i = 0; i < numWorkItems; ++i)
         {
             SharedPtr<WorkItem> item = queue->GetFreeItem();
@@ -350,7 +352,7 @@ void Renderer2D::HandleBeginViewUpdate(StringHash eventType, VariantMap& eventDa
             item->workFunction_ = CheckDrawableVisibilityWork;
             item->aux_ = this;
 
-            PODVector<Drawable2D*>::Iterator end = drawables_.End();
+            auto end = drawables_.end();
             if (i < numWorkItems - 1 && end - start > drawablesPerItem)
                 end = start + drawablesPerItem;
 
@@ -368,7 +370,7 @@ void Renderer2D::HandleBeginViewUpdate(StringHash eventType, VariantMap& eventDa
 
     // Create vertex buffer
     if (!viewBatchInfo.vertexBuffer_)
-        viewBatchInfo.vertexBuffer_ = new VertexBuffer(context_);
+        viewBatchInfo.vertexBuffer_ = context_->CreateObject<VertexBuffer>();
 
     UpdateViewBatchInfo(viewBatchInfo, camera);
 
@@ -376,7 +378,7 @@ void Renderer2D::HandleBeginViewUpdate(StringHash eventType, VariantMap& eventDa
     // but upload the actual vertex data later. The idea is that the View class copies our batch vector to
     // its internal data structures, so we can reuse the batches for each view, provided that unique Geometry
     // objects are used for each view to specify the draw ranges
-    batches_.Resize(viewBatchInfo.batchCount_);
+    batches_.resize(viewBatchInfo.batchCount_);
     for (unsigned i = 0; i < viewBatchInfo.batchCount_; ++i)
     {
         batches_[i].distance_ = viewBatchInfo.distances_[i];
@@ -385,21 +387,21 @@ void Renderer2D::HandleBeginViewUpdate(StringHash eventType, VariantMap& eventDa
     }
 }
 
-void Renderer2D::GetDrawables(PODVector<Drawable2D*>& drawables, Node* node)
+void Renderer2D::GetDrawables(ea::vector<Drawable2D*>& drawables, Node* node)
 {
     if (!node || !node->IsEnabled())
         return;
 
-    const Vector<SharedPtr<Component> >& components = node->GetComponents();
-    for (Vector<SharedPtr<Component> >::ConstIterator i = components.Begin(); i != components.End(); ++i)
+    const ea::vector<SharedPtr<Component> >& components = node->GetComponents();
+    for (auto i = components.begin(); i != components.end(); ++i)
     {
         auto* drawable = dynamic_cast<Drawable2D*>(i->Get());
         if (drawable && drawable->IsEnabled())
-            drawables.Push(drawable);
+            drawables.push_back(drawable);
     }
 
-    const Vector<SharedPtr<Node> >& children = node->GetChildren();
-    for (Vector<SharedPtr<Node> >::ConstIterator i = children.Begin(); i != children.End(); ++i)
+    const ea::vector<SharedPtr<Node> >& children = node->GetChildren();
+    for (auto i = children.begin(); i != children.end(); ++i)
         GetDrawables(drawables, i->Get());
 }
 
@@ -423,29 +425,32 @@ void Renderer2D::UpdateViewBatchInfo(ViewBatchInfo2D& viewBatchInfo, Camera* cam
     if (viewBatchInfo.batchUpdatedFrameNumber_ == frame_.frameNumber_)
         return;
 
-    PODVector<const SourceBatch2D*>& sourceBatches = viewBatchInfo.sourceBatches_;
-    sourceBatches.Clear();
-    for (unsigned d = 0; d < drawables_.Size(); ++d)
+    ea::vector<const SourceBatch2D*>& sourceBatches = viewBatchInfo.sourceBatches_;
+    sourceBatches.clear();
+    for (unsigned d = 0; d < drawables_.size(); ++d)
     {
         if (!drawables_[d]->IsInView(camera))
             continue;
 
-        const Vector<SourceBatch2D>& batches = drawables_[d]->GetSourceBatches();
-        for (unsigned b = 0; b < batches.Size(); ++b)
+        const ea::vector<SourceBatch2D>& batches = drawables_[d]->GetSourceBatches();
+        for (unsigned b = 0; b < batches.size(); ++b)
         {
-            if (batches[b].material_ && !batches[b].vertices_.Empty())
-                sourceBatches.Push(&batches[b]);
+            if (batches[b].material_ && !batches[b].vertices_.empty())
+                sourceBatches.push_back(&batches[b]);
         }
     }
 
-    for (unsigned i = 0; i < sourceBatches.Size(); ++i)
+    for (unsigned i = 0; i < sourceBatches.size(); ++i)
     {
         const SourceBatch2D* sourceBatch = sourceBatches[i];
-        Vector3 worldPos = sourceBatch->owner_->GetNode()->GetWorldPosition();
-        sourceBatch->distance_ = camera->GetDistance(worldPos);
+        // if (sourceBatch->owner_)
+        {
+            Vector3 worldPos = sourceBatch->owner_->GetNode()->GetWorldPosition();
+            sourceBatch->distance_ = camera->GetDistance(worldPos);
+        }
     }
 
-    Sort(sourceBatches.Begin(), sourceBatches.End(), CompareSourceBatch2Ds);
+    ea::quick_sort(sourceBatches.begin(), sourceBatches.end(), CompareSourceBatch2Ds);
 
     viewBatchInfo.batchCount_ = 0;
     Material* currMaterial = nullptr;
@@ -455,11 +460,11 @@ void Renderer2D::UpdateViewBatchInfo(ViewBatchInfo2D& viewBatchInfo, Camera* cam
     unsigned vCount = 0;
     float distance = M_INFINITY;
 
-    for (unsigned b = 0; b < sourceBatches.Size(); ++b)
+    for (unsigned b = 0; b < sourceBatches.size(); ++b)
     {
         distance = Min(distance, sourceBatches[b]->distance_);
         Material* material = sourceBatches[b]->material_;
-        const Vector<Vertex2D>& vertices = sourceBatches[b]->vertices_;
+        const ea::vector<Vertex2D>& vertices = sourceBatches[b]->vertices_;
 
         // When new material encountered, finish the current batch and start new
         if (currMaterial != material)
@@ -477,8 +482,8 @@ void Renderer2D::UpdateViewBatchInfo(ViewBatchInfo2D& viewBatchInfo, Camera* cam
             currMaterial = material;
         }
 
-        iCount += vertices.Size() * 6 / 4;
-        vCount += vertices.Size();
+        iCount += vertices.size() * 6 / 4;
+        vCount += vertices.size();
     }
 
     // Add the final batch if necessary
@@ -496,22 +501,22 @@ void Renderer2D::AddViewBatch(ViewBatchInfo2D& viewBatchInfo, Material* material
     if (!material || indexCount == 0 || vertexCount == 0)
         return;
 
-    if (viewBatchInfo.distances_.Size() <= viewBatchInfo.batchCount_)
-        viewBatchInfo.distances_.Resize(viewBatchInfo.batchCount_ + 1);
+    if (viewBatchInfo.distances_.size() <= viewBatchInfo.batchCount_)
+        viewBatchInfo.distances_.resize(viewBatchInfo.batchCount_ + 1);
     viewBatchInfo.distances_[viewBatchInfo.batchCount_] = distance;
 
-    if (viewBatchInfo.materials_.Size() <= viewBatchInfo.batchCount_)
-        viewBatchInfo.materials_.Resize(viewBatchInfo.batchCount_ + 1);
+    if (viewBatchInfo.materials_.size() <= viewBatchInfo.batchCount_)
+        viewBatchInfo.materials_.resize(viewBatchInfo.batchCount_ + 1);
     viewBatchInfo.materials_[viewBatchInfo.batchCount_] = material;
 
     // Allocate new geometry if necessary
-    if (viewBatchInfo.geometries_.Size() <= viewBatchInfo.batchCount_)
+    if (viewBatchInfo.geometries_.size() <= viewBatchInfo.batchCount_)
     {
-        SharedPtr<Geometry> geometry(new Geometry(context_));
+        SharedPtr<Geometry> geometry(context_->CreateObject<Geometry>());
         geometry->SetIndexBuffer(indexBuffer_);
         geometry->SetVertexBuffer(0, viewBatchInfo.vertexBuffer_);
 
-        viewBatchInfo.geometries_.Push(geometry);
+        viewBatchInfo.geometries_.push_back(geometry);
     }
 
     Geometry* geometry = viewBatchInfo.geometries_[viewBatchInfo.batchCount_];

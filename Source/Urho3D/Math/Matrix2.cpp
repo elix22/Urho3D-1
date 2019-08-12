@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -50,10 +50,10 @@ Matrix2 Matrix2::Inverse() const
     ) * invDet;
 }
 
-String Matrix2::ToString() const
+ea::string Matrix2::ToString() const
 {
     char tempBuffer[MATRIX_CONVERSION_BUFFER_LENGTH];
     sprintf(tempBuffer, "%g %g %g %g", m00_, m01_, m10_, m11_);
-    return String(tempBuffer);
+    return ea::string(tempBuffer);
 }
 }

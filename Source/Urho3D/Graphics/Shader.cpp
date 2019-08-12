@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,8 @@
 
 #include "../Precompiled.h"
 
+#include <EASTL/sort.h>
+
 #include "../Core/Context.h"
 #include "../Graphics/Graphics.h"
 #include "../Graphics/Shader.h"
@@ -36,16 +38,16 @@
 namespace Urho3D
 {
 
-void CommentOutFunction(String& code, const String& signature)
+void CommentOutFunction(ea::string& code, const ea::string& signature)
 {
-    unsigned startPos = code.Find(signature);
+    unsigned startPos = code.find(signature);
     unsigned braceLevel = 0;
-    if (startPos == String::NPOS)
+    if (startPos == ea::string::npos)
         return;
 
-    code.Insert(startPos, "/*");
+    code.insert(startPos, "/*");
 
-    for (unsigned i = startPos + 2 + signature.Length(); i < code.Length(); ++i)
+    for (unsigned i = startPos + 2 + signature.length(); i < code.length(); ++i)
     {
         if (code[i] == '{')
             ++braceLevel;
@@ -54,7 +56,7 @@ void CommentOutFunction(String& code, const String& signature)
             --braceLevel;
             if (braceLevel == 0)
             {
-                code.Insert(i + 1, "*/");
+                code.insert(i + 1, "*/");
                 return;
             }
         }
@@ -89,7 +91,7 @@ bool Shader::BeginLoad(Deserializer& source)
 
     // Load the shader source code and resolve any includes
     timeStamp_ = 0;
-    String shaderCode;
+    ea::string shaderCode;
     if (!ProcessSource(shaderCode, source))
         return false;
 
@@ -101,8 +103,8 @@ bool Shader::BeginLoad(Deserializer& source)
 
     // OpenGL: rename either VS() or PS() to main()
 #ifdef URHO3D_OPENGL
-    vsSourceCode_.Replace("void VS(", "void main(");
-    psSourceCode_.Replace("void PS(", "void main(");
+    vsSourceCode_.replace("void VS(", "void main(");
+    psSourceCode_.replace("void PS(", "void main(");
 #endif
 
     RefreshMemoryUse();
@@ -112,52 +114,54 @@ bool Shader::BeginLoad(Deserializer& source)
 bool Shader::EndLoad()
 {
     // If variations had already been created, release them and require recompile
-    for (HashMap<StringHash, SharedPtr<ShaderVariation> >::Iterator i = vsVariations_.Begin(); i != vsVariations_.End(); ++i)
-        i->second_->Release();
-    for (HashMap<StringHash, SharedPtr<ShaderVariation> >::Iterator i = psVariations_.Begin(); i != psVariations_.End(); ++i)
-        i->second_->Release();
+    for (auto i = vsVariations_.begin(); i !=
+        vsVariations_.end(); ++i)
+        i->second->Release();
+    for (auto i = psVariations_.begin(); i !=
+        psVariations_.end(); ++i)
+        i->second->Release();
 
     return true;
 }
 
-ShaderVariation* Shader::GetVariation(ShaderType type, const String& defines)
+ShaderVariation* Shader::GetVariation(ShaderType type, const ea::string& defines)
 {
-    return GetVariation(type, defines.CString());
+    return GetVariation(type, defines.c_str());
 }
 
 ShaderVariation* Shader::GetVariation(ShaderType type, const char* defines)
 {
     StringHash definesHash(defines);
-    HashMap<StringHash, SharedPtr<ShaderVariation> >& variations(type == VS ? vsVariations_ : psVariations_);
-    HashMap<StringHash, SharedPtr<ShaderVariation> >::Iterator i = variations.Find(definesHash);
-    if (i == variations.End())
+    ea::unordered_map<StringHash, SharedPtr<ShaderVariation> >& variations(type == VS ? vsVariations_ : psVariations_);
+    auto i = variations.find(definesHash);
+    if (i == variations.end())
     {
         // If shader not found, normalize the defines (to prevent duplicates) and check again. In that case make an alias
         // so that further queries are faster
-        String normalizedDefines = NormalizeDefines(defines);
+        ea::string normalizedDefines = NormalizeDefines(defines);
         StringHash normalizedHash(normalizedDefines);
 
-        i = variations.Find(normalizedHash);
-        if (i != variations.End())
-            variations.Insert(MakePair(definesHash, i->second_));
+        i = variations.find(normalizedHash);
+        if (i != variations.end())
+            variations.insert(ea::make_pair(definesHash, i->second));
         else
         {
             // No shader variation found. Create new
-            i = variations.Insert(MakePair(normalizedHash, SharedPtr<ShaderVariation>(new ShaderVariation(this, type))));
+            i = variations.insert(ea::make_pair(normalizedHash, SharedPtr<ShaderVariation>(new ShaderVariation(this, type)))).first;
             if (definesHash != normalizedHash)
-                variations.Insert(MakePair(definesHash, i->second_));
+                variations.insert(ea::make_pair(definesHash, i->second));
 
-            i->second_->SetName(GetFileName(GetName()));
-            i->second_->SetDefines(normalizedDefines);
+            i->second->SetName(GetFileName(GetName()));
+            i->second->SetDefines(normalizedDefines);
             ++numVariations_;
             RefreshMemoryUse();
         }
     }
 
-    return i->second_;
+    return i->second;
 }
 
-bool Shader::ProcessSource(String& code, Deserializer& source)
+bool Shader::ProcessSource(ea::string& code, Deserializer& source)
 {
     auto* cache = GetSubsystem<ResourceCache>();
 
@@ -166,7 +170,7 @@ bool Shader::ProcessSource(String& code, Deserializer& source)
     if (file && !file->IsPackaged())
     {
         auto* fileSystem = GetSubsystem<FileSystem>();
-        String fullName = cache->GetResourceFileName(file->GetName());
+        ea::string fullName = cache->GetResourceFileName(file->GetName());
         unsigned fileTimeStamp = fileSystem->GetLastModifiedTime(fullName);
         if (fileTimeStamp > timeStamp_)
             timeStamp_ = fileTimeStamp;
@@ -178,11 +182,11 @@ bool Shader::ProcessSource(String& code, Deserializer& source)
 
     while (!source.IsEof())
     {
-        String line = source.ReadLine();
+        ea::string line = source.ReadLine();
 
-        if (line.StartsWith("#include"))
+        if (line.starts_with("#include"))
         {
-            String includeFileName = GetPath(source.GetName()) + line.Substring(9).Replaced("\"", "").Trimmed();
+            ea::string includeFileName = GetPath(source.GetName()) + line.substr(9).replaced("\"", "").trimmed();
 
             SharedPtr<File> includeFile = cache->GetFile(includeFileName);
             if (!includeFile)
@@ -205,17 +209,17 @@ bool Shader::ProcessSource(String& code, Deserializer& source)
     return true;
 }
 
-String Shader::NormalizeDefines(const String& defines)
+ea::string Shader::NormalizeDefines(const ea::string& defines)
 {
-    Vector<String> definesVec = defines.ToUpper().Split(' ');
-    Sort(definesVec.Begin(), definesVec.End());
-    return String::Joined(definesVec, " ");
+    ea::vector<ea::string> definesVec = defines.to_upper().split(' ');
+    ea::quick_sort(definesVec.begin(), definesVec.end());
+    return ea::string::joined(definesVec, " ");
 }
 
 void Shader::RefreshMemoryUse()
 {
     SetMemoryUse(
-        (unsigned)(sizeof(Shader) + vsSourceCode_.Length() + psSourceCode_.Length() + numVariations_ * sizeof(ShaderVariation)));
+        (unsigned)(sizeof(Shader) + vsSourceCode_.length() + psSourceCode_.length() + numVariations_ * sizeof(ShaderVariation)));
 }
 
 }

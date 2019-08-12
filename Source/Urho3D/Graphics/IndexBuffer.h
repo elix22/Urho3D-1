@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,9 @@
 
 #pragma once
 
+#include <EASTL/shared_array.h>
+
 #include "../Core/Object.h"
-#include "../Container/ArrayPtr.h"
 #include "../Graphics/GPUObject.h"
 #include "../Graphics/GraphicsDefs.h"
 
@@ -42,6 +43,9 @@ public:
     explicit IndexBuffer(Context* context, bool forceHeadless = false);
     /// Destruct.
     ~IndexBuffer() override;
+
+    /// Register object with the engine.
+    static void RegisterObject(Context* context);
 
     /// Mark the buffer destroyed on graphics context destruction. May be a no-op depending on the API.
     void OnDeviceLost() override;
@@ -82,10 +86,10 @@ public:
     bool GetUsedVertexRange(unsigned start, unsigned count, unsigned& minVertex, unsigned& vertexCount);
 
     /// Return CPU memory shadow data.
-    unsigned char* GetShadowData() const { return shadowData_.Get(); }
+    unsigned char* GetShadowData() const { return shadowData_.get(); }
 
     /// Return shared array pointer to the CPU memory shadow data.
-    SharedArrayPtr<unsigned char> GetShadowDataShared() const { return shadowData_; }
+    ea::shared_array<unsigned char> GetShadowDataShared() const { return shadowData_; }
 
 private:
     /// Create buffer.
@@ -98,7 +102,7 @@ private:
     void UnmapBuffer();
 
     /// Shadow data.
-    SharedArrayPtr<unsigned char> shadowData_;
+    ea::shared_array<unsigned char> shadowData_;
     /// Number of indices.
     unsigned indexCount_;
     /// Index size.

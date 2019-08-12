@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,9 @@
 
 #pragma once
 
-#include "../Container/HashMap.h"
+#include <EASTL/unordered_map.h>
+
+#include <Urho3D/Urho3D.h>
 #include "../Container/Ptr.h"
 
 namespace Urho3D
@@ -51,9 +53,9 @@ public:
 
 private:
     /// Nodes.
-    HashMap<unsigned, WeakPtr<Node> > nodes_;
+    ea::unordered_map<unsigned, WeakPtr<Node> > nodes_;
     /// Components.
-    HashMap<unsigned, WeakPtr<Component> > components_;
+    ea::unordered_map<unsigned, WeakPtr<Component> > components_;
 };
 
 }

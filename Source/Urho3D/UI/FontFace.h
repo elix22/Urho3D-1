@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,9 +22,10 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
-#include "../Container/HashMap.h"
-#include "../Container/List.h"
+#include <EASTL/unordered_map.h>
+
+#include <Urho3D/Urho3D.h>
+
 #include "../Container/Ptr.h"
 #include "../Math/AreaAllocator.h"
 
@@ -93,7 +94,7 @@ public:
     float GetRowHeight() const { return rowHeight_; }
 
     /// Return textures.
-    const Vector<SharedPtr<Texture2D> >& GetTextures() const { return textures_; }
+    const ea::vector<SharedPtr<Texture2D> >& GetTextures() const { return textures_; }
 
 protected:
     friend class FontFaceBitmap;
@@ -105,11 +106,11 @@ protected:
     /// Parent font.
     Font* font_{};
     /// Glyph mapping.
-    HashMap<unsigned, FontGlyph> glyphMapping_;
+    ea::unordered_map<unsigned, FontGlyph> glyphMapping_;
     /// Kerning mapping.
-    HashMap<unsigned, float> kerningMapping_;
+    ea::unordered_map<unsigned, float> kerningMapping_;
     /// Glyph texture pages.
-    Vector<SharedPtr<Texture2D> > textures_;
+    ea::vector<SharedPtr<Texture2D> > textures_;
     /// Point size.
     float pointSize_{};
     /// Row height.

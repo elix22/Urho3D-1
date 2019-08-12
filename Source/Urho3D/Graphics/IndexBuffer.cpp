@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@
 
 #include "../Precompiled.h"
 
+#include "../Core/Context.h"
 #include "../Graphics/Graphics.h"
 #include "../Graphics/IndexBuffer.h"
 #include "../IO/Log.h"
@@ -56,6 +57,13 @@ IndexBuffer::~IndexBuffer()
     Release();
 }
 
+extern const char* GEOMETRY_CATEGORY;
+
+void IndexBuffer::RegisterObject(Context* context)
+{
+    context->RegisterFactory<IndexBuffer>();
+}
+
 void IndexBuffer::SetShadowed(bool enable)
 {
     // If no graphics subsystem, can not disable shadowing
@@ -67,7 +75,7 @@ void IndexBuffer::SetShadowed(bool enable)
         if (enable && indexCount_ && indexSize_)
             shadowData_ = new unsigned char[indexCount_ * indexSize_];
         else
-            shadowData_.Reset();
+            shadowData_.reset();
 
         shadowed_ = enable;
     }
@@ -84,7 +92,7 @@ bool IndexBuffer::SetSize(unsigned indexCount, bool largeIndices, bool dynamic)
     if (shadowed_ && indexCount_ && indexSize_)
         shadowData_ = new unsigned char[indexCount_ * indexSize_];
     else
-        shadowData_.Reset();
+        shadowData_.reset();
 
     return Create();
 }
@@ -108,7 +116,7 @@ bool IndexBuffer::GetUsedVertexRange(unsigned start, unsigned count, unsigned& m
 
     if (indexSize_ == sizeof(unsigned))
     {
-        unsigned* indices = ((unsigned*)shadowData_.Get()) + start;
+        unsigned* indices = ((unsigned*)shadowData_.get()) + start;
 
         for (unsigned i = 0; i < count; ++i)
         {
@@ -120,7 +128,7 @@ bool IndexBuffer::GetUsedVertexRange(unsigned start, unsigned count, unsigned& m
     }
     else
     {
-        unsigned short* indices = ((unsigned short*)shadowData_.Get()) + start;
+        unsigned short* indices = ((unsigned short*)shadowData_.get()) + start;
 
         for (unsigned i = 0; i < count; ++i)
         {

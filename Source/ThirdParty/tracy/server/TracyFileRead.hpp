@@ -142,6 +142,7 @@ private:
             {
                 if( m_exit.load( std::memory_order_relaxed ) == true ) return;
                 if( m_signalSwitch.load( std::memory_order_relaxed ) == true ) break;
+                std::this_thread::yield();
             }
             m_signalSwitch.store( false, std::memory_order_relaxed );
             std::swap( m_buf, m_second );
@@ -165,7 +166,7 @@ private:
             if( m_offset == BufSize )
             {
                 m_signalSwitch.store( true, std::memory_order_relaxed );
-                while( m_signalAvailable.load( std::memory_order_acquire ) == false ) {}
+                while( m_signalAvailable.load( std::memory_order_acquire ) == false ) { std::this_thread::yield(); }
                 m_signalAvailable.store( false, std::memory_order_relaxed );
             }
 
@@ -184,7 +185,7 @@ private:
             if( m_offset == BufSize )
             {
                 m_signalSwitch.store( true, std::memory_order_relaxed );
-                while( m_signalAvailable.load( std::memory_order_acquire ) == false ) {}
+                while( m_signalAvailable.load( std::memory_order_acquire ) == false ) { std::this_thread::yield(); }
                 m_signalAvailable.store( false, std::memory_order_relaxed );
             }
 
@@ -201,7 +202,7 @@ private:
         if( fread( &sz, 1, sizeof( sz ), m_file ) == sizeof( sz ) )
         {
             fread( m_lz4buf, 1, sz, m_file );
-            m_lastBlock = LZ4_decompress_safe_continue( m_stream, m_lz4buf, m_second, sz, BufSize );
+            m_lastBlock = (size_t)LZ4_decompress_safe_continue( m_stream, m_lz4buf, m_second, sz, BufSize );
         }
         else
         {
@@ -218,7 +219,7 @@ private:
     char* m_buf;
     char* m_second;
     size_t m_offset;
-    int m_lastBlock;
+    size_t m_lastBlock;
 
     std::atomic<bool> m_signalSwitch;
     std::atomic<bool> m_signalAvailable;

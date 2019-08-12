@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -47,7 +47,7 @@ struct Triangle
 
 struct ModelBone
 {
-    String name_;
+    ea::string name_;
     unsigned parentIndex_;
     Vector3 bindPosition_;
     Quaternion bindRotation_;
@@ -64,9 +64,9 @@ struct ModelBone
 
 struct ModelAnimation
 {
-    String name_;
+    ea::string name_;
     float length_;
-    Vector<AnimationTrack> tracks_;
+    ea::vector<AnimationTrack> tracks_;
 };
 
 struct BoneWeightAssignment
@@ -114,7 +114,7 @@ struct ModelVertexBuffer
     VertexMaskFlags elementMask_;
     unsigned morphStart_;
     unsigned morphCount_;
-    Vector<ModelVertex> vertices_;
+    ea::vector<ModelVertex> vertices_;
 
     ModelVertexBuffer() :
         elementMask_(MASK_NONE),
@@ -125,11 +125,11 @@ struct ModelVertexBuffer
 
     void WriteData(Serializer& dest)
     {
-        dest.WriteUInt(vertices_.Size());
+        dest.WriteUInt(vertices_.size());
 
-        PODVector<VertexElement> elements = VertexBuffer::GetElements(elementMask_);
-        dest.WriteUInt(elements.Size());
-        for (unsigned j = 0; j < elements.Size(); ++j)
+        ea::vector<VertexElement> elements = VertexBuffer::GetElements(elementMask_);
+        dest.WriteUInt(elements.size());
+        for (unsigned j = 0; j < elements.size(); ++j)
         {
             unsigned elementDesc = ((unsigned)elements[j].type_) |
                 (((unsigned)elements[j].semantic_) << 8u) |
@@ -140,7 +140,7 @@ struct ModelVertexBuffer
         dest.WriteUInt(morphStart_);
         dest.WriteUInt(morphCount_);
 
-        for (unsigned i = 0; i < vertices_.Size(); ++i)
+        for (unsigned i = 0; i < vertices_.size(); ++i)
         {
             if (elementMask_ & MASK_POSITION)
                 dest.WriteVector3(vertices_[i].position_);
@@ -170,35 +170,35 @@ struct ModelMorphBuffer
 {
     unsigned vertexBuffer_;
     unsigned elementMask_;
-    Vector<Pair<unsigned, ModelVertex> > vertices_;
+    ea::vector<ea::pair<unsigned, ModelVertex> > vertices_;
 };
 
 struct ModelMorph
 {
-    String name_;
-    Vector<ModelMorphBuffer> buffers_;
+    ea::string name_;
+    ea::vector<ModelMorphBuffer> buffers_;
 
     void WriteData(Serializer& dest)
     {
         dest.WriteString(name_);
-        dest.WriteUInt(buffers_.Size());
-        for (unsigned i = 0; i < buffers_.Size(); ++i)
+        dest.WriteUInt(buffers_.size());
+        for (unsigned i = 0; i < buffers_.size(); ++i)
         {
             dest.WriteUInt(buffers_[i].vertexBuffer_);
             dest.WriteUInt(buffers_[i].elementMask_);
-            dest.WriteUInt(buffers_[i].vertices_.Size());
+            dest.WriteUInt(buffers_[i].vertices_.size());
             unsigned elementMask = buffers_[i].elementMask_;
 
-            for (Vector<Pair<unsigned, ModelVertex> >::Iterator j = buffers_[i].vertices_.Begin();
-                j != buffers_[i].vertices_.End(); ++j)
+            for (auto j = buffers_[i].vertices_.begin();
+                j != buffers_[i].vertices_.end(); ++j)
             {
-                dest.WriteUInt(j->first_);
+                dest.WriteUInt(j->first);
                 if (elementMask & MASK_POSITION)
-                    dest.WriteVector3(j->second_.position_);
+                    dest.WriteVector3(j->second.position_);
                 if (elementMask & MASK_NORMAL)
-                    dest.WriteVector3(j->second_.normal_);
+                    dest.WriteVector3(j->second.normal_);
                 if (elementMask & MASK_TANGENT)
-                    dest.WriteVector3(Vector3(j->second_.tangent_.x_, j->second_.tangent_.y_, j->second_.tangent_.z_));
+                    dest.WriteVector3(Vector3(j->second.tangent_.x_, j->second.tangent_.y_, j->second.tangent_.z_));
             }
         }
     }
@@ -207,7 +207,7 @@ struct ModelMorph
 struct ModelIndexBuffer
 {
     unsigned indexSize_;
-    PODVector<unsigned> indices_;
+    ea::vector<unsigned> indices_;
 
     ModelIndexBuffer() :
         indexSize_(sizeof(unsigned short))
@@ -216,10 +216,10 @@ struct ModelIndexBuffer
 
     void WriteData(Serializer& dest)
     {
-        dest.WriteUInt(indices_.Size());
+        dest.WriteUInt(indices_.size());
         dest.WriteUInt(indexSize_);
 
-        for (unsigned i = 0; i < indices_.Size(); ++i)
+        for (unsigned i = 0; i < indices_.size(); ++i)
         {
             if (indexSize_ == sizeof(unsigned short))
                 dest.WriteUShort(indices_[i]);
@@ -237,6 +237,6 @@ struct ModelSubGeometryLodLevel
     unsigned indexBuffer_{};
     unsigned indexStart_{};
     unsigned indexCount_{};
-    HashMap<unsigned, PODVector<BoneWeightAssignment> > boneWeights_;
-    PODVector<unsigned> boneMapping_;
+    ea::unordered_map<unsigned, ea::vector<BoneWeightAssignment> > boneWeights_;
+    ea::vector<unsigned> boneMapping_;
 };

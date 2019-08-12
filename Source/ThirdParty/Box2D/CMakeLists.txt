@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2018 the Urho3D project.
+# Copyright (c) 2008-2019 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -179,7 +179,11 @@ source_group(Rope FILES ${BOX2D_Rope_SRCS} ${BOX2D_Rope_HDRS})
 add_library (Box2D STATIC ${SOURCE_FILES})
 target_include_directories(Box2D PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 if (BUILD_SHARED_LIBS)
-    target_compile_definitions(Box2D PRIVATE -DBOX2D_EXPORTS INTERFACE -DBOX2D_IMPORTS)
+    target_compile_definitions(Box2D PRIVATE -DBOX2D_EXPORTS)
 endif ()
 
 install(DIRECTORY Box2D DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR} FILES_MATCHING PATTERN *.h)
+
+if (NOT URHO3D_MERGE_STATIC_LIBS)
+    install(TARGETS Box2D EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
+endif ()

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2018 the Urho3D project.
+# Copyright (c) 2017-2019 Rokas Kupstys.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,8 +20,13 @@
 # THE SOFTWARE.
 #
 
-if (NOT URHO3D_CSHARP)
+if (NOT URHO3D_CSHARP OR NOT URHO3D_PLUGINS)
     return ()
 endif ()
 
-add_sample (102_CSharpProject CSHARP)
+add_target_csharp(
+    TARGET 102_CSharpProject
+    PROJECT ${CMAKE_CURRENT_SOURCE_DIR}/102_CSharpProject.csproj
+    OUTPUT ${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG}/102_CSharpProject.exe
+    DEPENDS Urho3DNet)
+install (FILES ${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG}/102_CSharpProject.exe DESTINATION ${DEST_BIN_DIR})

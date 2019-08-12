@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -44,7 +44,7 @@ private:
     /// Handle scene node's physics collision.
     void HandleNodeCollision(StringHash eventType, VariantMap& eventData);
     /// Make a bone physical by adding RigidBody and CollisionShape components.
-    void CreateRagdollBone(const String& boneName, ShapeType type, const Vector3& size, const Vector3& position, const Quaternion& rotation);
+    void CreateRagdollBone(const ea::string& boneName, ShapeType type, const Vector3& size, const Vector3& position, const Quaternion& rotation);
     /// Join two bones with a Constraint component.
-    void CreateRagdollConstraint(const String& boneName, const String& parentName, ConstraintType type, const Vector3& axis, const Vector3& parentAxis, const Vector2& highLimit, const Vector2& lowLimit, bool disableCollision = true);
+    void CreateRagdollConstraint(const ea::string& boneName, const ea::string& parentName, ConstraintType type, const Vector3& axis, const Vector3& parentAxis, const Vector2& highLimit, const Vector2& lowLimit, bool disableCollision = true);
 };

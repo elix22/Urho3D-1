@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +31,13 @@ namespace Urho3D
 class URHO3D_API UnknownComponent : public Component
 {
 public:
+    using ClassName = UnknownComponent;
+    using BaseClassName = Component;
+    virtual const Urho3D::TypeInfo* GetTypeInfo() const override { return GetTypeInfoStatic(); }
+    static Urho3D::StringHash GetTypeStatic() { return GetTypeInfoStatic()->GetType(); }
+    static const ea::string& GetTypeNameStatic() { return GetTypeInfoStatic()->GetTypeName(); }
+    static const Urho3D::TypeInfo* GetTypeInfoStatic() { static const Urho3D::TypeInfo typeInfoStatic("UnknownComponent", BaseClassName::GetTypeInfoStatic()); return &typeInfoStatic; }
+
     /// Construct.
     explicit UnknownComponent(Context* context);
 
@@ -41,10 +48,10 @@ public:
     StringHash GetType() const override { return typeHash_; }
 
     /// Return type name of the stored component.
-    const String& GetTypeName() const override { return typeName_; }
+    const ea::string& GetTypeName() const override { return typeName_; }
 
     /// Return attribute descriptions, or null if none defined.
-    const Vector<AttributeInfo>* GetAttributes() const override { return &xmlAttributeInfos_; }
+    const ea::vector<AttributeInfo>* GetAttributes() const override { return &xmlAttributeInfos_; }
 
     /// Load from binary data. Return true if successful.
     bool Load(Deserializer& source) override;
@@ -60,43 +67,30 @@ public:
     bool SaveJSON(JSONValue& dest) const override;
 
     /// Initialize the type name. Called by Node when loading.
-    void SetTypeName(const String& typeName);
+    void SetTypeName(const ea::string& typeName);
     /// Initialize the type hash only when type name not known. Called by Node when loading.
     void SetType(StringHash typeHash);
 
     /// Return the XML format attributes. Empty when loaded with binary serialization.
-    const Vector<String>& GetXMLAttributes() const { return xmlAttributes_; }
+    const ea::vector<ea::string>& GetXMLAttributes() const { return xmlAttributes_; }
 
     /// Return the binary attributes. Empty when loaded with XML serialization.
-    const PODVector<unsigned char>& GetBinaryAttributes() const { return binaryAttributes_; }
+    const ea::vector<unsigned char>& GetBinaryAttributes() const { return binaryAttributes_; }
 
     /// Return whether was loaded using XML data.
     bool GetUseXML() const { return useXML_; }
-
-    /// Return static type.
-    static Urho3D::StringHash GetTypeStatic()
-    {
-        static const StringHash typeStatic("UnknownComponent");
-        return typeStatic;
-    }
-    /// Return static type name.
-    static const Urho3D::String& GetTypeNameStatic()
-    {
-        static const String typeNameStatic("UnknownComponent");
-        return typeNameStatic;
-    }
 
 private:
     /// Type of stored component.
     StringHash typeHash_;
     /// Type name of the stored component.
-    String typeName_;
+    ea::string typeName_;
     /// XML format attribute infos.
-    Vector<AttributeInfo> xmlAttributeInfos_;
+    ea::vector<AttributeInfo> xmlAttributeInfos_;
     /// XML format attribute data (as strings)
-    Vector<String> xmlAttributes_;
+    ea::vector<ea::string> xmlAttributes_;
     /// Binary attributes.
-    PODVector<unsigned char> binaryAttributes_;
+    ea::vector<unsigned char> binaryAttributes_;
     /// Flag of whether was loaded using XML/JSON data.
     bool useXML_;
 

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,16 +20,26 @@
 // THE SOFTWARE.
 //
 
+#include <EASTL/sort.h>
+
 #include <Urho3D/Graphics/Graphics.h>
+#include <Urho3D/IO/FileSystem.h>
 #include <Urho3D/IO/Log.h>
+#include <Urho3D/Input/Input.h>
 #include <Urho3D/Resource/ResourceCache.h>
+#include <Urho3D/UI/Window.h>
+#include <Urho3D/UI/UI.h>
 #include <Toolbox/IO/ContentUtilities.h>
 #include <Toolbox/SystemUI/Widgets.h>
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
+#include <ImGui/imgui.h>
+#include <ImGui/imgui_internal.h>
 #include "EditorEvents.h"
 #include "Editor.h"
 #include "Widgets.h"
 #include "UITab.h"
+#include "Tabs/HierarchyTab.h"
+#include "Tabs/InspectorTab.h"
 
 using namespace ui::litterals;
 
@@ -38,12 +48,24 @@ namespace Urho3D
 
 UITab::UITab(Context* context)
     : BaseResourceTab(context)
-    , undo_(context)
 {
+    SetID(GenerateUUID());
     SetTitle("New UI Layout");
     windowFlags_ = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 
+    texture_ = new Texture2D(context_);
+    texture_->SetFilterMode(FILTER_BILINEAR);
+    texture_->SetAddressMode(COORD_U, ADDRESS_CLAMP);
+    texture_->SetAddressMode(COORD_V, ADDRESS_CLAMP);
+    texture_->SetNumLevels(1);
+
     rootElement_ = new RootUIElement(context_);
+    rootElement_->SetTraversalMode(TM_BREADTH_FIRST);
+    rootElement_->SetEnabled(true);
+
+    offScreenUI_ = new UI(context_);
+    offScreenUI_->SetRoot(rootElement_);
+    offScreenUI_->SetRenderTarget(texture_, Color::BLACK);
 
     undo_.Connect(rootElement_);
     undo_.Connect(&inspector_);
@@ -56,19 +78,21 @@ UITab::UITab(Context* context)
 
 void UITab::RenderHierarchy()
 {
-    auto oldSpacing = ui::GetStyle().IndentSpacing;
-    ui::GetStyle().IndentSpacing = 10;
+    if (rootElement_.Null())
+        return;
+
+    ui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
     RenderNodeTree(rootElement_);
-    ui::GetStyle().IndentSpacing = oldSpacing;
+    ui::PopStyleVar();
 }
 
 void UITab::RenderNodeTree(UIElement* element)
 {
     SharedPtr<UIElement> elementRef(element);
-    String name = element->GetName();
-    String type = element->GetTypeName();
-    String tooltip = "Type: " + type;
-    if (name.Empty())
+    ea::string name = element->GetName();
+    ea::string type = element->GetTypeName();
+    ea::string tooltip = "Type: " + type;
+    if (name.empty())
         name = type;
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
     bool isInternal = element->IsInternal();
@@ -78,7 +102,7 @@ void UITab::RenderNodeTree(UIElement* element)
         flags |= ImGuiTreeNodeFlags_DefaultOpen;
 
     if (showInternal_)
-        tooltip += String("\nInternal: ") + (isInternal ? "true" : "false");
+        tooltip += ea::string("\nInternal: ") + (isInternal ? "true" : "false");
 
     if (element == selectedElement_)
         flags |= ImGuiTreeNodeFlags_Selected;
@@ -86,12 +110,12 @@ void UITab::RenderNodeTree(UIElement* element)
     ui::Image(element->GetTypeName());
     ui::SameLine();
 
-    auto treeExpanded = ui::TreeNodeEx(element, flags, "%s", name.CString());
+    auto treeExpanded = ui::TreeNodeEx(element, flags, "%s", name.c_str());
 
     if (ui::BeginDragDropSource())
     {
         ui::SetDragDropVariant("ptr", (void*)element);
-        ui::Text("%s", name.CString());
+        ui::Text("%s", name.c_str());
         ui::EndDragDropSource();
     }
 
@@ -102,7 +126,7 @@ void UITab::RenderNodeTree(UIElement* element)
         if (!payload.IsEmpty())
         {
             SharedPtr<UIElement> child((UIElement*)payload.GetVoidPtr());
-            if (child.NotNull() && child != element)
+            if (child && child != element)
             {
                 child->Remove();    // Needed for reordering under the same parent.
                 element->InsertChild(0, child);
@@ -114,14 +138,14 @@ void UITab::RenderNodeTree(UIElement* element)
     if (treeExpanded)
     {
         if (ui::IsItemHovered())
-            ui::SetTooltip("%s", tooltip.CString());
+            ui::SetTooltip("%s", tooltip.c_str());
 
         if (ui::IsItemHovered())
         {
-            if (ui::IsMouseClicked(0) || ui::IsMouseClicked(2))
+            if (ui::IsMouseClicked(MOUSEB_LEFT) || ui::IsMouseClicked(MOUSEB_RIGHT))
             {
                 SelectItem(element);
-                if (ui::IsMouseClicked(2))
+                if (ui::IsMouseClicked(MOUSEB_RIGHT))
                     ui::OpenPopup("Element Context Menu");
             }
         }
@@ -129,11 +153,11 @@ void UITab::RenderNodeTree(UIElement* element)
         RenderElementContextMenu();
 
         // Context menu may delete this element
-        bool wasDeleted = (flags & ImGuiTreeNodeFlags_Selected) && selectedElement_.Null();
+        bool wasDeleted = (flags & ImGuiTreeNodeFlags_Selected) && !selectedElement_;
         if (!wasDeleted)
         {
             // Do not use element->GetChildren() because child may be deleted during this loop.
-            PODVector<UIElement*> children;
+            ea::vector<UIElement*> children;
             element->GetChildren(children);
             for (const auto& child: children)
                 RenderNodeTree(child);
@@ -152,7 +176,7 @@ void UITab::RenderNodeTree(UIElement* element)
         if (!payload.IsEmpty())
         {
             SharedPtr<UIElement> child((UIElement*)payload.GetVoidPtr());
-            if (child.NotNull() && child != element)
+            if (child && child != element)
             {
                 child->Remove();    // Needed for reordering under the same parent.
                 auto index = element->GetParent()->FindChild(element) + 1;
@@ -163,10 +187,15 @@ void UITab::RenderNodeTree(UIElement* element)
     }
 }
 
-void UITab::RenderInspector()
+void UITab::ClearSelection()
+{
+    selectedElement_ = nullptr;
+}
+
+void UITab::RenderInspector(const char* filter)
 {
     if (auto selected = GetSelected())
-        inspector_.RenderAttributes(selected);
+        RenderAttributes(selected, filter, &inspector_);
 }
 
 bool UITab::RenderWindowContent()
@@ -175,14 +204,16 @@ bool UITab::RenderWindowContent()
     IntRect tabRect = UpdateViewRect();
 
     ui::SetCursorScreenPos(ToImGui(tabRect.Min()));
-    ui::Image(texture_, ToImGui(tabRect.Size()));
+    ImVec2 contentSize = ToImGui(tabRect.Size());
+    ui::BeginChild("UI view", contentSize, false, windowFlags_);
+    ui::Image(texture_, contentSize);
 
     if (auto selected = GetSelected())
     {
         // Render element selection rect, resize handles, and handle element transformations.
         IntRect delta;
         IntRect screenRect(selected->GetScreenPosition() + tabRect.Min(), selected->GetScreenPosition() + selected->GetSize() + tabRect.Min());
-        auto flags = ui::TSF_NONE;
+        ui::TransformSelectorFlags flags = ui::TSF_NONE;
         if (hideResizeHandles_)
             flags |= ui::TSF_HIDEHANDLES;
         if (selected->GetMinSize().x_ == selected->GetMaxSize().x_)
@@ -213,31 +244,23 @@ bool UITab::RenderWindowContent()
         if (s->resizeActive_ && !ui::IsItemActive())
         {
             s->resizeActive_ = false;
-            undo_.Track<Undo::EditAttributeAction>(selected, "Position", s->resizeStartPos_);
-            undo_.Track<Undo::EditAttributeAction>(selected, "Size", s->resizeStartSize_);
+            undo_.Track<Undo::EditAttributeAction>(selected, "Position", s->resizeStartPos_, selected->GetPosition());
+            undo_.Track<Undo::EditAttributeAction>(selected, "Size", s->resizeStartSize_, selected->GetSize());
         }
     }
 
     RenderRectSelector();
+    ui::EndChild();
 
     return true;
 }
 
 void UITab::RenderToolbarButtons()
 {
-    auto& style = ui::GetStyle();
-    auto oldRounding = style.FrameRounding;
-    style.FrameRounding = 0;
+    ui::SetCursorPos(ui::GetCursorPos() + ImVec2{4_dpx, 4_dpy});
 
     if (ui::EditorToolbarButton(ICON_FA_SAVE, "Save"))
         SaveResource();
-
-    ui::SameLine(0, 3.f);
-
-    if (ui::EditorToolbarButton(ICON_FA_UNDO, "Undo"))
-        undo_.Undo();
-    if (ui::EditorToolbarButton(ICON_FA_REDO, "Redo"))
-        undo_.Redo();
 
     ui::SameLine(0, 3.f);
 
@@ -245,7 +268,8 @@ void UITab::RenderToolbarButtons()
     ui::SameLine();
     ui::Checkbox("Hide Resize Handles", &hideResizeHandles_);
 
-    style.FrameRounding = oldRounding;
+    ui::SameLine(0, 3.f);
+    ui::SetCursorPosY(ui::GetCursorPosY() + 4_dpx);
 }
 
 void UITab::OnActiveUpdate()
@@ -253,14 +277,6 @@ void UITab::OnActiveUpdate()
     Input* input = GetSubsystem<Input>();
     if (!ui::IsAnyItemActive())
     {
-        if (input->GetKeyDown(KEY_CTRL))
-        {
-            if (input->GetKeyPress(KEY_Y) || (input->GetKeyDown(KEY_SHIFT) && input->GetKeyPress(KEY_Z)))
-                undo_.Redo();
-            else if (input->GetKeyPress(KEY_Z))
-                undo_.Undo();
-        }
-
         if (auto selected = GetSelected())
         {
             if (input->GetKeyPress(KEY_DELETE))
@@ -276,8 +292,8 @@ void UITab::OnActiveUpdate()
     {
         if (input->GetMouseButtonPress(MOUSEB_LEFT) || input->GetMouseButtonPress(MOUSEB_RIGHT))
         {
-            auto pos = input->GetMousePosition();
-            auto clicked = GetSubsystem<UI>()->GetElementAt(pos, false);
+            IntVector2 pos = rootElement_->ScreenToElement(input->GetMousePosition());
+            UIElement* clicked = offScreenUI_->GetElementAt(pos, false);
             if (!clicked && rootElement_->GetCombinedScreenRect().IsInside(pos) == INSIDE && !ui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow))
                 clicked = rootElement_;
 
@@ -296,61 +312,44 @@ void UITab::OnActiveUpdate()
 
 IntRect UITab::UpdateViewRect()
 {
-    if (texture_.Null())
-    {
-        // TODO: Stinks. These need to be initialized after at least one SystemUI frame has rendered. However project may be loaded from command line and that would call initializing code too early.
-        texture_ = new Texture2D(context_);
-        texture_->SetFilterMode(FILTER_BILINEAR);
-        texture_->SetAddressMode(COORD_U, ADDRESS_CLAMP);
-        texture_->SetAddressMode(COORD_V, ADDRESS_CLAMP);
-        texture_->SetNumLevels(1);
-        rootElement_->SetRenderTexture(texture_);
-        rootElement_->SetEnabled(true);
-    }
-
     IntRect rect = BaseClassName::UpdateViewRect();
+    // Correct content rect to not overlap buttons. Ideally this should be in Tab.cpp but for some reason it creates
+    // unused space at the bottom of PreviewTab.
+    rect.top_ += static_cast<int>(ui::GetCursorPosY());
 
     if (rect.Width() != texture_->GetWidth() || rect.Height() != texture_->GetHeight())
     {
-        if (texture_->SetSize(rect.Width(), rect.Height(), GetSubsystem<Graphics>()->GetRGBAFormat(),
-                              TEXTURE_RENDERTARGET))
-        {
-            rootElement_->SetSize(rect.Width(), rect.Height());
-            rootElement_->SetOffset(rect.Min());
-            texture_->GetRenderSurface()->SetUpdateMode(SURFACE_UPDATEALWAYS);
-        }
-        else
-            URHO3D_LOGERROR("UITab: resizing texture failed.");
+        rootElement_->SetOffset(rect.Min());
+        offScreenUI_->SetCustomSize(rect.Width(), rect.Height());
     }
 
     return rect;
 }
 
-bool UITab::LoadResource(const String& resourcePath)
+bool UITab::LoadResource(const ea::string& resourcePath)
 {
     if (!BaseClassName::LoadResource(resourcePath))
         return false;
 
-    if (GetContentType(resourcePath) != CTYPE_UILAYOUT)
+    if (GetContentType(context_, resourcePath) != CTYPE_UILAYOUT)
     {
-        URHO3D_LOGERRORF("%s is not a UI layout.", resourcePath.CString());
+        URHO3D_LOGERRORF("%s is not a UI layout.", resourcePath.c_str());
         return false;
     }
 
-    undo_.Clear();
-    undo_.SetTrackingEnabled(false);
+    Undo::SetTrackingScoped noTrack(undo_, false);
 
     auto cache = GetSubsystem<ResourceCache>();
     rootElement_->RemoveAllChildren();
 
     UIElement* layoutElement = nullptr;
-    if (resourcePath.EndsWith(".xml"))
+    if (resourcePath.ends_with(".xml"))
     {
         SharedPtr<XMLFile> file(cache->GetResource<XMLFile>(resourcePath));
-        if (file.NotNull())
+        if (file)
         {
-            String type = file->GetRoot().GetAttribute("type");
-            if (type.Empty())
+            ea::string type = file->GetRoot().GetAttribute("type");
+            if (type.empty())
                 type = "UIElement";
             auto* child = rootElement_->CreateChild(StringHash(type));
             if (child->LoadXML(file->GetRoot()))
@@ -360,18 +359,15 @@ bool UITab::LoadResource(const String& resourcePath)
         }
         else
         {
-            URHO3D_LOGERRORF("Loading file %s failed.", resourcePath.CString());
+            URHO3D_LOGERRORF("Loading file %s failed.", resourcePath.c_str());
+            cache->ReleaseResource(XMLFile::GetTypeStatic(), resourcePath, true);
             return false;
         }
     }
-    else if (resourcePath.EndsWith(".json"))
+    else
     {
         URHO3D_LOGERROR("Unsupported format.");
-        return false;
-    }
-    else if (resourcePath.EndsWith(".ui"))
-    {
-        URHO3D_LOGERROR("Unsupported format.");
+        cache->ReleaseResource(XMLFile::GetTypeStatic(), resourcePath, true);
         return false;
     }
 
@@ -380,7 +376,7 @@ bool UITab::LoadResource(const String& resourcePath)
         layoutElement->SetStyleAuto();
 
         // Must be disabled because it interferes with ui element resizing
-        if (auto window = dynamic_cast<Window*>(layoutElement))
+        if (auto* window = layoutElement->Cast<Window>())
         {
             window->SetMovable(false);
             window->SetResizable(false);
@@ -388,11 +384,14 @@ bool UITab::LoadResource(const String& resourcePath)
     }
     else
     {
-        URHO3D_LOGERRORF("Loading UI layout %s failed.", resourcePath.CString());
+        URHO3D_LOGERRORF("Loading UI layout %s failed.", resourcePath.c_str());
+        cache->ReleaseResource(XMLFile::GetTypeStatic(), resourcePath, true);
         return false;
     }
 
-    undo_.SetTrackingEnabled(true);
+    undo_.Clear();
+    lastUndoIndex_ = undo_.Index();
+
     return true;
 }
 
@@ -409,9 +408,10 @@ bool UITab::SaveResource()
         return false;
 
     ResourceCache* cache = GetSubsystem<ResourceCache>();
-    String savePath = cache->GetResourceFileName(resourceName_);
+    ea::string savePath = cache->GetResourceFileName(resourceName_);
+    cache->ReleaseResource(XMLFile::GetTypeStatic(), resourceName_);
 
-    if (resourceName_.EndsWith(".xml"))
+    if (resourceName_.ends_with(".xml"))
     {
         XMLFile xml(context_);
         XMLElement root = xml.CreateRoot("element");
@@ -449,12 +449,7 @@ bool UITab::SaveResource()
         else
             return false;
     }
-    else if (resourceName_.EndsWith(".json"))
-    {
-        URHO3D_LOGERROR("Unsupported format.");
-        return false;
-    }
-    else if (resourceName_.EndsWith(".ui"))
+    else
     {
         URHO3D_LOGERROR("Unsupported format.");
         return false;
@@ -483,26 +478,30 @@ UIElement* UITab::GetSelected() const
 void UITab::SelectItem(UIElement* current)
 {
     if (current == nullptr)
-        textureSelectorAttribute_.Clear();
+        textureSelectorAttribute_.clear();
 
     selectedElement_ = current;
+
+    auto* editor = GetSubsystem<Editor>();
+    editor->GetTab<InspectorTab>()->SetProvider(this);
+    editor->GetTab<HierarchyTab>()->SetProvider(this);
 }
 
 void UITab::AutoLoadDefaultStyle()
 {
-    styleNames_.Clear();
+    styleNames_.clear();
     auto cache = GetSubsystem<ResourceCache>();
     auto fs = GetSubsystem<FileSystem>();
     for (const auto& dir: cache->GetResourceDirs())
     {
-        Vector<String> items;
+        ea::vector<ea::string> items;
         fs->ScanDir(items, dir + "UI", "", SCAN_FILES, false);
 
         for (const auto& fileName : items)
         {
             auto resourcePath = dir + "UI/" + fileName;
             // Icons file is also a style file. Without this ugly workaround sometimes wrong style gets applied.
-            if (GetContentType(resourcePath) == CTYPE_UISTYLE && !resourcePath.EndsWith("Icons.xml"))
+            if (GetContentType(context_, resourcePath) == CTYPE_UISTYLE && !resourcePath.ends_with("Icons.xml"))
             {
                 auto* style = cache->GetResource<XMLFile>(resourcePath);
                 rootElement_->SetDefaultStyle(style);
@@ -511,15 +510,15 @@ void UITab::AutoLoadDefaultStyle()
                 for (auto i = 0; i < styles.Size(); i++)
                 {
                     auto type = styles[i].GetAttribute("type");
-                    if (type.Length() && !styleNames_.Contains(type) &&
-                        styles[i].GetAttribute("auto").ToLower() == "false")
-                        styleNames_.Push(type);
+                    if (type.length() && !styleNames_.contains(type) &&
+                        styles[i].GetAttribute("auto").to_lower() == "false")
+                        styleNames_.push_back(type);
                 }
                 break;
             }
         }
     }
-    Sort(styleNames_.Begin(), styleNames_.End());
+    ea::quick_sort(styleNames_.begin(), styleNames_.end());
 }
 
 void UITab::RenderElementContextMenu()
@@ -529,20 +528,20 @@ void UITab::RenderElementContextMenu()
         if (ui::BeginMenu("Create Child"))
         {
             auto components = GetSubsystem<Editor>()->GetObjectsByCategory("UI");
-            Sort(components.Begin(), components.End());
+            ea::quick_sort(components.begin(), components.end());
 
-            for (const String& component : components)
+            for (const ea::string& component : components)
             {
                 // TODO: element creation with custom styles more usable.
                 if (GetSubsystem<Input>()->GetKeyDown(KEY_SHIFT))
                 {
                     ui::Image(component);
                     ui::SameLine();
-                    if (ui::BeginMenu(component.CString()))
+                    if (ui::BeginMenu(component.c_str()))
                     {
-                        for (auto j = 0; j < styleNames_.Size(); j++)
+                        for (auto j = 0; j < styleNames_.size(); j++)
                         {
-                            if (ui::MenuItem(styleNames_[j].CString()))
+                            if (ui::MenuItem(styleNames_[j].c_str()))
                             {
                                 SelectItem(selectedElement_->CreateChild(StringHash(component)));
                                 selectedElement_->SetStyle(styleNames_[j]);
@@ -555,7 +554,7 @@ void UITab::RenderElementContextMenu()
                 {
                     ui::Image(component);
                     ui::SameLine();
-                    if (ui::MenuItem(component.CString()))
+                    if (ui::MenuItem(component.c_str()))
                     {
                         SelectItem(selectedElement_->CreateChild(StringHash(component)));
                         selectedElement_->SetStyleAuto();
@@ -580,17 +579,7 @@ void UITab::RenderElementContextMenu()
     }
 }
 
-void UITab::OnSaveProject(JSONValue& tab)
-{
-    BaseClassName::OnSaveProject(tab);
-}
-
-void UITab::OnLoadProject(const JSONValue& tab)
-{
-    BaseClassName::OnLoadProject(tab);
-}
-
-String UITab::GetAppliedStyle(UIElement* element)
+ea::string UITab::GetAppliedStyle(UIElement* element)
 {
     if (element == nullptr)
         element = selectedElement_;
@@ -599,16 +588,16 @@ String UITab::GetAppliedStyle(UIElement* element)
         return "";
 
     auto appliedStyle = selectedElement_->GetAppliedStyle();
-    if (appliedStyle.Empty())
+    if (appliedStyle.empty())
         appliedStyle = selectedElement_->GetTypeName();
     return appliedStyle;
 }
 
 void UITab::RenderRectSelector()
 {
-    auto* selected = dynamic_cast<BorderImage*>(GetSelected());
+    auto* selected = GetSelected() ? GetSelected()->Cast<BorderImage>() : nullptr;
 
-    if (textureSelectorAttribute_.Empty() || selected == nullptr)
+    if (textureSelectorAttribute_.empty() || selected == nullptr)
         return;
 
     struct State
@@ -692,13 +681,14 @@ void UITab::RenderRectSelector()
         else if (s->isResizing_)
         {
             s->isResizing_ = false;
-            undo_.Track<Undo::EditAttributeAction>(selected, textureSelectorAttribute_, s->startRect_);
+            undo_.Track<Undo::EditAttributeAction>(selected, textureSelectorAttribute_, s->startRect_,
+                selected->GetAttribute(textureSelectorAttribute_));
         }
     }
     ui::End();
 
     if (!open)
-        textureSelectorAttribute_.Clear();
+        textureSelectorAttribute_.clear();
 }
 
 Variant UITab::GetVariantFromXML(const XMLElement& attribute, const AttributeInfo& info) const
@@ -741,7 +731,7 @@ void UITab::GetStyleData(const AttributeInfo& info, XMLElement& style, XMLElemen
         attribute = style.SelectSinglePrepared(xpAttribute);
         // Go up in style hierarchy
         styleName = style.GetAttribute("Style");
-    } while (attribute.IsNull() && !styleName.Empty() && !style.IsNull());
+    } while (attribute.IsNull() && !styleName.empty() && !style.IsNull());
 
 
     if (!attribute.IsNull() && attribute.GetAttribute("type") != "None")
@@ -754,7 +744,7 @@ void UITab::AttributeMenu(VariantMap& args)
 
     if (auto selected = GetSelected())
     {
-        auto* item = dynamic_cast<Serializable*>(args[P_SERIALIZABLE].GetPtr());
+        auto* item = static_cast<Serializable*>(args[P_SERIALIZABLE].GetPtr());
         auto* info = static_cast<AttributeInfo*>(args[P_ATTRIBUTEINFO].GetVoidPtr());
 
         Variant value = item->GetAttribute(info->name_);
@@ -765,16 +755,6 @@ void UITab::AttributeMenu(VariantMap& args)
 
         if (styleVariant != value)
         {
-            if (!styleVariant.IsEmpty())
-            {
-                if (ui::MenuItem("Reset to style"))
-                {
-                    item->SetAttribute(info->name_, styleVariant);
-                    item->ApplyAttributes();
-                    undo_.Track<Undo::EditAttributeAction>(item, info->name_, value);
-                }
-            }
-
             if (styleXml.NotNull())
             {
                 if (ui::MenuItem("Save to style"))
@@ -799,7 +779,7 @@ void UITab::AttributeMenu(VariantMap& args)
             }
         }
 
-        if (info->type_ == VAR_INTRECT && dynamic_cast<BorderImage*>(selected) != nullptr)
+        if (info->type_ == VAR_INTRECT && selected->IsInstanceOf<BorderImage>())
         {
             if (ui::MenuItem("Select in UI Texture"))
                 textureSelectorAttribute_ = info->name_;
@@ -814,7 +794,7 @@ void UITab::AttributeCustomize(VariantMap& args)
 
     using namespace AttributeInspectorAttribute;
 
-    auto* item = dynamic_cast<Serializable*>(args[P_SERIALIZABLE].GetPtr());
+    auto* item = static_cast<Serializable*>(args[P_SERIALIZABLE].GetPtr());
     auto* info = static_cast<AttributeInfo*>(args[P_ATTRIBUTEINFO].GetVoidPtr());
 
     Variant value = item->GetAttribute(info->name_);
@@ -840,8 +820,30 @@ void UITab::AttributeCustomize(VariantMap& args)
 
 void UITab::OnFocused()
 {
-    SendEvent(E_EDITORRENDERINSPECTOR, EditorRenderInspector::P_INSPECTABLE, this);
-    SendEvent(E_EDITORRENDERHIERARCHY, EditorRenderHierarchy::P_INSPECTABLE, this);
+    auto* editor = GetSubsystem<Editor>();
+    editor->GetTab<HierarchyTab>()->SetProvider(this);
+}
+
+void UITab::OnBeforeBegin()
+{
+    // Allow viewport texture to cover entire window
+    ui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+}
+
+void UITab::OnAfterBegin()
+{
+    ui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
+}
+
+void UITab::OnBeforeEnd()
+{
+    BaseClassName::OnBeforeEnd();
+    ui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
+}
+
+void UITab::OnAfterEnd()
+{
+    ui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 }
 
 }

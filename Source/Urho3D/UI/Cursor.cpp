@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -89,12 +89,12 @@ Cursor::Cursor(Context* context) :
 
 Cursor::~Cursor()
 {
-    for (HashMap<String, CursorShapeInfo>::Iterator i = shapeInfos_.Begin(); i != shapeInfos_.End(); ++i)
+    for (auto i = shapeInfos_.begin(); i != shapeInfos_.end(); ++i)
     {
-        if (i->second_.osCursor_)
+        if (i->second.osCursor_)
         {
-            SDL_FreeCursor(i->second_.osCursor_);
-            i->second_.osCursor_ = nullptr;
+            SDL_FreeCursor(i->second.osCursor_);
+            i->second.osCursor_ = nullptr;
         }
     }
 }
@@ -109,14 +109,14 @@ void Cursor::RegisterObject(Context* context)
     URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Shapes", GetShapesAttr, SetShapesAttr, VariantVector, Variant::emptyVariantVector, AM_FILE);
 }
 
-void Cursor::GetBatches(PODVector<UIBatch>& batches, PODVector<float>& vertexData, const IntRect& currentScissor)
+void Cursor::GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, const IntRect& currentScissor)
 {
-    unsigned initialSize = vertexData.Size();
+    unsigned initialSize = vertexData.size();
     const IntVector2& offset = shapeInfos_[shape_].hotSpot_;
     Vector2 floatOffset(-(float)offset.x_, -(float)offset.y_);
 
     BorderImage::GetBatches(batches, vertexData, currentScissor);
-    for (unsigned i = initialSize; i < vertexData.Size(); i += 6)
+    for (unsigned i = initialSize; i < vertexData.size(); i += 6)
     {
         vertexData[i] += floatOffset.x_;
         vertexData[i + 1] += floatOffset.y_;
@@ -134,14 +134,14 @@ void Cursor::DefineShape(CursorShape shape, Image* image, const IntRect& imageRe
     DefineShape(shapeNames[shape], image, imageRect, hotSpot);
 }
 
-void Cursor::DefineShape(const String& shape, Image* image, const IntRect& imageRect, const IntVector2& hotSpot)
+void Cursor::DefineShape(const ea::string& shape, Image* image, const IntRect& imageRect, const IntVector2& hotSpot)
 {
     if (!image)
         return;
 
     auto* cache = GetSubsystem<ResourceCache>();
 
-    if (!shapeInfos_.Contains(shape))
+    if (!shapeInfos_.contains(shape))
         shapeInfos_[shape] = CursorShapeInfo();
 
     CursorShapeInfo& info = shapeInfos_[shape];
@@ -150,8 +150,8 @@ void Cursor::DefineShape(const String& shape, Image* image, const IntRect& image
     info.texture_ = cache->GetResource<Texture2D>(image->GetName(), false);
     if (!info.texture_)
     {
-        auto* texture = new Texture2D(context_);
-        texture->SetData(SharedPtr<Image>(image));
+        auto texture(context_->CreateObject<Texture2D>());
+        texture->SetData(image);
         info.texture_ = texture;
     }
 
@@ -169,15 +169,15 @@ void Cursor::DefineShape(const String& shape, Image* image, const IntRect& image
     // Reset current shape if it was edited
     if (shape_ == shape)
     {
-        shape_ = String::EMPTY;
+        shape_ = EMPTY_STRING;
         SetShape(shape);
     }
 }
 
 
-void Cursor::SetShape(const String& shape)
+void Cursor::SetShape(const ea::string& shape)
 {
-    if (shape == String::EMPTY || shape.Empty() || shape_ == shape || !shapeInfos_.Contains(shape))
+    if (shape == EMPTY_STRING || shape.empty() || shape_ == shape || !shapeInfos_.contains(shape))
         return;
 
     shape_ = shape;
@@ -214,15 +214,15 @@ void Cursor::SetUseSystemShapes(bool enable)
 
 void Cursor::SetShapesAttr(const VariantVector& value)
 {
-    if (!value.Size())
+    if (!value.size())
         return;
 
-    for (VariantVector::ConstIterator i = value.Begin(); i != value.End(); ++i)
+    for (auto i = value.begin(); i != value.end(); ++i)
     {
-        VariantVector shapeVector = i->GetVariantVector();
-        if (shapeVector.Size() >= 4)
+        const VariantVector& shapeVector = i->GetVariantVector();
+        if (shapeVector.size() >= 4)
         {
-            String shape = shapeVector[0].GetString();
+            ea::string shape = shapeVector[0].GetString();
             ResourceRef ref = shapeVector[1].GetResourceRef();
             IntRect imageRect = shapeVector[2].GetIntRect();
             IntVector2 hotSpot = shapeVector[3].GetIntVector2();
@@ -236,17 +236,17 @@ VariantVector Cursor::GetShapesAttr() const
 {
     VariantVector ret;
 
-    for (HashMap<String, CursorShapeInfo>::ConstIterator i = shapeInfos_.Begin(); i != shapeInfos_.End(); ++i)
+    for (auto i = shapeInfos_.begin(); i != shapeInfos_.end(); ++i)
     {
-        if (i->second_.imageRect_ != IntRect::ZERO)
+        if (i->second.imageRect_ != IntRect::ZERO)
         {
             // Could use a map but this simplifies the UI xml.
             VariantVector shape;
-            shape.Push(i->first_);
-            shape.Push(GetResourceRef(i->second_.texture_, Texture2D::GetTypeStatic()));
-            shape.Push(i->second_.imageRect_);
-            shape.Push(i->second_.hotSpot_);
-            ret.Push(shape);
+            shape.push_back(i->first);
+            shape.push_back(GetResourceRef(i->second.texture_, Texture2D::GetTypeStatic()));
+            shape.push_back(i->second.imageRect_);
+            shape.push_back(i->second.hotSpot_);
+            ret.push_back(shape);
         }
     }
 

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -45,13 +45,10 @@
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(RenderToTexture)
 
 RenderToTexture::RenderToTexture(Context* context) :
     Sample(context)
 {
-    // Register an object factory for our custom Rotator component so that we can create them to scene nodes
-    context->RegisterFactory<Rotator>();
 }
 
 void RenderToTexture::Start()

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,8 @@
 //
 
 #include "../Precompiled.h"
+
+#include <EASTL/sort.h>
 
 #include "../Core/Context.h"
 #include "../IO/File.h"
@@ -46,7 +48,7 @@ static bool CompareEntries(const FileSelectorEntry& lhs, const FileSelectorEntry
         return true;
     if (!lhs.directory_ && rhs.directory_)
         return false;
-    return lhs.name_.Compare(rhs.name_, false) < 0;
+    return lhs.name_.comparei(rhs.name_) < 0;
 }
 
 FileSelector::FileSelector(Context* context) :
@@ -54,68 +56,69 @@ FileSelector::FileSelector(Context* context) :
     directoryMode_(false),
     ignoreEvents_(false)
 {
-    window_ = new Window(context_);
+    window_ = context_->CreateObject<Window>();
     window_->SetLayout(LM_VERTICAL);
 
-    titleLayout = new UIElement(context_);
+    titleLayout = context_->CreateObject<UIElement>();
     titleLayout->SetLayout(LM_HORIZONTAL);
-    window_->AddChild(titleLayout);
+    window_->AddChild(titleLayout.Get());
 
-    titleText_ = new Text(context_);
-    titleLayout->AddChild(titleText_);
+    titleText_ = context_->CreateObject<Text>();
+    titleLayout->AddChild(titleText_.Get());
 
-    closeButton_ = new Button(context_);
-    titleLayout->AddChild(closeButton_);
+    closeButton_ = context_->CreateObject<Button>();
+    titleLayout->AddChild(closeButton_.Get());
 
-    pathEdit_ = new LineEdit(context_);
-    window_->AddChild(pathEdit_);
+    pathEdit_ = context_->CreateObject<LineEdit>();
+    window_->AddChild(pathEdit_.Get());
 
-    fileList_ = new ListView(context_);
-    window_->AddChild(fileList_);
+    fileList_ = context_->CreateObject<ListView>();
+    window_->AddChild(fileList_.Get());
 
-    fileNameLayout_ = new UIElement(context_);
+    fileNameLayout_ = context_->CreateObject<UIElement>();
     fileNameLayout_->SetLayout(LM_HORIZONTAL);
 
-    fileNameEdit_ = new LineEdit(context_);
-    fileNameLayout_->AddChild(fileNameEdit_);
+    fileNameEdit_ = context_->CreateObject<LineEdit>();
+    fileNameLayout_->AddChild(fileNameEdit_.Get());
 
-    filterList_ = new DropDownList(context_);
-    fileNameLayout_->AddChild(filterList_);
+    filterList_ = context_->CreateObject<DropDownList>();
+    fileNameLayout_->AddChild(filterList_.Get());
 
-    window_->AddChild(fileNameLayout_);
+    window_->AddChild(fileNameLayout_.Get());
 
-    separatorLayout_ = new UIElement(context_);
-    window_->AddChild(separatorLayout_);
+    separatorLayout_ = context_->CreateObject<UIElement>();
+    window_->AddChild(separatorLayout_.Get());
 
-    buttonLayout_ = new UIElement(context_);
+    buttonLayout_ = context_->CreateObject<UIElement>();
     buttonLayout_->SetLayout(LM_HORIZONTAL);
 
-    buttonLayout_->AddChild(new UIElement(context_)); // Add spacer
+    auto spacer = context_->CreateObject<UIElement>();
+    buttonLayout_->AddChild(spacer.Get()); // Add spacer
 
-    cancelButton_ = new Button(context_);
-    cancelButtonText_ = new Text(context_);
+    cancelButton_ = context_->CreateObject<Button>();
+    cancelButtonText_ = context_->CreateObject<Text>();
     cancelButtonText_->SetAlignment(HA_CENTER, VA_CENTER);
-    cancelButton_->AddChild(cancelButtonText_);
-    buttonLayout_->AddChild(cancelButton_);
+    cancelButton_->AddChild(cancelButtonText_.Get());
+    buttonLayout_->AddChild(cancelButton_.Get());
 
-    okButton_ = new Button(context_);
-    okButtonText_ = new Text(context_);
+    okButton_ = context_->CreateObject<Button>();
+    okButtonText_ = context_->CreateObject<Text>();
     okButtonText_->SetAlignment(HA_CENTER, VA_CENTER);
-    okButton_->AddChild(okButtonText_);
-    buttonLayout_->AddChild(okButton_);
+    okButton_->AddChild(okButtonText_.Get());
+    buttonLayout_->AddChild(okButton_.Get());
 
-    window_->AddChild(buttonLayout_);
+    window_->AddChild(buttonLayout_.Get());
 
-    Vector<String> defaultFilters;
-    defaultFilters.Push("*.*");
+    ea::vector<ea::string> defaultFilters;
+    defaultFilters.push_back("*.*");
     SetFilters(defaultFilters, 0);
     auto* fileSystem = GetSubsystem<FileSystem>();
     SetPath(fileSystem->GetCurrentDir());
 
     // Focus the fileselector's filelist initially when created, and bring to front
     auto* ui = GetSubsystem<UI>();
-    ui->GetRoot()->AddChild(window_);
-    ui->SetFocusElement(fileList_);
+    ui->GetRoot()->AddChild(window_.Get());
+    ui->SetFocusElement(fileList_.Get());
     window_->SetModal(true);
 
     SubscribeToEvent(filterList_, E_ITEMSELECTED, URHO3D_HANDLER(FileSelector, HandleFilterChanged));
@@ -168,29 +171,29 @@ void FileSelector::SetDefaultStyle(XMLFile* style)
     okButton_->SetStyle("FileSelectorButton");
     cancelButton_->SetStyle("FileSelectorButton");
 
-    const Vector<SharedPtr<UIElement> >& filterTexts = filterList_->GetListView()->GetContentElement()->GetChildren();
-    for (unsigned i = 0; i < filterTexts.Size(); ++i)
+    const ea::vector<SharedPtr<UIElement> >& filterTexts = filterList_->GetListView()->GetContentElement()->GetChildren();
+    for (unsigned i = 0; i < filterTexts.size(); ++i)
         filterTexts[i]->SetStyle("FileSelectorFilterText");
 
-    const Vector<SharedPtr<UIElement> >& listTexts = fileList_->GetContentElement()->GetChildren();
-    for (unsigned i = 0; i < listTexts.Size(); ++i)
+    const ea::vector<SharedPtr<UIElement> >& listTexts = fileList_->GetContentElement()->GetChildren();
+    for (unsigned i = 0; i < listTexts.size(); ++i)
         listTexts[i]->SetStyle("FileSelectorListText");
 
     UpdateElements();
 }
 
-void FileSelector::SetTitle(const String& text)
+void FileSelector::SetTitle(const ea::string& text)
 {
     titleText_->SetText(text);
 }
 
-void FileSelector::SetButtonTexts(const String& okText, const String& cancelText)
+void FileSelector::SetButtonTexts(const ea::string& okText, const ea::string& cancelText)
 {
     okButtonText_->SetText(okText);
     cancelButtonText_->SetText(cancelText);
 }
 
-void FileSelector::SetPath(const String& path)
+void FileSelector::SetPath(const ea::string& path)
 {
     auto* fileSystem = GetSubsystem<FileSystem>();
     if (fileSystem->DirExists(path))
@@ -207,28 +210,28 @@ void FileSelector::SetPath(const String& path)
     }
 }
 
-void FileSelector::SetFileName(const String& fileName)
+void FileSelector::SetFileName(const ea::string& fileName)
 {
     SetLineEditText(fileNameEdit_, fileName);
 }
 
-void FileSelector::SetFilters(const Vector<String>& filters, unsigned defaultIndex)
+void FileSelector::SetFilters(const ea::vector<ea::string>& filters, unsigned defaultIndex)
 {
-    if (filters.Empty())
+    if (filters.empty())
         return;
 
     ignoreEvents_ = true;
 
     filters_ = filters;
     filterList_->RemoveAllItems();
-    for (unsigned i = 0; i < filters_.Size(); ++i)
+    for (unsigned i = 0; i < filters_.size(); ++i)
     {
-        auto* filterText = new Text(context_);
+        auto filterText = context_->CreateObject<Text>();
         filterList_->AddItem(filterText);
         filterText->SetText(filters_[i]);
         filterText->SetStyle("FileSelectorFilterText");
     }
-    if (defaultIndex > filters.Size())
+    if (defaultIndex > filters.size())
         defaultIndex = 0;
     filterList_->SetSelection(defaultIndex);
 
@@ -253,23 +256,23 @@ XMLFile* FileSelector::GetDefaultStyle() const
     return window_->GetDefaultStyle(false);
 }
 
-const String& FileSelector::GetTitle() const
+const ea::string& FileSelector::GetTitle() const
 {
     return titleText_->GetText();
 }
 
-const String& FileSelector::GetFileName() const
+const ea::string& FileSelector::GetFileName() const
 {
     return fileNameEdit_->GetText();
 }
 
-const String& FileSelector::GetFilter() const
+const ea::string& FileSelector::GetFilter() const
 {
     auto* selectedFilter = static_cast<Text*>(filterList_->GetSelectedItem());
     if (selectedFilter)
         return selectedFilter->GetText();
     else
-        return String::EMPTY;
+        return EMPTY_STRING;
 }
 
 unsigned FileSelector::GetFilterIndex() const
@@ -277,7 +280,7 @@ unsigned FileSelector::GetFilterIndex() const
     return filterList_->GetSelection();
 }
 
-void FileSelector::SetLineEditText(LineEdit* edit, const String& text)
+void FileSelector::SetLineEditText(LineEdit* edit, const ea::string& text)
 {
     ignoreEvents_ = true;
     edit->SetText(text);
@@ -291,45 +294,45 @@ void FileSelector::RefreshFiles()
     ignoreEvents_ = true;
 
     fileList_->RemoveAllItems();
-    fileEntries_.Clear();
+    fileEntries_.clear();
 
-    Vector<String> directories;
-    Vector<String> files;
+    ea::vector<ea::string> directories;
+    ea::vector<ea::string> files;
     fileSystem->ScanDir(directories, path_, "*", SCAN_DIRS, false);
     fileSystem->ScanDir(files, path_, GetFilter(), SCAN_FILES, false);
 
-    fileEntries_.Reserve(directories.Size() + files.Size());
+    fileEntries_.reserve(directories.size() + files.size());
 
-    for (unsigned i = 0; i < directories.Size(); ++i)
+    for (unsigned i = 0; i < directories.size(); ++i)
     {
         FileSelectorEntry newEntry;
         newEntry.name_ = directories[i];
         newEntry.directory_ = true;
-        fileEntries_.Push(newEntry);
+        fileEntries_.push_back(newEntry);
     }
 
-    for (unsigned i = 0; i < files.Size(); ++i)
+    for (unsigned i = 0; i < files.size(); ++i)
     {
         FileSelectorEntry newEntry;
         newEntry.name_ = files[i];
         newEntry.directory_ = false;
-        fileEntries_.Push(newEntry);
+        fileEntries_.push_back(newEntry);
     }
 
     // Sort and add to the list view
     // While items are being added, disable layout update for performance optimization
-    Sort(fileEntries_.Begin(), fileEntries_.End(), CompareEntries);
+    ea::quick_sort(fileEntries_.begin(), fileEntries_.end(), CompareEntries);
     UIElement* listContent = fileList_->GetContentElement();
     listContent->DisableLayoutUpdate();
-    for (unsigned i = 0; i < fileEntries_.Size(); ++i)
+    for (unsigned i = 0; i < fileEntries_.size(); ++i)
     {
-        String displayName;
+        ea::string displayName;
         if (fileEntries_[i].directory_)
             displayName = "<DIR> " + fileEntries_[i].name_;
         else
             displayName = fileEntries_[i].name_;
 
-        auto* entryText = new Text(context_);
+        auto entryText = context_->CreateObject<Text>();
         fileList_->AddItem(entryText);
         entryText->SetText(displayName);
         entryText->SetStyle("FileSelectorListText");
@@ -340,25 +343,25 @@ void FileSelector::RefreshFiles()
     ignoreEvents_ = false;
 
     // Clear filename from the previous dir so that there is no confusion
-    SetFileName(String::EMPTY);
+    SetFileName(EMPTY_STRING);
     lastUsedFilter_ = GetFilter();
 }
 
 bool FileSelector::EnterFile()
 {
     unsigned index = fileList_->GetSelection();
-    if (index >= fileEntries_.Size())
+    if (index >= fileEntries_.size())
         return false;
 
     if (fileEntries_[index].directory_)
     {
         // If a directory double clicked, enter it. Recognize . and .. as a special case
-        const String& newPath = fileEntries_[index].name_;
+        const ea::string& newPath = fileEntries_[index].name_;
         if ((newPath != ".") && (newPath != ".."))
             SetPath(path_ + newPath);
         else if (newPath == "..")
         {
-            String parentPath = GetParentPath(path_);
+            ea::string parentPath = GetParentPath(path_);
             SetPath(parentPath);
         }
 
@@ -406,7 +409,7 @@ void FileSelector::HandleFileSelected(StringHash eventType, VariantMap& eventDat
         return;
 
     unsigned index = fileList_->GetSelection();
-    if (index >= fileEntries_.Size())
+    if (index >= fileEntries_.size())
         return;
     // If a file selected, update the filename edit field
     if (!fileEntries_[index].directory_)
@@ -444,11 +447,11 @@ void FileSelector::HandleOKPressed(StringHash eventType, VariantMap& eventData)
     if (ignoreEvents_)
         return;
 
-    const String& fileName = GetFileName();
+    const ea::string& fileName = GetFileName();
 
     if (!directoryMode_)
     {
-        if (!fileName.Empty())
+        if (!fileName.empty())
         {
             using namespace FileSelected;
 
@@ -459,7 +462,7 @@ void FileSelector::HandleOKPressed(StringHash eventType, VariantMap& eventData)
             SendEvent(E_FILESELECTED, newEventData);
         }
     }
-    else if (eventType == E_RELEASED && !path_.Empty())
+    else if (eventType == E_RELEASED && !path_.empty())
     {
         using namespace FileSelected;
 
@@ -482,7 +485,7 @@ void FileSelector::HandleCancelPressed(StringHash eventType, VariantMap& eventDa
     using namespace FileSelected;
 
     VariantMap& newEventData = GetEventDataMap();
-    newEventData[P_FILENAME] = String::EMPTY;
+    newEventData[P_FILENAME] = EMPTY_STRING;
     newEventData[P_FILTER] = GetFilter();
     newEventData[P_OK] = false;
     SendEvent(E_FILESELECTED, newEventData);

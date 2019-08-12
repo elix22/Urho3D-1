@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,8 +24,10 @@
 
 
 #include <Urho3D/Core/Object.h>
-
-#include "Assets/AssetConverter.h"
+#if URHO3D_PLUGINS
+#   include "Plugins/PluginManager.h"
+#endif
+#include "Pipeline/Pipeline.h"
 
 
 namespace Urho3D
@@ -40,25 +42,51 @@ public:
     /// Destruct.
     ~Project() override;
     /// Load existing project. Returns true if project was successfully loaded.
-    bool LoadProject(const String& projectPath);
+    bool LoadProject(const ea::string& projectPath);
     /// Create a new project. Returns true if successful. Overwrites specified path unconditionally.
     bool SaveProject();
+    /// Return project directory.
+    const ea::string& GetProjectPath() const { return projectFileDir_; }
     /// Returns path to temporary asset cache.
-    String GetCachePath() const;
+    ea::string GetCachePath() const;
     /// Returns path to permanent asset cache.
-    String GetResourcePath() const;
-    /// Returns a path from which project was loaded.
-    const String& GetProjectFilePath() const { return projectFilePath_; }
+    ea::string GetResourcePath() const;
+#if URHO3D_PLUGINS
+    /// Returns plugin manager.
+    PluginManager* GetPlugins() { return &plugins_; }
+#endif
+    /// Returns true in very first session of new project.
+    bool IsNewProject() const { return isNewProject_; }
+    /// Return resource name of scene that will be executed first by the player.
+    const ea::string& GetDefaultSceneName() const { return defaultScene_; }
+    /// Set resource name of scene that will be executed first by the player.
+    void SetDefaultSceneName(const ea::string& defaultScene) { defaultScene_ = defaultScene; }
+    /// Returns a map of default engine settings that will be applied on the start of player application.
+    ea::unordered_map<ea::string, Variant>& GetDefaultEngineSettings() { return engineParameters_; }
+    ///
+    Pipeline& GetPipeline() { return pipeline_; }
 
 protected:
-    /// Path to a project file.
-    String projectFilePath_;
-    /// Directory containing project file.
-    String projectFileDir_;
-    /// Converter responsible for watching resource directories and converting assets to required formats.
-    AssetConverter assetConverter_;
+    /// Directory containing project.
+    ea::string projectFileDir_;
     ///
+    Pipeline pipeline_;
+    /// Copy of engine resource paths that get unregistered when project is loaded.
     StringVector cachedEngineResourcePaths_;
+    /// Path to imgui settings ini file.
+    ea::string uiConfigPath_;
+#if URHO3D_PLUGINS
+    /// Native plugin manager.
+    PluginManager plugins_;
+#endif
+    /// Flag indicating that project was just created.
+    bool isNewProject_ = true;
+    /// Resource name of scene that will be started by player first.
+    ea::string defaultScene_;
+    ///
+    ea::unordered_map<ea::string, Variant> engineParameters_;
+    ///
+    Timer saveProjectTimer_;
 };
 
 

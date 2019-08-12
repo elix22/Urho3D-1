@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,9 +22,10 @@
 
 #pragma once
 
+#include <EASTL/shared_array.h>
+
 #include "../Core/Object.h"
 #include "../Core/Timer.h"
-#include "../Container/ArrayPtr.h"
 #include "../Graphics/GraphicsDefs.h"
 #include "../Math/Frustum.h"
 
@@ -52,7 +53,7 @@ struct DepthValue
 struct OcclusionBufferData
 {
     /// Full buffer data with safety padding.
-    SharedArrayPtr<int> dataWithSafety_;
+    ea::shared_array<int> dataWithSafety_;
     /// Buffer data.
     int* data_;
     /// Use flag.
@@ -96,6 +97,9 @@ public:
     /// Destruct.
     ~OcclusionBuffer() override;
 
+    /// Register object with the engine.
+    static void RegisterObject(Context* context);
+
     /// Set occlusion buffer size and whether to reserve multiple buffers for threading optimization.
     bool SetSize(int width, int height, bool threaded);
     /// Set camera view to render from.
@@ -121,7 +125,7 @@ public:
     void ResetUseTimer();
 
     /// Return highest level depth values.
-    int* GetBuffer() const { return buffers_.Size() ? buffers_[0].data_ : nullptr; }
+    int* GetBuffer() const { return buffers_.size() ? buffers_[0].data_ : nullptr; }
 
     /// Return view transform matrix.
     const Matrix3x4& GetView() const { return view_; }
@@ -145,7 +149,7 @@ public:
     CullMode GetCullMode() const { return cullMode_; }
 
     /// Return whether is using threads to speed up rendering.
-    bool IsThreaded() const { return buffers_.Size() > 1; }
+    bool IsThreaded() const { return buffers_.size() > 1; }
 
     /// Test a bounding box for visibility. For best performance, build depth hierarchy first.
     bool IsVisible(const BoundingBox& worldSpaceBox) const;
@@ -178,11 +182,11 @@ private:
     void MergeBuffers();
 
     /// Highest-level buffer data per thread.
-    Vector<OcclusionBufferData> buffers_;
+    ea::vector<OcclusionBufferData> buffers_;
     /// Reduced size depth buffers.
-    Vector<SharedArrayPtr<DepthValue> > mipBuffers_;
+    ea::vector<ea::shared_array<DepthValue> > mipBuffers_;
     /// Submitted render jobs.
-    PODVector<OcclusionBatch> batches_;
+    ea::vector<OcclusionBatch> batches_;
     /// Buffer width.
     int width_{};
     /// Buffer height.

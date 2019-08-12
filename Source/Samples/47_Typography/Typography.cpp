@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,6 @@
 #include <Urho3D/DebugNew.h>
 
 // Expands to this example's entry-point
-URHO3D_DEFINE_APPLICATION_MAIN(Typography)
 
 namespace
 {
@@ -150,14 +149,14 @@ void Typography::CreateText()
     {
         auto size = size2x / 2.f;
         SharedPtr<Text> text(new Text(context_));
-        text->SetText(String("The quick brown fox jumps over the lazy dog (") + String(size) + String("pt)"));
+        text->SetText(ea::string("The quick brown fox jumps over the lazy dog (") + ea::to_string(size) + ea::string("pt)"));
         text->SetFont(font, size);
         text->AddTag(TEXT_TAG);
         container->AddChild(text);
     }
 }
 
-SharedPtr<CheckBox> Typography::CreateCheckbox(const String& label, EventHandler* handler)
+SharedPtr<CheckBox> Typography::CreateCheckbox(const ea::string& label, EventHandler* handler)
 {
     SharedPtr<UIElement> container(new UIElement(context_));
     container->SetAlignment(HA_LEFT, VA_TOP);
@@ -178,7 +177,7 @@ SharedPtr<CheckBox> Typography::CreateCheckbox(const String& label, EventHandler
     return box;
 }
 
-SharedPtr<DropDownList> Typography::CreateMenu(const String& label, const char** items, EventHandler* handler)
+SharedPtr<DropDownList> Typography::CreateMenu(const ea::string& label, const char** items, EventHandler* handler)
 {
     SharedPtr<UIElement> container(new UIElement(context_));
     container->SetAlignment(HA_LEFT, VA_TOP);
@@ -223,8 +222,8 @@ void Typography::HandleWhiteBackground(StringHash eventType, VariantMap& eventDa
     Zone* zone = renderer->GetDefaultZone();
     zone->SetFogColor(bg);
 
-    PODVector<UIElement*> text = uielement_->GetChildrenWithTag(TEXT_TAG, true);
-    for (int i = 0; i < text.Size(); i++)
+    ea::vector<UIElement*> text = uielement_->GetChildrenWithTag(TEXT_TAG, true);
+    for (int i = 0; i < text.size(); i++)
     {
         text[i]->SetColor(fg);
     }

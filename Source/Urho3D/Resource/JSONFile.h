@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -46,10 +46,12 @@ public:
     /// Save resource with default indentation (one tab). Return true if successful.
     bool Save(Serializer& dest) const override;
     /// Save resource with user-defined indentation, only the first character (if any) of the string is used and the length of the string defines the character count. Return true if successful.
-    bool Save(Serializer& dest, const String& indendation) const;
+    bool Save(Serializer& dest, const ea::string& indendation) const;
 
     /// Deserialize from a string. Return true if successful.
-    bool FromString(const String& source);
+    bool FromString(const ea::string& source);
+    /// Save to a string.
+    ea::string ToString(const ea::string& indendation = "\t") const;
 
     /// Return root value.
     JSONValue& GetRoot() { return root_; }
@@ -57,7 +59,7 @@ public:
     const JSONValue& GetRoot() const { return root_; }
 
     /// Return true if parsing json string into JSONValue succeeds.
-    static bool ParseJSON(const String& json, JSONValue& value, bool reportError = true);
+    static bool ParseJSON(const ea::string& json, JSONValue& value, bool reportError = true);
 private:
     /// JSON root value.
     JSONValue root_;

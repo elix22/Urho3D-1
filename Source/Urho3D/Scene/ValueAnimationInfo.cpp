@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -93,16 +93,16 @@ bool ValueAnimationInfo::SetTime(float time)
     // Send keyframe event if necessary
     if (animation_->HasEventFrames())
     {
-        PODVector<const VAnimEventFrame*> eventFrames;
+        ea::vector<const VAnimEventFrame*> eventFrames;
         GetEventFrames(lastScaledTime_, scaledTime, eventFrames);
 
-        if (eventFrames.Size())
+        if (eventFrames.size())
         {
             // Make a copy of the target weakptr, since if it expires, the AnimationInfo is deleted as well, in which case the
             // member variable cannot be accessed
             WeakPtr<Object> targetWeak(target_);
 
-            for (unsigned i = 0; i < eventFrames.Size(); ++i)
+            for (unsigned i = 0; i < eventFrames.size(); ++i)
                 target_->SendEvent(eventFrames[i]->eventType_, const_cast<VariantMap&>(eventFrames[i]->eventData_));
 
             // Break immediately if target expired due to event
@@ -154,7 +154,7 @@ float ValueAnimationInfo::CalculateScaledTime(float currentTime, bool& finished)
     }
 }
 
-void ValueAnimationInfo::GetEventFrames(float beginTime, float endTime, PODVector<const VAnimEventFrame*>& eventFrames)
+void ValueAnimationInfo::GetEventFrames(float beginTime, float endTime, ea::vector<const VAnimEventFrame*>& eventFrames)
 {
     switch (wrapMode_)
     {

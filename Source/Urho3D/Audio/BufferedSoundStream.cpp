@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -42,20 +42,20 @@ unsigned BufferedSoundStream::GetData(signed char* dest, unsigned numBytes)
 
     unsigned outBytes = 0;
 
-    while (numBytes && buffers_.Size())
+    while (numBytes && buffers_.size())
     {
         // Copy as much from the front buffer as possible, then discard it and move to the next
-        List<Pair<SharedArrayPtr<signed char>, unsigned> >::Iterator front = buffers_.Begin();
+        auto front = buffers_.begin();
 
-        unsigned copySize = front->second_ - position_;
+        unsigned copySize = front->second - position_;
         if (copySize > numBytes)
             copySize = numBytes;
 
-        memcpy(dest, front->first_.Get() + position_, copySize);
+        memcpy(dest, front->first.get() + position_, copySize);
         position_ += copySize;
-        if (position_ >= front->second_)
+        if (position_ >= front->second)
         {
-            buffers_.PopFront();
+            buffers_.pop_front();
             position_ = 0;
         }
 
@@ -73,29 +73,29 @@ void BufferedSoundStream::AddData(void* data, unsigned numBytes)
     {
         MutexLock lock(bufferMutex_);
 
-        SharedArrayPtr<signed char> newBuffer(new signed char[numBytes]);
-        memcpy(newBuffer.Get(), data, numBytes);
-        buffers_.Push(MakePair(newBuffer, numBytes));
+        ea::shared_array<signed char> newBuffer(new signed char[numBytes]);
+        memcpy(newBuffer.get(), data, numBytes);
+        buffers_.push_back(ea::make_pair(newBuffer, numBytes));
     }
 }
 
-void BufferedSoundStream::AddData(const SharedArrayPtr<signed char>& data, unsigned numBytes)
+void BufferedSoundStream::AddData(const ea::shared_array<signed char>& data, unsigned numBytes)
 {
     if (data && numBytes)
     {
         MutexLock lock(bufferMutex_);
 
-        buffers_.Push(MakePair(data, numBytes));
+        buffers_.push_back(ea::make_pair(data, numBytes));
     }
 }
 
-void BufferedSoundStream::AddData(const SharedArrayPtr<signed short>& data, unsigned numBytes)
+void BufferedSoundStream::AddData(const ea::shared_array<signed short>& data, unsigned numBytes)
 {
     if (data && numBytes)
     {
         MutexLock lock(bufferMutex_);
 
-        buffers_.Push(MakePair(ReinterpretCast<signed char>(data), numBytes));
+        buffers_.push_back(ea::make_pair(ea::do_reinterpret_cast<signed char>(data), numBytes));
     }
 }
 
@@ -103,7 +103,7 @@ void BufferedSoundStream::Clear()
 {
     MutexLock lock(bufferMutex_);
 
-    buffers_.Clear();
+    buffers_.clear();
     position_ = 0;
 }
 
@@ -112,8 +112,8 @@ unsigned BufferedSoundStream::GetBufferNumBytes() const
     MutexLock lock(bufferMutex_);
 
     unsigned ret = 0;
-    for (List<Pair<SharedArrayPtr<signed char>, unsigned> >::ConstIterator i = buffers_.Begin(); i != buffers_.End(); ++i)
-        ret += i->second_;
+    for (const auto& buffer : buffers_)
+        ret += buffer.second;
     // Subtract amount of sound data played from the front buffer
     ret -= position_;
 

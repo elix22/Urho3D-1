@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,8 +27,8 @@ namespace ImGui
 {
 
 /// Displays editor icon by it's name.
-void Image(const Urho3D::String& name);
+void Image(const ea::string& name);
 /// Creates a button with editor icon obtained by it's name. Returns true if button was pressed.
-bool ImageButton(const Urho3D::String& name);
+bool ImageButton(const ea::string& name);
 
 }

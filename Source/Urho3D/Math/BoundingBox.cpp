@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -74,11 +74,11 @@ void BoundingBox::Merge(const Frustum& frustum)
 
 void BoundingBox::Merge(const Polyhedron& poly)
 {
-    for (unsigned i = 0; i < poly.faces_.Size(); ++i)
+    for (unsigned i = 0; i < poly.faces_.size(); ++i)
     {
-        const PODVector<Vector3>& face = poly.faces_[i];
-        if (!face.Empty())
-            Merge(&face[0], face.Size());
+        const ea::vector<Vector3>& face = poly.faces_[i];
+        if (!face.empty())
+            Merge(&face[0], face.size());
     }
 }
 
@@ -241,7 +241,7 @@ Intersection BoundingBox::IsInside(const Sphere& sphere) const
     }
 
     float radius = sphere.radius_;
-    if (distSquared >= radius * radius)
+    if (distSquared > radius * radius)
         return OUTSIDE;
     else if (center.x_ - radius < min_.x_ || center.x_ + radius > max_.x_ || center.y_ - radius < min_.y_ ||
              center.y_ + radius > max_.y_ || center.z_ - radius < min_.z_ || center.z_ + radius > max_.z_)
@@ -294,7 +294,7 @@ Intersection BoundingBox::IsInsideFast(const Sphere& sphere) const
         return INSIDE;
 }
 
-String BoundingBox::ToString() const
+ea::string BoundingBox::ToString() const
 {
     return min_.ToString() + " - " + max_.ToString();
 }

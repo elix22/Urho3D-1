@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,8 @@
 
 #include "../Precompiled.h"
 
+#include "Container/Utility.h"
+#include "../Core/Context.h"
 #include "../Core/Profiler.h"
 #include "../IO/File.h"
 #include "../IO/FileSystem.h"
@@ -38,9 +40,18 @@
 #include "../Scene/SceneEvents.h"
 #include "../Scene/SmoothedTransform.h"
 
-#include <kNet/kNet.h>
+#include <slikenet/peerinterface.h>
+#include <slikenet/statistics.h>
+
+#ifdef SendMessage
+#undef SendMessage
+#endif
 
 #include "../DebugNew.h"
+#include "Connection.h"
+
+
+#include <cstdio>
 
 namespace Urho3D
 {
@@ -60,30 +71,41 @@ PackageUpload::PackageUpload() :
 {
 }
 
-Connection::Connection(Context* context, bool isClient, const kNet::SharedPtr<kNet::MessageConnection>& connection) :
+Connection::Connection(Context* context) :
     Object(context),
     timeStamp_(0),
-    connection_(connection),
+    peer_(nullptr),
     sendMode_(OPSM_NONE),
-    isClient_(isClient),
+    isClient_(false),
     connectPending_(false),
     sceneLoaded_(false),
-    logStatistics_(false)
+    logStatistics_(false),
+    address_(nullptr)
 {
-    sceneState_.connection_ = this;
-
-    // Store address and port now for accurate logging (kNet may already have destroyed the socket on disconnection,
-    // in which case we would log a zero address:port on disconnect)
-    kNet::EndPoint endPoint = connection_->RemoteEndPoint();
-    ///\todo Not IPv6-capable.
-    address_ = Urho3D::ToString("%d.%d.%d.%d", endPoint.ip[0], endPoint.ip[1], endPoint.ip[2], endPoint.ip[3]);
-    port_ = endPoint.port;
 }
 
 Connection::~Connection()
 {
     // Reset scene (remove possible owner references), as this connection is about to be destroyed
     SetScene(nullptr);
+
+    delete address_;
+    address_ = nullptr;
+}
+
+void Connection::Initialize(bool isClient, const SLNet::AddressOrGUID& address, SLNet::RakPeerInterface* peer)
+{
+    assert(peer_ == nullptr);
+    peer_ = peer;
+    isClient_ = isClient;
+    sceneState_.connection_ = this;
+    port_ = address.systemAddress.GetPort();
+    SetAddressOrGUID(address);
+}
+
+void Connection::RegisterObject(Context* context)
+{
+    context->RegisterFactory<Connection>();
 }
 
 void Connection::SendMessage(int msgID, bool reliable, bool inOrder, const VectorBuffer& msg, unsigned contentID)
@@ -94,8 +116,9 @@ void Connection::SendMessage(int msgID, bool reliable, bool inOrder, const Vecto
 void Connection::SendMessage(int msgID, bool reliable, bool inOrder, const unsigned char* data, unsigned numBytes,
     unsigned contentID)
 {
-    // Make sure not to use kNet internal message ID's
-    if (msgID <= 0x4 || msgID >= 0x3ffffffe)
+    /* Make sure not to use SLikeNet(RakNet) internal message ID's
+     and since RakNet uses 1 byte message ID's, they cannot exceed 255 limit */
+    if (msgID <= 0x4 || msgID >= 255)
     {
         URHO3D_LOGERROR("Can not send message with reserved ID");
         return;
@@ -106,22 +129,15 @@ void Connection::SendMessage(int msgID, bool reliable, bool inOrder, const unsig
         URHO3D_LOGERROR("Null pointer supplied for network message data");
         return;
     }
-
-    kNet::NetworkMessage* msg = connection_->StartNewMessage((unsigned long)msgID, numBytes);
-    if (!msg)
-    {
-        URHO3D_LOGERROR("Can not start new network message");
-        return;
+    
+    VectorBuffer buffer;
+    buffer.WriteUByte((unsigned char)msgID);
+    buffer.Write(data, numBytes);
+    PacketReliability reliability = reliable ? (inOrder ? RELIABLE_ORDERED : RELIABLE) : (inOrder ? UNRELIABLE_SEQUENCED : UNRELIABLE);
+    if (peer_) {
+        peer_->Send((const char *) buffer.GetData(), (int) buffer.GetSize(), HIGH_PRIORITY, reliability, (char) 0, *address_, false);
+        tempPacketCounter_.y_++;
     }
-
-    msg->reliable = reliable;
-    msg->inOrder = inOrder;
-    msg->priority = 0;
-    msg->contentID = contentID;
-    if (numBytes)
-        memcpy(msg->data, data, numBytes);
-
-    connection_->EndAndQueueMessage(msg);
 }
 
 void Connection::SendRemoteEvent(StringHash eventType, bool inOrder, const VariantMap& eventData)
@@ -131,7 +147,7 @@ void Connection::SendRemoteEvent(StringHash eventType, bool inOrder, const Varia
     queuedEvent.eventType_ = eventType;
     queuedEvent.eventData_ = eventData;
     queuedEvent.inOrder_ = inOrder;
-    remoteEvents_.Push(queuedEvent);
+    remoteEvents_.push_back(queuedEvent);
 }
 
 void Connection::SendRemoteEvent(Node* node, StringHash eventType, bool inOrder, const VariantMap& eventData)
@@ -157,7 +173,7 @@ void Connection::SendRemoteEvent(Node* node, StringHash eventType, bool inOrder,
     queuedEvent.eventType_ = eventType;
     queuedEvent.eventData_ = eventData;
     queuedEvent.inOrder_ = inOrder;
-    remoteEvents_.Push(queuedEvent);
+    remoteEvents_.push_back(queuedEvent);
 }
 
 void Connection::SetScene(Scene* newScene)
@@ -180,8 +196,8 @@ void Connection::SetScene(Scene* newScene)
         sceneState_.Clear();
 
         // When scene is assigned on the server, instruct the client to load it. This may require downloading packages
-        const Vector<SharedPtr<PackageFile> >& packages = scene_->GetRequiredPackageFiles();
-        unsigned numPackages = packages.Size();
+        const ea::vector<SharedPtr<PackageFile> >& packages = scene_->GetRequiredPackageFiles();
+        unsigned numPackages = packages.size();
         msg_.Clear();
         msg_.WriteString(scene_->GetFileName());
         msg_.WriteVLE(numPackages);
@@ -238,7 +254,7 @@ void Connection::SetLogStatistics(bool enable)
 
 void Connection::Disconnect(int waitMSec)
 {
-    connection_->Disconnect(waitMSec);
+    peer_->CloseConnection(*address_, true);
 }
 
 void Connection::SendServerUpdate()
@@ -249,16 +265,16 @@ void Connection::SendServerUpdate()
     // Always check the root node (scene) first so that the scene-wide components get sent first,
     // and all other replicated nodes get added to the dirty set for sending the initial state
     unsigned sceneID = scene_->GetID();
-    nodesToProcess_.Insert(sceneID);
+    nodesToProcess_.insert(sceneID);
     ProcessNode(sceneID);
 
     // Then go through all dirtied nodes
-    nodesToProcess_.Insert(sceneState_.dirtyNodes_);
-    nodesToProcess_.Erase(sceneID); // Do not process the root node twice
+    nodesToProcess_.insert(sceneState_.dirtyNodes_.begin(), sceneState_.dirtyNodes_.end());
+    nodesToProcess_.erase(sceneID); // Do not process the root node twice
 
-    while (nodesToProcess_.Size())
+    while (nodesToProcess_.size())
     {
-        unsigned nodeID = nodesToProcess_.Front();
+        unsigned nodeID = *nodesToProcess_.begin();
         ProcessNode(nodeID);
     }
 }
@@ -290,19 +306,29 @@ void Connection::SendRemoteEvents()
     {
         statsTimer_.Reset();
         char statsBuffer[256];
-        sprintf(statsBuffer, "RTT %.3f ms Pkt in %d Pkt out %d Data in %.3f KB/s Data out %.3f KB/s", connection_->RoundTripTime(),
-            (int)connection_->PacketsInPerSec(),
-            (int)connection_->PacketsOutPerSec(), connection_->BytesInPerSec() / 1000.0f, connection_->BytesOutPerSec() / 1000.0f);
+        sprintf(statsBuffer, "RTT %.3f ms Pkt in %i Pkt out %i Data in %.3f KB/s Data out %.3f KB/s, Last heard %u", GetRoundTripTime(),
+            GetPacketsInPerSec(),
+            GetPacketsOutPerSec(),
+            GetBytesInPerSec(),
+            GetBytesOutPerSec(),
+            GetLastHeardTime());
         URHO3D_LOGINFO(statsBuffer);
     }
 #endif
 
-    if (remoteEvents_.Empty())
+    if (packetCounterTimer_.GetMSec(false) > 1000)
+    {
+        packetCounterTimer_.Reset();
+        packetCounter_ = tempPacketCounter_;
+        tempPacketCounter_ = IntVector2::ZERO;
+    }
+
+    if (remoteEvents_.empty())
         return;
 
     URHO3D_PROFILE("SendRemoteEvents");
 
-    for (Vector<RemoteEvent>::ConstIterator i = remoteEvents_.Begin(); i != remoteEvents_.End(); ++i)
+    for (auto i = remoteEvents_.begin(); i != remoteEvents_.end(); ++i)
     {
         msg_.Clear();
         if (!i->senderID_)
@@ -320,32 +346,32 @@ void Connection::SendRemoteEvents()
         }
     }
 
-    remoteEvents_.Clear();
+    remoteEvents_.clear();
 }
 
 void Connection::SendPackages()
 {
-    while (!uploads_.Empty() && connection_->NumOutboundMessagesPending() < 1000)
+    while (!uploads_.empty())
     {
         unsigned char buffer[PACKAGE_FRAGMENT_SIZE];
 
-        for (HashMap<StringHash, PackageUpload>::Iterator i = uploads_.Begin(); i != uploads_.End();)
+        for (auto i = uploads_.begin(); i != uploads_.end();)
         {
-            HashMap<StringHash, PackageUpload>::Iterator current = i++;
-            PackageUpload& upload = current->second_;
-            unsigned fragmentSize =
-                Min((upload.file_->GetSize() - upload.file_->GetPosition()), PACKAGE_FRAGMENT_SIZE);
+            auto current = i++;
+            PackageUpload& upload = current->second;
+            auto fragmentSize =
+                (unsigned)Min((int)(upload.file_->GetSize() - upload.file_->GetPosition()), (int)PACKAGE_FRAGMENT_SIZE);
             upload.file_->Read(buffer, fragmentSize);
 
             msg_.Clear();
-            msg_.WriteStringHash(current->first_);
+            msg_.WriteStringHash(current->first);
             msg_.WriteUInt(upload.fragment_++);
             msg_.Write(buffer, fragmentSize);
             SendMessage(MSG_PACKAGEDATA, true, false, msg_);
 
             // Check if upload finished
             if (upload.fragment_ == upload.totalFragments_)
-                uploads_.Erase(current);
+                uploads_.erase(current);
         }
     }
 }
@@ -356,39 +382,42 @@ void Connection::ProcessPendingLatestData()
         return;
 
     // Iterate through pending node data and see if we can find the nodes now
-    for (HashMap<unsigned, PODVector<unsigned char> >::Iterator i = nodeLatestData_.Begin(); i != nodeLatestData_.End();)
+    for (auto i = nodeLatestData_.begin(); i != nodeLatestData_.end();)
     {
-        HashMap<unsigned, PODVector<unsigned char> >::Iterator current = i++;
-        Node* node = scene_->GetNode(current->first_);
+        auto current = i++;
+        Node* node = scene_->GetNode(current->first);
         if (node)
         {
-            MemoryBuffer msg(current->second_);
+            MemoryBuffer msg(current->second);
             msg.ReadNetID(); // Skip the node ID
             node->ReadLatestDataUpdate(msg);
             // ApplyAttributes() is deliberately skipped, as Node has no attributes that require late applying.
             // Furthermore it would propagate to components and child nodes, which is not desired in this case
-            nodeLatestData_.Erase(current);
+            nodeLatestData_.erase(current);
         }
     }
 
     // Iterate through pending component data and see if we can find the components now
-    for (HashMap<unsigned, PODVector<unsigned char> >::Iterator i = componentLatestData_.Begin(); i != componentLatestData_.End();)
+    for (auto i = componentLatestData_.begin(); i != componentLatestData_.end();)
     {
-        HashMap<unsigned, PODVector<unsigned char> >::Iterator current = i++;
-        Component* component = scene_->GetComponent(current->first_);
+        auto current = i++;
+        Component* component = scene_->GetComponent(current->first);
         if (component)
         {
-            MemoryBuffer msg(current->second_);
+            MemoryBuffer msg(current->second);
             msg.ReadNetID(); // Skip the component ID
             if (component->ReadLatestDataUpdate(msg))
                 component->ApplyAttributes();
-            componentLatestData_.Erase(current);
+            componentLatestData_.erase(current);
         }
     }
 }
 
 bool Connection::ProcessMessage(int msgID, MemoryBuffer& msg)
 {
+    // New incomming message, reset last heard timer
+    lastHeardTimer_.Reset();
+    tempPacketCounter_.x_++;
     bool processed = true;
 
     switch (msgID)
@@ -446,6 +475,14 @@ bool Connection::ProcessMessage(int msgID, MemoryBuffer& msg)
     return processed;
 }
 
+void Connection::Ban()
+{
+    if (peer_)
+    {
+        peer_->AddToBanList(address_->ToString(false), 0);
+    }
+}
+
 void Connection::ProcessLoadScene(int msgID, MemoryBuffer& msg)
 {
     if (IsClient())
@@ -464,20 +501,20 @@ void Connection::ProcessLoadScene(int msgID, MemoryBuffer& msg)
     sceneFileName_ = msg.ReadString();
 
     // Clear previous pending latest data and package downloads if any
-    nodeLatestData_.Clear();
-    componentLatestData_.Clear();
-    downloads_.Clear();
+    nodeLatestData_.clear();
+    componentLatestData_.clear();
+    downloads_.clear();
 
     // In case we have joined other scenes in this session, remove first all downloaded package files from the resource system
     // to prevent resource conflicts
     auto* cache = GetSubsystem<ResourceCache>();
-    const String& packageCacheDir = GetSubsystem<Network>()->GetPackageCacheDir();
+    const ea::string& packageCacheDir = GetSubsystem<Network>()->GetPackageCacheDir();
 
-    Vector<SharedPtr<PackageFile> > packages = cache->GetPackageFiles();
-    for (unsigned i = 0; i < packages.Size(); ++i)
+    ea::vector<SharedPtr<PackageFile> > packages = cache->GetPackageFiles();
+    for (unsigned i = 0; i < packages.size(); ++i)
     {
         PackageFile* package = packages[i];
-        if (!package->GetName().Find(packageCacheDir))
+        if (!package->GetName().find(packageCacheDir))
             cache->RemovePackageFile(package, true);
     }
 
@@ -490,7 +527,7 @@ void Connection::ProcessLoadScene(int msgID, MemoryBuffer& msg)
     }
 
     // If no downloads were queued, can load the scene directly
-    if (downloads_.Empty())
+    if (downloads_.empty())
         OnPackagesReady();
 }
 
@@ -599,7 +636,7 @@ void Connection::ProcessSceneUpdate(int msgID, MemoryBuffer& msg)
                 }
             }
             else
-                URHO3D_LOGWARNING("NodeDeltaUpdate message received for missing node " + String(nodeID));
+                URHO3D_LOGWARNING("NodeDeltaUpdate message received for missing node " + ea::to_string(nodeID));
         }
         break;
 
@@ -616,8 +653,8 @@ void Connection::ProcessSceneUpdate(int msgID, MemoryBuffer& msg)
             else
             {
                 // Latest data messages may be received out-of-order relative to node creation, so cache if necessary
-                PODVector<unsigned char>& data = nodeLatestData_[nodeID];
-                data.Resize(msg.GetSize());
+                ea::vector<unsigned char>& data = nodeLatestData_[nodeID];
+                data.resize(msg.GetSize());
                 memcpy(&data[0], msg.GetData(), msg.GetSize());
             }
         }
@@ -629,7 +666,7 @@ void Connection::ProcessSceneUpdate(int msgID, MemoryBuffer& msg)
             Node* node = scene_->GetNode(nodeID);
             if (node)
                 node->Remove();
-            nodeLatestData_.Erase(nodeID);
+            nodeLatestData_.erase(nodeID);
         }
         break;
 
@@ -663,7 +700,7 @@ void Connection::ProcessSceneUpdate(int msgID, MemoryBuffer& msg)
                 component->ApplyAttributes();
             }
             else
-                URHO3D_LOGWARNING("CreateComponent message received for missing node " + String(nodeID));
+                URHO3D_LOGWARNING("CreateComponent message received for missing node " + ea::to_string(nodeID));
         }
         break;
 
@@ -677,7 +714,7 @@ void Connection::ProcessSceneUpdate(int msgID, MemoryBuffer& msg)
                 component->ApplyAttributes();
             }
             else
-                URHO3D_LOGWARNING("ComponentDeltaUpdate message received for missing component " + String(componentID));
+                URHO3D_LOGWARNING("ComponentDeltaUpdate message received for missing component " + ea::to_string(componentID));
         }
         break;
 
@@ -693,8 +730,8 @@ void Connection::ProcessSceneUpdate(int msgID, MemoryBuffer& msg)
             else
             {
                 // Latest data messages may be received out-of-order relative to component creation, so cache if necessary
-                PODVector<unsigned char>& data = componentLatestData_[componentID];
-                data.Resize(msg.GetSize());
+                ea::vector<unsigned char>& data = componentLatestData_[componentID];
+                data.resize(msg.GetSize());
                 memcpy(&data[0], msg.GetData(), msg.GetSize());
             }
         }
@@ -706,7 +743,7 @@ void Connection::ProcessSceneUpdate(int msgID, MemoryBuffer& msg)
             Component* component = scene_->GetComponent(componentID);
             if (component)
                 component->Remove();
-            componentLatestData_.Erase(componentID);
+            componentLatestData_.erase(componentID);
         }
         break;
 
@@ -726,7 +763,7 @@ void Connection::ProcessPackageDownload(int msgID, MemoryBuffer& msg)
         }
         else
         {
-            String name = msg.ReadString();
+            ea::string name = msg.ReadString();
 
             if (!scene_)
             {
@@ -735,17 +772,17 @@ void Connection::ProcessPackageDownload(int msgID, MemoryBuffer& msg)
             }
 
             // The package must be one of those required by the scene
-            const Vector<SharedPtr<PackageFile> >& packages = scene_->GetRequiredPackageFiles();
-            for (unsigned i = 0; i < packages.Size(); ++i)
+            const ea::vector<SharedPtr<PackageFile> >& packages = scene_->GetRequiredPackageFiles();
+            for (unsigned i = 0; i < packages.size(); ++i)
             {
                 PackageFile* package = packages[i];
-                const String& packageFullName = package->GetName();
-                if (!GetFileNameAndExtension(packageFullName).Compare(name, false))
+                const ea::string& packageFullName = package->GetName();
+                if (!GetFileNameAndExtension(packageFullName).comparei(name))
                 {
                     StringHash nameHash(name);
 
                     // Do not restart upload if already exists
-                    if (uploads_.Contains(nameHash))
+                    if (uploads_.contains(nameHash))
                     {
                         URHO3D_LOGWARNING("Received a request for package " + name + " already in transfer");
                         return;
@@ -786,13 +823,13 @@ void Connection::ProcessPackageDownload(int msgID, MemoryBuffer& msg)
         {
             StringHash nameHash = msg.ReadStringHash();
 
-            HashMap<StringHash, PackageDownload>::Iterator i = downloads_.Find(nameHash);
+            auto i = downloads_.find(nameHash);
             // In case of being unable to create the package file into the cache, we will still receive all data from the server.
             // Simply disregard it
-            if (i == downloads_.End())
+            if (i == downloads_.end())
                 return;
 
-            PackageDownload& download = i->second_;
+            PackageDownload& download = i->second;
 
             // If no further data, this is an error reply
             if (msg.IsEof())
@@ -822,10 +859,10 @@ void Connection::ProcessPackageDownload(int msgID, MemoryBuffer& msg)
             msg.Read(buffer, fragmentSize);
             download.file_->Seek(index * PACKAGE_FRAGMENT_SIZE);
             download.file_->Write(buffer, fragmentSize);
-            download.receivedFragments_.Insert(index);
+            download.receivedFragments_.insert(index);
 
             // Check if all fragments received
-            if (download.receivedFragments_.Size() == download.totalFragments_)
+            if (download.receivedFragments_.size() == download.totalFragments_)
             {
                 URHO3D_LOGINFO("Package " + download.name_ + " downloaded successfully");
 
@@ -834,12 +871,12 @@ void Connection::ProcessPackageDownload(int msgID, MemoryBuffer& msg)
                 GetSubsystem<ResourceCache>()->AddPackageFile(download.file_->GetName(), 0);
 
                 // Then start the next download if there are more
-                downloads_.Erase(i);
-                if (downloads_.Empty())
+                downloads_.erase(i);
+                if (downloads_.empty())
                     OnPackagesReady();
                 else
                 {
-                    PackageDownload& nextDownload = downloads_.Begin()->second_;
+                    PackageDownload& nextDownload = downloads_.begin()->second;
 
                     URHO3D_LOGINFO("Requesting package " + nextDownload.name_ + " from server");
                     msg_.Clear();
@@ -981,11 +1018,6 @@ void Connection::ProcessRemoteEvent(int msgID, MemoryBuffer& msg)
     }
 }
 
-kNet::MessageConnection* Connection::GetMessageConnection() const
-{
-    return const_cast<kNet::MessageConnection*>(connection_.ptr());
-}
-
 Scene* Connection::GetScene() const
 {
     return scene_;
@@ -993,65 +1025,85 @@ Scene* Connection::GetScene() const
 
 bool Connection::IsConnected() const
 {
-    return connection_->GetConnectionState() == kNet::ConnectionOK;
+    return peer_ && peer_->IsActive();
 }
 
 float Connection::GetRoundTripTime() const
 {
-    return connection_->RoundTripTime();
+    if (peer_)
+    {
+        SLNet::RakNetStatistics stats{};
+        if (peer_->GetStatistics(address_->systemAddress, &stats))
+            return (float)peer_->GetAveragePing(*address_);
+    }
+    return 0.0f;
 }
 
-float Connection::GetLastHeardTime() const
+unsigned Connection::GetLastHeardTime() const
 {
-    return connection_->LastHeardTime();
+    return const_cast<Timer&>(lastHeardTimer_).GetMSec(false);
 }
 
 float Connection::GetBytesInPerSec() const
 {
-    return connection_->BytesInPerSec();
+    if (peer_)
+    {
+        SLNet::RakNetStatistics stats{};
+        if (peer_->GetStatistics(address_->systemAddress, &stats))
+            return (float)stats.valueOverLastSecond[SLNet::ACTUAL_BYTES_RECEIVED];
+    }
+    return 0.0f;
 }
 
 float Connection::GetBytesOutPerSec() const
 {
-    return connection_->BytesOutPerSec();
+    if (peer_)
+    {
+        SLNet::RakNetStatistics stats{};
+        if (peer_->GetStatistics(address_->systemAddress, &stats))
+            return (float)stats.valueOverLastSecond[SLNet::ACTUAL_BYTES_SENT];
+    }
+    return 0.0f;
 }
 
-float Connection::GetPacketsInPerSec() const
+int Connection::GetPacketsInPerSec() const
 {
-    return connection_->PacketsInPerSec();
+    return packetCounter_.x_;
 }
 
-float Connection::GetPacketsOutPerSec() const
+int Connection::GetPacketsOutPerSec() const
 {
-    return connection_->PacketsOutPerSec();
+    return packetCounter_.y_;
 }
 
-String Connection::ToString() const
+ea::string Connection::ToString() const
 {
-    return GetAddress() + ":" + String(GetPort());
+    return GetAddress() + ":" + ea::to_string(GetPort());
 }
 
 unsigned Connection::GetNumDownloads() const
 {
-    return downloads_.Size();
+    return downloads_.size();
 }
 
-const String& Connection::GetDownloadName() const
+const ea::string& Connection::GetDownloadName() const
 {
-    for (HashMap<StringHash, PackageDownload>::ConstIterator i = downloads_.Begin(); i != downloads_.End(); ++i)
+    for (auto i = downloads_.begin(); i !=
+        downloads_.end(); ++i)
     {
-        if (i->second_.initiated_)
-            return i->second_.name_;
+        if (i->second.initiated_)
+            return i->second.name_;
     }
-    return String::EMPTY;
+    return EMPTY_STRING;
 }
 
 float Connection::GetDownloadProgress() const
 {
-    for (HashMap<StringHash, PackageDownload>::ConstIterator i = downloads_.Begin(); i != downloads_.End(); ++i)
+    for (auto i = downloads_.begin(); i !=
+        downloads_.end(); ++i)
     {
-        if (i->second_.initiated_)
-            return (float)i->second_.receivedFragments_.Size() / (float)i->second_.totalFragments_;
+        if (i->second.initiated_)
+            return (float)i->second.receivedFragments_.size() / (float)i->second.totalFragments_;
     }
     return 1.0f;
 }
@@ -1074,7 +1126,7 @@ void Connection::SendPackageToClient(PackageFile* package)
 
     msg_.Clear();
 
-    String filename = GetFileNameAndExtension(package->GetName());
+    ea::string filename = GetFileNameAndExtension(package->GetName());
     msg_.WriteString(filename);
     msg_.WriteUInt(package->GetTotalSize());
     msg_.WriteUInt(package->GetChecksum());
@@ -1083,18 +1135,16 @@ void Connection::SendPackageToClient(PackageFile* package)
 
 void Connection::ConfigureNetworkSimulator(int latencyMs, float packetLoss)
 {
-    if (connection_)
-    {
-        kNet::NetworkSimulator& simulator = connection_->NetworkSendSimulator();
-        simulator.enabled = latencyMs > 0 || packetLoss > 0.0f;
-        simulator.constantPacketSendDelay = (float)latencyMs;
-        simulator.packetLossRate = packetLoss;
-    }
+    if (peer_)
+        peer_->ApplyNetworkSimulator(packetLoss, latencyMs, 0);
 }
 
 void Connection::HandleAsyncLoadFinished(StringHash eventType, VariantMap& eventData)
 {
     sceneLoaded_ = true;
+
+    // Clear all replicated nodes
+    scene_->Clear(true, false);
 
     msg_.Clear();
     msg_.WriteUInt(scene_->GetChecksum());
@@ -1104,15 +1154,15 @@ void Connection::HandleAsyncLoadFinished(StringHash eventType, VariantMap& event
 void Connection::ProcessNode(unsigned nodeID)
 {
     // Check that we have not already processed this due to dependency recursion
-    if (!nodesToProcess_.Erase(nodeID))
+    if (!nodesToProcess_.erase(nodeID))
         return;
 
     // Find replication state for the node
-    HashMap<unsigned, NodeReplicationState>::Iterator i = sceneState_.nodeStates_.Find(nodeID);
-    if (i != sceneState_.nodeStates_.End())
+    auto i = sceneState_.nodeStates_.find(nodeID);
+    if (i != sceneState_.nodeStates_.end())
     {
         // Replication state found: the node is either be existing or removed
-        Node* node = i->second_.node_;
+        Node* node = i->second.node_;
         if (!node)
         {
             msg_.Clear();
@@ -1122,10 +1172,10 @@ void Connection::ProcessNode(unsigned nodeID)
             // would be enough. However, this may be better due to the client not possibly having updated parenting
             // information at the time of receiving this message
             SendMessage(MSG_REMOVENODE, true, true, msg_);
-            sceneState_.nodeStates_.Erase(nodeID);
+            sceneState_.nodeStates_.erase(nodeID);
         }
         else
-            ProcessExistingNode(node, i->second_);
+            ProcessExistingNode(node, i->second);
     }
     else
     {
@@ -1136,7 +1186,7 @@ void Connection::ProcessNode(unsigned nodeID)
         else
         {
             // Did not find the new node (may have been created, then removed immediately): erase from dirty set.
-            sceneState_.dirtyNodes_.Erase(nodeID);
+            sceneState_.dirtyNodes_.erase(nodeID);
         }
     }
 }
@@ -1144,11 +1194,11 @@ void Connection::ProcessNode(unsigned nodeID)
 void Connection::ProcessNewNode(Node* node)
 {
     // Process depended upon nodes first, if they are dirty
-    const PODVector<Node*>& dependencyNodes = node->GetDependencyNodes();
-    for (PODVector<Node*>::ConstIterator i = dependencyNodes.Begin(); i != dependencyNodes.End(); ++i)
+    const ea::vector<Node*>& dependencyNodes = node->GetDependencyNodes();
+    for (auto i = dependencyNodes.begin(); i != dependencyNodes.end(); ++i)
     {
         unsigned nodeID = (*i)->GetID();
-        if (sceneState_.dirtyNodes_.Contains(nodeID))
+        if (ea::contains(sceneState_.dirtyNodes_, nodeID))
             ProcessNode(nodeID);
     }
 
@@ -1166,17 +1216,17 @@ void Connection::ProcessNewNode(Node* node)
 
     // Write node's user variables
     const VariantMap& vars = node->GetVars();
-    msg_.WriteVLE(vars.Size());
-    for (VariantMap::ConstIterator i = vars.Begin(); i != vars.End(); ++i)
+    msg_.WriteVLE(vars.size());
+    for (auto i = vars.begin(); i != vars.end(); ++i)
     {
-        msg_.WriteStringHash(i->first_);
-        msg_.WriteVariant(i->second_);
+        msg_.WriteStringHash(i->first);
+        msg_.WriteVariant(i->second);
     }
 
     // Write node's components
     msg_.WriteVLE(node->GetNumNetworkComponents());
-    const Vector<SharedPtr<Component> >& components = node->GetComponents();
-    for (unsigned i = 0; i < components.Size(); ++i)
+    const ea::vector<SharedPtr<Component> >& components = node->GetComponents();
+    for (unsigned i = 0; i < components.size(); ++i)
     {
         Component* component = components[i];
         // Check if component is not to be replicated
@@ -1197,17 +1247,17 @@ void Connection::ProcessNewNode(Node* node)
     SendMessage(MSG_CREATENODE, true, true, msg_);
 
     nodeState.markedDirty_ = false;
-    sceneState_.dirtyNodes_.Erase(node->GetID());
+    sceneState_.dirtyNodes_.erase(node->GetID());
 }
 
 void Connection::ProcessExistingNode(Node* node, NodeReplicationState& nodeState)
 {
     // Process depended upon nodes first, if they are dirty
-    const PODVector<Node*>& dependencyNodes = node->GetDependencyNodes();
-    for (PODVector<Node*>::ConstIterator i = dependencyNodes.Begin(); i != dependencyNodes.End(); ++i)
+    const ea::vector<Node*>& dependencyNodes = node->GetDependencyNodes();
+    for (auto i = dependencyNodes.begin(); i != dependencyNodes.end(); ++i)
     {
         unsigned nodeID = (*i)->GetID();
-        if (sceneState_.dirtyNodes_.Contains(nodeID))
+        if (ea::contains(sceneState_.dirtyNodes_, nodeID))
             ProcessNode(nodeID);
     }
 
@@ -1222,15 +1272,15 @@ void Connection::ProcessExistingNode(Node* node, NodeReplicationState& nodeState
     }
 
     // Check if attributes have changed
-    if (nodeState.dirtyAttributes_.Count() || nodeState.dirtyVars_.Size())
+    if (nodeState.dirtyAttributes_.Count() || nodeState.dirtyVars_.size())
     {
-        const Vector<AttributeInfo>* attributes = node->GetNetworkAttributes();
-        unsigned numAttributes = attributes->Size();
+        const ea::vector<AttributeInfo>* attributes = node->GetNetworkAttributes();
+        unsigned numAttributes = attributes->size();
         bool hasLatestData = false;
 
         for (unsigned i = 0; i < numAttributes; ++i)
         {
-            if (nodeState.dirtyAttributes_.IsSet(i) && (attributes->At(i).mode_ & AM_LATESTDATA))
+            if (nodeState.dirtyAttributes_.IsSet(i) && (attributes->at(i).mode_ & AM_LATESTDATA))
             {
                 hasLatestData = true;
                 nodeState.dirtyAttributes_.Clear(i);
@@ -1248,22 +1298,22 @@ void Connection::ProcessExistingNode(Node* node, NodeReplicationState& nodeState
         }
 
         // Send deltaupdate if remaining dirty bits, or vars have changed
-        if (nodeState.dirtyAttributes_.Count() || nodeState.dirtyVars_.Size())
+        if (nodeState.dirtyAttributes_.Count() || nodeState.dirtyVars_.size())
         {
             msg_.Clear();
             msg_.WriteNetID(node->GetID());
             node->WriteDeltaUpdate(msg_, nodeState.dirtyAttributes_, timeStamp_);
 
             // Write changed variables
-            msg_.WriteVLE(nodeState.dirtyVars_.Size());
+            msg_.WriteVLE(nodeState.dirtyVars_.size());
             const VariantMap& vars = node->GetVars();
-            for (HashSet<StringHash>::ConstIterator i = nodeState.dirtyVars_.Begin(); i != nodeState.dirtyVars_.End(); ++i)
+            for (auto i = nodeState.dirtyVars_.begin(); i != nodeState.dirtyVars_.end(); ++i)
             {
-                VariantMap::ConstIterator j = vars.Find(*i);
-                if (j != vars.End())
+                auto j = vars.find(*i);
+                if (j != vars.end())
                 {
-                    msg_.WriteStringHash(j->first_);
-                    msg_.WriteVariant(j->second_);
+                    msg_.WriteStringHash(j->first);
+                    msg_.WriteVariant(j->second);
                 }
                 else
                 {
@@ -1277,38 +1327,38 @@ void Connection::ProcessExistingNode(Node* node, NodeReplicationState& nodeState
             SendMessage(MSG_NODEDELTAUPDATE, true, true, msg_);
 
             nodeState.dirtyAttributes_.ClearAll();
-            nodeState.dirtyVars_.Clear();
+            nodeState.dirtyVars_.clear();
         }
     }
 
     // Check for removed or changed components
-    for (HashMap<unsigned, ComponentReplicationState>::Iterator i = nodeState.componentStates_.Begin();
-         i != nodeState.componentStates_.End();)
+    for (auto i = nodeState.componentStates_.begin();
+         i != nodeState.componentStates_.end();)
     {
-        HashMap<unsigned, ComponentReplicationState>::Iterator current = i++;
-        ComponentReplicationState& componentState = current->second_;
+        auto current = i++;
+        ComponentReplicationState& componentState = current->second;
         Component* component = componentState.component_;
         if (!component)
         {
             // Removed component
             msg_.Clear();
-            msg_.WriteNetID(current->first_);
+            msg_.WriteNetID(current->first);
 
             SendMessage(MSG_REMOVECOMPONENT, true, true, msg_);
-            nodeState.componentStates_.Erase(current);
+            nodeState.componentStates_.erase(current);
         }
         else
         {
             // Existing component. Check if attributes have changed
             if (componentState.dirtyAttributes_.Count())
             {
-                const Vector<AttributeInfo>* attributes = component->GetNetworkAttributes();
-                unsigned numAttributes = attributes->Size();
+                const ea::vector<AttributeInfo>* attributes = component->GetNetworkAttributes();
+                unsigned numAttributes = attributes->size();
                 bool hasLatestData = false;
 
                 for (unsigned i = 0; i < numAttributes; ++i)
                 {
-                    if (componentState.dirtyAttributes_.IsSet(i) && (attributes->At(i).mode_ & AM_LATESTDATA))
+                    if (componentState.dirtyAttributes_.IsSet(i) && (attributes->at(i).mode_ & AM_LATESTDATA))
                     {
                         hasLatestData = true;
                         componentState.dirtyAttributes_.Clear(i);
@@ -1341,18 +1391,19 @@ void Connection::ProcessExistingNode(Node* node, NodeReplicationState& nodeState
     }
 
     // Check for new components
-    if (nodeState.componentStates_.Size() != node->GetNumNetworkComponents())
+    if (nodeState.componentStates_.size() != node->GetNumNetworkComponents())
     {
-        const Vector<SharedPtr<Component> >& components = node->GetComponents();
-        for (unsigned i = 0; i < components.Size(); ++i)
+        const ea::vector<SharedPtr<Component> >& components = node->GetComponents();
+        for (unsigned i = 0; i < components.size(); ++i)
         {
             Component* component = components[i];
             // Check if component is not to be replicated
             if (!component->IsReplicated())
                 continue;
 
-            HashMap<unsigned, ComponentReplicationState>::Iterator j = nodeState.componentStates_.Find(component->GetID());
-            if (j == nodeState.componentStates_.End())
+            auto j = nodeState.componentStates_.find(
+                component->GetID());
+            if (j == nodeState.componentStates_.end())
             {
                 // New component
                 ComponentReplicationState& componentState = nodeState.componentStates_[component->GetID()];
@@ -1373,31 +1424,31 @@ void Connection::ProcessExistingNode(Node* node, NodeReplicationState& nodeState
     }
 
     nodeState.markedDirty_ = false;
-    sceneState_.dirtyNodes_.Erase(node->GetID());
+    sceneState_.dirtyNodes_.erase(node->GetID());
 }
 
 bool Connection::RequestNeededPackages(unsigned numPackages, MemoryBuffer& msg)
 {
     auto* cache = GetSubsystem<ResourceCache>();
-    const String& packageCacheDir = GetSubsystem<Network>()->GetPackageCacheDir();
+    const ea::string& packageCacheDir = GetSubsystem<Network>()->GetPackageCacheDir();
 
-    Vector<SharedPtr<PackageFile> > packages = cache->GetPackageFiles();
-    Vector<String> downloadedPackages;
+    ea::vector<SharedPtr<PackageFile> > packages = cache->GetPackageFiles();
+    ea::vector<ea::string> downloadedPackages;
     bool packagesScanned = false;
 
     for (unsigned i = 0; i < numPackages; ++i)
     {
-        String name = msg.ReadString();
+        ea::string name = msg.ReadString();
         unsigned fileSize = msg.ReadUInt();
         unsigned checksum = msg.ReadUInt();
-        String checksumString = ToStringHex(checksum);
+        ea::string checksumString = ToStringHex(checksum);
         bool found = false;
 
         // Check first the resource cache
-        for (unsigned j = 0; j < packages.Size(); ++j)
+        for (unsigned j = 0; j < packages.size(); ++j)
         {
             PackageFile* package = packages[j];
-            if (!GetFileNameAndExtension(package->GetName()).Compare(name, false) && package->GetTotalSize() == fileSize &&
+            if (!GetFileNameAndExtension(package->GetName()).comparei(name) && package->GetTotalSize() == fileSize &&
                 package->GetChecksum() == checksum)
             {
                 found = true;
@@ -1410,7 +1461,7 @@ bool Connection::RequestNeededPackages(unsigned numPackages, MemoryBuffer& msg)
 
         if (!packagesScanned)
         {
-            if (packageCacheDir.Empty())
+            if (packageCacheDir.empty())
             {
                 URHO3D_LOGERROR("Can not check/download required packages, as package cache directory is not set");
                 return false;
@@ -1421,11 +1472,11 @@ bool Connection::RequestNeededPackages(unsigned numPackages, MemoryBuffer& msg)
         }
 
         // Then the download cache
-        for (unsigned j = 0; j < downloadedPackages.Size(); ++j)
+        for (unsigned j = 0; j < downloadedPackages.size(); ++j)
         {
-            const String& fileName = downloadedPackages[j];
+            const ea::string& fileName = downloadedPackages[j];
             // In download cache, package file name format is checksum_packagename
-            if (!fileName.Find(checksumString) && !fileName.Substring(9).Compare(name, false))
+            if (!fileName.find(checksumString) && !fileName.substr(9).comparei(name))
             {
                 // Name matches. Check file size and actual checksum to be sure
                 SharedPtr<PackageFile> newPackage(new PackageFile(context_, packageCacheDir + fileName));
@@ -1447,10 +1498,10 @@ bool Connection::RequestNeededPackages(unsigned numPackages, MemoryBuffer& msg)
     return true;
 }
 
-void Connection::RequestPackage(const String& name, unsigned fileSize, unsigned checksum)
+void Connection::RequestPackage(const ea::string& name, unsigned fileSize, unsigned checksum)
 {
     StringHash nameHash(name);
-    if (downloads_.Contains(nameHash))
+    if (downloads_.contains(nameHash))
         return; // Download already exists
 
     PackageDownload& download = downloads_[nameHash];
@@ -1459,7 +1510,7 @@ void Connection::RequestPackage(const String& name, unsigned fileSize, unsigned 
     download.checksum_ = checksum;
 
     // Start download now only if no existing downloads, else wait for the existing ones to finish
-    if (downloads_.Size() == 1)
+    if (downloads_.size() == 1)
     {
         URHO3D_LOGINFO("Requesting package " + name + " from server");
         msg_.Clear();
@@ -1469,7 +1520,7 @@ void Connection::RequestPackage(const String& name, unsigned fileSize, unsigned 
     }
 }
 
-void Connection::SendPackageError(const String& name)
+void Connection::SendPackageError(const ea::string& name)
 {
     msg_.Clear();
     msg_.WriteStringHash(name);
@@ -1487,11 +1538,11 @@ void Connection::OnSceneLoadFailed()
     SendEvent(E_NETWORKSCENELOADFAILED, eventData);
 }
 
-void Connection::OnPackageDownloadFailed(const String& name)
+void Connection::OnPackageDownloadFailed(const ea::string& name)
 {
     URHO3D_LOGERROR("Download of package " + name + " failed");
     // As one package failed, we can not join the scene in any case. Clear the downloads
-    downloads_.Clear();
+    downloads_.clear();
     OnSceneLoadFailed();
 }
 
@@ -1505,7 +1556,7 @@ void Connection::OnPackagesReady()
     if (sceneLoaded_)
         return;
 
-    if (sceneFileName_.Empty())
+    if (sceneFileName_.empty())
     {
         // If the scene filename is empty, just clear the scene of all existing replicated content, and send the loaded reply
         scene_->Clear(true, false);
@@ -1518,7 +1569,7 @@ void Connection::OnPackagesReady()
     else
     {
         // Otherwise start the async loading process
-        String extension = GetExtension(sceneFileName_);
+        ea::string extension = GetExtension(sceneFileName_);
         SharedPtr<File> file = GetSubsystem<ResourceCache>()->GetFile(sceneFileName_);
         bool success;
 
@@ -1544,6 +1595,17 @@ void Connection::ProcessPackageInfo(int msgID, MemoryBuffer& msg)
     }
 
     RequestNeededPackages(1, msg);
+}
+
+ea::string Connection::GetAddress() const {
+    return ea::string(address_->ToString(false /*write port*/));
+}
+
+void Connection::SetAddressOrGUID(const SLNet::AddressOrGUID& addr)
+{ 
+    delete address_;
+    address_ = nullptr;
+    address_ = new SLNet::AddressOrGUID(addr);
 }
 
 }

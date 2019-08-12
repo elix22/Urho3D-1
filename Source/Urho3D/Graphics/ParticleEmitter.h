@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -91,7 +91,7 @@ public:
     ParticleEffect* GetEffect() const;
 
     /// Return maximum number of particles.
-    unsigned GetNumParticles() const { return particles_.Size(); }
+    unsigned GetNumParticles() const { return particles_.size(); }
 
     /// Return whether is currently emitting.
     bool IsEmitting() const { return emitting_; }
@@ -133,7 +133,7 @@ private:
     /// Particle effect.
     SharedPtr<ParticleEffect> effect_;
     /// Particles.
-    PODVector<Particle> particles_;
+    ea::vector<Particle> particles_;
     /// Active/inactive period timer.
     float periodTimer_;
     /// New particle emission timer.

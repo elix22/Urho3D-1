@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -96,7 +96,7 @@ void Drawable2D::SetOrderInLayer(int orderInLayer)
     MarkNetworkUpdate();
 }
 
-const Vector<SourceBatch2D>& Drawable2D::GetSourceBatches()
+const ea::vector<SourceBatch2D>& Drawable2D::GetSourceBatches()
 {
     if (sourceBatchesDirty_)
         UpdateSourceBatches();

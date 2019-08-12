@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -59,7 +59,7 @@ public:
     const TileMapInfo2D& GetInfo() const { return info_; }
 
     /// Return number of layers.
-    unsigned GetNumLayers() const { return layers_.Size(); }
+    unsigned GetNumLayers() const { return layers_.size(); }
 
     /// Return tile map layer at index.
     TileMapLayer2D* GetLayer(unsigned index) const;
@@ -73,7 +73,7 @@ public:
     /// Return tile map file attribute.
     ResourceRef GetTmxFileAttr() const;
     ///
-    Vector<SharedPtr<TileMapObject2D> > GetTileCollisionShapes(unsigned gid) const;
+    ea::vector<SharedPtr<TileMapObject2D> > GetTileCollisionShapes(unsigned gid) const;
 private:
     /// Tmx file.
     SharedPtr<TmxFile2D> tmxFile_;
@@ -82,7 +82,7 @@ private:
     /// Root node for tile map layer.
     SharedPtr<Node> rootNode_;
     /// Tile map layers.
-    Vector<WeakPtr<TileMapLayer2D> > layers_;
+    ea::vector<WeakPtr<TileMapLayer2D> > layers_;
 };
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/HashMap.h"
+#include <EASTL/unordered_map.h>
+
 #include "../Core/Variant.h"
 #include "../Math/BoundingBox.h"
 #include "../Math/StringHash.h"
@@ -103,13 +104,13 @@ public:
     /// Write a bounding box.
     bool WriteBoundingBox(const BoundingBox& value);
     /// Write a null-terminated string.
-    bool WriteString(const String& value);
+    bool WriteString(const ea::string& value);
     /// Write a four-letter file ID. If the string is not long enough, spaces will be appended.
-    bool WriteFileID(const String& value);
+    bool WriteFileID(const ea::string& value);
     /// Write a 32-bit StringHash.
     bool WriteStringHash(const StringHash& value);
     /// Write a buffer, with size encoded as VLE.
-    bool WriteBuffer(const PODVector<unsigned char>& value);
+    bool WriteBuffer(const ea::vector<unsigned char>& value);
     /// Write a resource reference.
     bool WriteResourceRef(const ResourceRef& value);
     /// Write a resource reference list.
@@ -129,7 +130,7 @@ public:
     /// Write a 24-bit network object ID.
     bool WriteNetID(unsigned value);
     /// Write a text line. Char codes 13 & 10 will be automatically appended.
-    bool WriteLine(const String& value);
+    bool WriteLine(const ea::string& value);
 };
 
 }

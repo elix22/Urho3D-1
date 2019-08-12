@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,9 @@
 
 #pragma once
 
-#include "../Container/HashSet.h"
+#include <EASTL/unique_ptr.h>
+
+#include "../Container/Ptr.h"
 #include "../Core/Attribute.h"
 #include "../Core/Object.h"
 
@@ -53,7 +55,7 @@ public:
     void Remove(Object* object);
 
     /// Receivers. May contain holes during sending.
-    PODVector<Object*> receivers_;
+    ea::vector<Object*> receivers_;
 
 private:
     /// "In send" recursion counter.
@@ -151,13 +153,13 @@ public:
     void SetGlobalVar(StringHash key, const Variant& value);
 
     /// Return all subsystems.
-    const HashMap<StringHash, SharedPtr<Object> >& GetSubsystems() const { return subsystems_; }
+    const ea::unordered_map<StringHash, SharedPtr<Object> >& GetSubsystems() const { return subsystems_; }
 
     /// Return all object factories.
-    const HashMap<StringHash, SharedPtr<ObjectFactory> >& GetObjectFactories() const { return factories_; }
+    const ea::unordered_map<StringHash, SharedPtr<ObjectFactory> >& GetObjectFactories() const { return factories_; }
 
     /// Return all object categories.
-    const HashMap<String, PODVector<StringHash> >& GetObjectCategories() const { return objectCategories_; }
+    const ea::unordered_map<ea::string, ea::vector<StringHash> >& GetObjectCategories() const { return objectCategories_; }
 
     /// Return active event sender. Null outside event handling.
     Object* GetEventSender() const;
@@ -166,7 +168,7 @@ public:
     EventHandler* GetEventHandler() const { return eventHandler_; }
 
     /// Return object type name from hash, or empty if unknown.
-    const String& GetTypeName(StringHash objectType) const;
+    const ea::string& GetTypeName(StringHash objectType) const;
     /// Return a specific attribute description for an object, or null if not found.
     AttributeInfo* GetAttribute(StringHash objectType, const char* name);
     /// Template version of returning a subsystem.
@@ -175,30 +177,31 @@ public:
     template <class T> AttributeInfo* GetAttribute(const char* name);
 
     /// Return attribute descriptions for an object type, or null if none defined.
-    const Vector<AttributeInfo>* GetAttributes(StringHash type) const
+    const ea::vector<AttributeInfo>* GetAttributes(StringHash type) const
     {
-        HashMap<StringHash, Vector<AttributeInfo> >::ConstIterator i = attributes_.Find(type);
-        return i != attributes_.End() ? &i->second_ : nullptr;
+        auto i = attributes_.find(type);
+        return i != attributes_.end() ? &i->second : nullptr;
     }
 
     /// Return network replication attribute descriptions for an object type, or null if none defined.
-    const Vector<AttributeInfo>* GetNetworkAttributes(StringHash type) const
+    const ea::vector<AttributeInfo>* GetNetworkAttributes(StringHash type) const
     {
-        HashMap<StringHash, Vector<AttributeInfo> >::ConstIterator i = networkAttributes_.Find(type);
-        return i != networkAttributes_.End() ? &i->second_ : nullptr;
+        auto i = networkAttributes_.find(type);
+        return i != networkAttributes_.end() ? &i->second : nullptr;
     }
 
     /// Return all registered attributes.
-    const HashMap<StringHash, Vector<AttributeInfo> >& GetAllAttributes() const { return attributes_; }
+    const ea::unordered_map<StringHash, ea::vector<AttributeInfo> >& GetAllAttributes() const { return attributes_; }
 
     /// Return event receivers for a sender and event type, or null if they do not exist.
     EventReceiverGroup* GetEventReceivers(Object* sender, StringHash eventType)
     {
-        HashMap<Object*, HashMap<StringHash, SharedPtr<EventReceiverGroup> > >::Iterator i = specificEventReceivers_.Find(sender);
-        if (i != specificEventReceivers_.End())
+        auto i = specificEventReceivers_.find(
+            sender);
+        if (i != specificEventReceivers_.end())
         {
-            HashMap<StringHash, SharedPtr<EventReceiverGroup> >::Iterator j = i->second_.Find(eventType);
-            return j != i->second_.End() ? j->second_ : nullptr;
+            auto j = i->second.find(eventType);
+            return j != i->second.end() ? j->second : nullptr;
         }
         else
             return nullptr;
@@ -207,8 +210,9 @@ public:
     /// Return event receivers for an event type, or null if they do not exist.
     EventReceiverGroup* GetEventReceivers(StringHash eventType)
     {
-        HashMap<StringHash, SharedPtr<EventReceiverGroup> >::Iterator i = eventReceivers_.Find(eventType);
-        return i != eventReceivers_.End() ? i->second_ : nullptr;
+        auto i = eventReceivers_.find(
+            eventType);
+        return i != eventReceivers_.end() ? i->second : nullptr;
     }
 
     /// Return engine subsystem.
@@ -245,10 +249,6 @@ public:
     inline Graphics* GetGraphics() const { return graphics_; }
     /// Return renderer subsystem.
     inline Renderer* GetRenderer() const { return renderer_; }
-#if URHO3D_TASKS
-    /// Return tasks subsystem.
-    inline Tasks* GetTasks() const { return tasks_; }
-#endif
 
     /// Register engine subsystem and cache it's pointer.
     void RegisterSubsystem(Engine* subsystem);
@@ -276,14 +276,14 @@ public:
     void RegisterSubsystem(Audio* subsystem);
     /// Register UI subsystem and cache it's pointer.
     void RegisterSubsystem(UI* subsystem);
-#if URHO3D_TASKS
-    /// Register tasks subsystem and cache it's pointer.
-    void RegisterSubsystem(Tasks* subsystem);
-#endif
 #if URHO3D_SYSTEMUI
     /// Register system UI subsystem and cache it's pointer.
     void RegisterSubsystem(SystemUI* subsystem);
 #endif
+    /// Register system graphics subsystem and cache it's pointer.
+    void RegisterSubsystem(Graphics* subsystem);
+    /// Register system renderer subsystem and cache it's pointer.
+    void RegisterSubsystem(Renderer* subsystem);
 
 private:
     /// Add event receiver.
@@ -305,25 +305,25 @@ private:
     void SetEventHandler(EventHandler* handler) { eventHandler_ = handler; }
 
     /// Object factories.
-    HashMap<StringHash, SharedPtr<ObjectFactory> > factories_;
+    ea::unordered_map<StringHash, SharedPtr<ObjectFactory> > factories_;
     /// Subsystems.
-    HashMap<StringHash, SharedPtr<Object> > subsystems_;
+    ea::unordered_map<StringHash, SharedPtr<Object> > subsystems_;
     /// Attribute descriptions per object type.
-    HashMap<StringHash, Vector<AttributeInfo> > attributes_;
+    ea::unordered_map<StringHash, ea::vector<AttributeInfo> > attributes_;
     /// Network replication attribute descriptions per object type.
-    HashMap<StringHash, Vector<AttributeInfo> > networkAttributes_;
+    ea::unordered_map<StringHash, ea::vector<AttributeInfo> > networkAttributes_;
     /// Event receivers for non-specific events.
-    HashMap<StringHash, SharedPtr<EventReceiverGroup> > eventReceivers_;
+    ea::unordered_map<StringHash, SharedPtr<EventReceiverGroup> > eventReceivers_;
     /// Event receivers for specific senders' events.
-    HashMap<Object*, HashMap<StringHash, SharedPtr<EventReceiverGroup> > > specificEventReceivers_;
+    ea::unordered_map<Object*, ea::unordered_map<StringHash, SharedPtr<EventReceiverGroup> > > specificEventReceivers_;
     /// Event sender stack.
-    PODVector<Object*> eventSenders_;
+    ea::vector<Object*> eventSenders_;
     /// Event data stack.
-    PODVector<VariantMap*> eventDataMaps_;
+    ea::vector<VariantMap*> eventDataMaps_;
     /// Active event handler. Not stored in a stack for performance reasons; is needed only in esoteric cases.
     EventHandler* eventHandler_;
     /// Object categories.
-    HashMap<String, PODVector<StringHash> > objectCategories_;
+    ea::unordered_map<ea::string, ea::vector<StringHash> > objectCategories_;
     /// Variant map for global variables that can persist throughout application execution.
     VariantMap globalVars_;
 
@@ -361,11 +361,6 @@ private:
     WeakPtr<Graphics> graphics_;
     /// Cached pointer of renderer susbsystem.
     WeakPtr<Renderer> renderer_;
-#if URHO3D_TASKS
-    /// Cached pointer to tasks subsystem.
-    WeakPtr<Tasks> tasks_;
-#endif
-    friend class Engine;
 };
 
 // Helper functions that terminate looping of argument list.

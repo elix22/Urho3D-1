@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,6 @@
 #pragma once
 
 
-#include <Urho3D/Urho3DAll.h>
 #include <Toolbox/Common/UndoManager.h>
 #include "Tabs/BaseResourceTab.h"
 #include "Tabs/UI/RootUIElement.h"
@@ -40,22 +39,30 @@ public:
     explicit UITab(Context* context);
     /// Render scene hierarchy window.
     void RenderHierarchy() override;
+    /// Clear current selection.
+    void ClearSelection() override;
     /// Render inspector window.
-    void RenderInspector() override;
+    void RenderInspector(const char* filter) override;
     /// Render content of tab window.
     bool RenderWindowContent() override;
     /// Render toolbar buttons.
     void RenderToolbarButtons() override;
+    /// Handle window padding.
+    void OnBeforeEnd() override;
+    /// Handle window padding.
+    void OnBeforeBegin() override;
+    /// Handle window padding.
+    void OnAfterBegin() override;
+    /// Handle window padding.
+    void OnAfterEnd() override;
     /// Update window when it is active.
     void OnActiveUpdate() override;
-    /// Save project data to xml.
-    void OnSaveProject(JSONValue& tab) override;
-    /// Load project data from xml.
-    void OnLoadProject(const JSONValue& tab) override;
     /// Load UI layout from resource path.
-    bool LoadResource(const String& resourcePath) override;
+    bool LoadResource(const ea::string& resourcePath) override;
     /// Save scene to a resource file.
     bool SaveResource() override;
+    ///
+    StringHash GetResourceType() override { return XMLFile::GetTypeStatic(); };
     /// Called when tab focused.
     void OnFocused() override;
     /// Return selected UIElement.
@@ -77,7 +84,7 @@ protected:
     ///
     Variant GetVariantFromXML(const XMLElement& attribute, const AttributeInfo& info) const;
     ///
-    String GetAppliedStyle(UIElement* element = nullptr);
+    ea::string GetAppliedStyle(UIElement* element = nullptr);
     ///
     void GetStyleData(const AttributeInfo& info, XMLElement& style, XMLElement& attribute, Variant& value);
     ///
@@ -85,6 +92,8 @@ protected:
     ///
     void AttributeCustomize(VariantMap& args);
 
+    ///
+    SharedPtr<UI> offScreenUI_;
     /// Root element which contains edited UI.
     SharedPtr<RootUIElement> rootElement_;
     /// Texture that UIElement will be rendered into.
@@ -93,10 +102,9 @@ protected:
     bool showInternal_ = false;
 
     WeakPtr<UIElement> selectedElement_;
-    Undo::Manager undo_;
     bool hideResizeHandles_ = false;
-    Vector<String> styleNames_;
-    String textureSelectorAttribute_;
+    ea::vector<ea::string> styleNames_;
+    ea::string textureSelectorAttribute_;
 };
 
 }

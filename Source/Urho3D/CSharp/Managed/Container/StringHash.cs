@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,8 +27,9 @@ using System.Runtime.InteropServices;
 namespace Urho3DNet
 {
 
+[Serializable]
 [StructLayout(LayoutKind.Sequential)]
-public struct StringHash
+public struct StringHash : IEquatable<StringHash>
 {
     public uint Hash { get; }
 
@@ -65,7 +66,7 @@ public struct StringHash
     public static uint Calculate(string value, uint hash=0)
     {
         // Perform the actual hashing as case-insensitive
-        var bytes = Encoding.UTF8.GetBytes(value.ToLower());
+        var bytes = Encoding.UTF8.GetBytes(value);
         foreach (var b in bytes)
             hash = SDBMHash(hash, b);
         return hash;
@@ -86,6 +87,11 @@ public struct StringHash
     internal static uint GetNativeInstance(StringHash source)
     {
         return source.Hash;
+    }
+
+    public bool Equals(StringHash other)
+    {
+            return Hash == other.Hash;
     }
 }
 

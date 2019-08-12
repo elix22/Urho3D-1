@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -39,7 +39,6 @@
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(L10n)
 
 L10n::L10n(Context* context) :
     Sample(context)
@@ -77,6 +76,7 @@ void L10n::InitLocalizationSystem()
     l10n->LoadJSONFile("StringsEnRu.json");
     // You can load multiple files
     l10n->LoadJSONFile("StringsDe.json");
+    l10n->LoadJSONFile("StringsLv.json", "lv");
     // Hook up to the change language
     SubscribeToEvent(E_CHANGELANGUAGE, URHO3D_HANDLER(L10n, HandleChangeLanguage));
 }
@@ -103,15 +103,15 @@ void L10n::CreateGUI()
     window->AddChild(windowTitle);
 
     // In this place the current language is "en" because it was found first when loading the JSON files
-    String langName = l10n->GetLanguage();
+    ea::string langName = l10n->GetLanguage();
     // Languages are numbered in the loading order
     int langIndex = l10n->GetLanguageIndex(); // == 0 at the beginning
     // Get string with identifier "title" in the current language
-    String localizedString = l10n->Get("title");
-    // Localization::Get returns String::EMPTY if the id is empty.
+    ea::string localizedString = l10n->Get("title");
+    // Localization::Get returns EMPTY_STRING if the id is empty.
     // Localization::Get returns the id if translation is not found and will be added a warning into the log.
 
-    windowTitle->SetText(localizedString + " (" + String(langIndex) + " " + langName + ")");
+    windowTitle->SetText(localizedString + " (" + ea::to_string(langIndex) + " " + langName + ")");
 
     auto* b = new Button(context_);
     window->AddChild(b);
@@ -220,8 +220,7 @@ void L10n::HandleChangeLangButtonPressed(StringHash eventType, VariantMap& event
 
 void L10n::HandleQuitButtonPressed(StringHash eventType, VariantMap& eventData)
 {
-    if (GetPlatform() != "Web")
-        engine_->Exit();
+    CloseSample();
 }
 
 // You can manually change texts, sprites and other aspects of the game when language is changed
@@ -231,7 +230,7 @@ void L10n::HandleChangeLanguage(StringHash eventType, VariantMap& eventData)
     UIElement* uiRoot = GetSubsystem<UI>()->GetRoot();
 
     auto* windowTitle = uiRoot->GetChildStaticCast<Text>("WindowTitle", true);
-    windowTitle->SetText(l10n->Get("title") + " (" + String(l10n->GetLanguageIndex()) + " " + l10n->GetLanguage() + ")");
+    windowTitle->SetText(l10n->Get("title") + " (" + ea::to_string(l10n->GetLanguageIndex()) + " " + l10n->GetLanguage() + ")");
 
     auto* buttonText = uiRoot->GetChildStaticCast<Text>("ButtonTextQuit", true);
     buttonText->SetText(l10n->Get("quit"));

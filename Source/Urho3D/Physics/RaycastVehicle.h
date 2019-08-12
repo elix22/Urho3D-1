@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -187,15 +187,15 @@ private:
     /// Coordinate system.
     IntVector3 coordinateSystem_;
     /// Nodes of all wheels
-    Vector<Node*> wheelNodes_;
+    ea::vector<Node*> wheelNodes_;
     /// All wheels original rotations. These are applied in addition to wheel rotations by btRaycastVehicle
-    Vector<Quaternion> origRotation_;
+    ea::vector<Quaternion> origRotation_;
     /// Revolutions per minute value for in-air motor wheels. FIXME: set this one per wheel
     float inAirRPM_;
     /// Per-wheel extra settings.
-    Vector<float> skidInfoCumulative_;
+    ea::vector<float> skidInfoCumulative_;
     /// Wheel side movement speed.
-    Vector<float> wheelSideSlipSpeed_;
+    ea::vector<float> wheelSideSlipSpeed_;
     /// Side slip speed threshold.
     float maxSideSlipSpeed_;
     /// Loaded data temporarily wait here for ApplyAttributes to come pick them up.

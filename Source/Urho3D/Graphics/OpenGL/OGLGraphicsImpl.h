@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../../Container/HashMap.h"
+#include <EASTL/unordered_map.h>
+
 #include "../../Core/Timer.h"
 #include "../../Graphics/ConstantBuffer.h"
 #include "../../Graphics/ShaderProgram.h"
@@ -30,11 +31,21 @@
 #include "../../Math/Color.h"
 
 #if defined(IOS) || defined(TVOS)
+#if URHO3D_GLES3
+#include <OpenGLES/ES3/gl.h>
+#include <OpenGLES/ES3/glext.h>
+#else
 #include <OpenGLES/ES2/gl.h>
 #include <OpenGLES/ES2/glext.h>
+#endif
 #elif defined(__ANDROID__) || defined (__arm__) || defined(__aarch64__) || defined (__EMSCRIPTEN__)
+#if URHO3D_GLES3
+#include <GLES3/gl3.h>
+#include <GLES3/gl3ext.h>
+#else
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
+#endif
 #else
 #include <GLEW/glew.h>
 #endif
@@ -50,6 +61,18 @@
 #endif
 #ifndef GL_ETC1_RGB8_OES
 #define GL_ETC1_RGB8_OES 0x8d64
+#endif
+#ifndef GL_ETC2_RGB8_OES
+#define GL_ETC2_RGB8_OES 0x9274
+#endif
+#ifndef GL_ETC2_RGBA8_OES
+#define GL_ETC2_RGBA8_OES 0x9278
+#endif
+#ifndef GL_DEPTH_COMPONENT24_OES
+#define GL_DEPTH_COMPONENT24_OES 0x81A6
+#endif
+#ifndef GL_DEPTH24_STENCIL8_OES
+#define GL_DEPTH24_STENCIL8_OES 0x88F0
 #endif
 #ifndef COMPRESSED_RGB_PVRTC_4BPPV1_IMG
 #define COMPRESSED_RGB_PVRTC_4BPPV1_IMG 0x8c00
@@ -71,8 +94,8 @@ namespace Urho3D
 
 class Context;
 
-using ConstantBufferMap = HashMap<unsigned, SharedPtr<ConstantBuffer> >;
-using ShaderProgramMap = HashMap<Pair<ShaderVariation*, ShaderVariation*>, SharedPtr<ShaderProgram> >;
+using ConstantBufferMap = ea::unordered_map<unsigned, SharedPtr<ConstantBuffer> >;
+using ShaderProgramMap = ea::unordered_map<ea::pair<ShaderVariation*, ShaderVariation*>, SharedPtr<ShaderProgram> >;
 
 /// Cached state of a frame buffer object
 struct FrameBufferObject
@@ -115,7 +138,7 @@ private:
     /// Vertex attribute instancing bitmask for keeping track of divisors.
     unsigned instancingVertexAttributes_{};
     /// Current mapping of vertex attribute locations by semantic. The map is owned by the shader program, so care must be taken to switch a null shader program when it's destroyed.
-    const HashMap<Pair<unsigned char, unsigned char>, unsigned>* vertexAttributes_{};
+    const ea::unordered_map<ea::pair<unsigned char, unsigned char>, unsigned>* vertexAttributes_{};
     /// Currently bound frame buffer object.
     unsigned boundFBO_{};
     /// Currently bound vertex buffer object.
@@ -129,7 +152,7 @@ private:
     /// Current pixel format.
     int pixelFormat_{};
     /// Map for FBO's per resolution and format.
-    HashMap<unsigned long long, FrameBufferObject> frameBuffers_;
+    ea::unordered_map<unsigned long long, FrameBufferObject> frameBuffers_;
     /// OpenGL texture types in use.
     unsigned textureTypes_[MAX_TEXTURE_UNITS]{};
     /// Constant buffer search map.
@@ -137,11 +160,11 @@ private:
     /// Currently bound constant buffers.
     ConstantBuffer* constantBuffers_[MAX_SHADER_PARAMETER_GROUPS * 2]{};
     /// Dirty constant buffers.
-    PODVector<ConstantBuffer*> dirtyConstantBuffers_;
+    ea::vector<ConstantBuffer*> dirtyConstantBuffers_;
     /// Last used instance data offset.
     unsigned lastInstanceOffset_{};
     /// Map for additional depth textures, to emulate Direct3D9 ability to mix render texture and backbuffer rendering.
-    HashMap<unsigned, SharedPtr<Texture2D> > depthTextures_;
+    ea::unordered_map<unsigned, SharedPtr<Texture2D> > depthTextures_;
     /// Shader program in use.
     ShaderProgram* shaderProgram_{};
     /// Linked shader programs.

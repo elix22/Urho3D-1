@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -54,7 +54,7 @@ public:
 
 protected:
     /// Return XML patch instructions for screen joystick layout for a specific sample app, if any.
-    String GetScreenJoystickPatchString() const override { return
+    ea::string GetScreenJoystickPatchString() const override { return
         "<patch>"
         "    <add sel=\"/element/element[./attribute[@name='Name' and @value='Hat0']]\">"
         "        <attribute name=\"Is Visible\" value=\"false\" />"
@@ -72,7 +72,7 @@ private:
     /// Subscribe to update, UI and network events.
     void SubscribeToEvents();
     /// Create a button to the button container.
-    Button* CreateButton(const String& text, int width);
+    Button* CreateButton(const ea::string& text, int width);
     /// Update visibility of buttons according to connection and server status.
     void UpdateButtons();
     /// Create a controllable ball object and return its scene node.
@@ -99,7 +99,7 @@ private:
     void HandleClientObjectID(StringHash eventType, VariantMap& eventData);
 
     /// Mapping from client connections to controllable objects.
-    HashMap<Connection*, WeakPtr<Node> > serverObjects_;
+    ea::unordered_map<Connection*, WeakPtr<Node> > serverObjects_;
     /// Button container element.
     SharedPtr<UIElement> buttonContainer_;
     /// Server address line editor element.

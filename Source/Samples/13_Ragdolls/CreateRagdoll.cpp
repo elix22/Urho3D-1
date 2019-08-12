@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -112,7 +112,7 @@ void CreateRagdoll::HandleNodeCollision(StringHash eventType, VariantMap& eventD
     }
 }
 
-void CreateRagdoll::CreateRagdollBone(const String& boneName, ShapeType type, const Vector3& size, const Vector3& position,
+void CreateRagdoll::CreateRagdollBone(const ea::string& boneName, ShapeType type, const Vector3& size, const Vector3& position,
     const Quaternion& rotation)
 {
     // Find the correct child scene node recursively
@@ -141,7 +141,7 @@ void CreateRagdoll::CreateRagdollBone(const String& boneName, ShapeType type, co
         shape->SetCapsule(size.x_, size.y_, position, rotation);
 }
 
-void CreateRagdoll::CreateRagdollConstraint(const String& boneName, const String& parentName, ConstraintType type,
+void CreateRagdoll::CreateRagdollConstraint(const ea::string& boneName, const ea::string& parentName, ConstraintType type,
     const Vector3& axis, const Vector3& parentAxis, const Vector2& highLimit, const Vector2& lowLimit,
     bool disableCollision)
 {

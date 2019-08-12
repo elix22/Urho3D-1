@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,9 @@
 
 #pragma once
 
-#include "../Container/HashSet.h"
+#include <EASTL/unique_ptr.h>
+#include <EASTL/hash_set.h>
+
 #include "../Scene/Serializable.h"
 #include "../Scene/ValueAnimationInfo.h"
 
@@ -90,17 +92,17 @@ public:
     void SetObjectAnimation(ObjectAnimation* objectAnimation);
     /// Set attribute animation.
     void SetAttributeAnimation
-        (const String& name, ValueAnimation* attributeAnimation, WrapMode wrapMode = WM_LOOP, float speed = 1.0f);
+        (const ea::string& name, ValueAnimation* attributeAnimation, WrapMode wrapMode = WM_LOOP, float speed = 1.0f);
     /// Set attribute animation wrap mode.
-    void SetAttributeAnimationWrapMode(const String& name, WrapMode wrapMode);
+    void SetAttributeAnimationWrapMode(const ea::string& name, WrapMode wrapMode);
     /// Set attribute animation speed.
-    void SetAttributeAnimationSpeed(const String& name, float speed);
+    void SetAttributeAnimationSpeed(const ea::string& name, float speed);
     /// Set attribute animation time position manually. Automatic update should be disabled in this case.
-    void SetAttributeAnimationTime(const String& name, float time);
+    void SetAttributeAnimationTime(const ea::string& name, float time);
     /// Remove object animation. Same as calling SetObjectAnimation with a null pointer.
     void RemoveObjectAnimation();
     /// Remove attribute animation. Same as calling SetAttributeAnimation with a null pointer.
-    void RemoveAttributeAnimation(const String& name);
+    void RemoveAttributeAnimation(const ea::string& name);
 
     /// Return animation enabled.
     bool GetAnimationEnabled() const { return animationEnabled_; }
@@ -108,13 +110,13 @@ public:
     /// Return object animation.
     ObjectAnimation* GetObjectAnimation() const;
     /// Return attribute animation.
-    ValueAnimation* GetAttributeAnimation(const String& name) const;
+    ValueAnimation* GetAttributeAnimation(const ea::string& name) const;
     /// Return attribute animation wrap mode.
-    WrapMode GetAttributeAnimationWrapMode(const String& name) const;
+    WrapMode GetAttributeAnimationWrapMode(const ea::string& name) const;
     /// Return attribute animation speed.
-    float GetAttributeAnimationSpeed(const String& name) const;
+    float GetAttributeAnimationSpeed(const ea::string& name) const;
     /// Return attribute animation time position.
-    float GetAttributeAnimationTime(const String& name) const;
+    float GetAttributeAnimationTime(const ea::string& name) const;
 
     /// Set object animation attribute.
     void SetObjectAnimationAttr(const ResourceRef& value);
@@ -127,9 +129,9 @@ protected:
     /// Handle attribute animation removed.
     virtual void OnAttributeAnimationRemoved() = 0;
     /// Find target of an attribute animation from object hierarchy by name.
-    virtual Animatable* FindAttributeAnimationTarget(const String& name, String& outName);
+    virtual Animatable* FindAttributeAnimationTarget(const ea::string& name, ea::string& outName);
     /// Set object attribute animation internal.
-    void SetObjectAttributeAnimation(const String& name, ValueAnimation* attributeAnimation, WrapMode wrapMode, float speed);
+    void SetObjectAttributeAnimation(const ea::string& name, ValueAnimation* attributeAnimation, WrapMode wrapMode, float speed);
     /// Handle object animation added.
     void OnObjectAnimationAdded(ObjectAnimation* objectAnimation);
     /// Handle object animation removed.
@@ -139,7 +141,7 @@ protected:
     /// Is animated network attribute.
     bool IsAnimatedNetworkAttribute(const AttributeInfo& attrInfo) const;
     /// Return attribute animation info.
-    AttributeAnimationInfo* GetAttributeAnimationInfo(const String& name) const;
+    AttributeAnimationInfo* GetAttributeAnimationInfo(const ea::string& name) const;
     /// Handle attribute animation added.
     void HandleAttributeAnimationAdded(StringHash eventType, VariantMap& eventData);
     /// Handle attribute animation removed.
@@ -150,9 +152,9 @@ protected:
     /// Animation.
     SharedPtr<ObjectAnimation> objectAnimation_;
     /// Animated network attribute set.
-    HashSet<const AttributeInfo*> animatedNetworkAttributes_;
+    ea::hash_set<const AttributeInfo*> animatedNetworkAttributes_;
     /// Attribute animation infos.
-    HashMap<String, SharedPtr<AttributeAnimationInfo> > attributeAnimationInfos_;
+    ea::unordered_map<ea::string, SharedPtr<AttributeAnimationInfo> > attributeAnimationInfos_;
 };
 
 }

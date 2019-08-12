@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2018 the Urho3D project.
+# Copyright (c) 2008-2019 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -50,7 +50,11 @@ elseif (APPLE AND (NOT IOS OR IPHONEOS_DEPLOYMENT_TARGET STREQUAL "" OR NOT IPHO
     endif ()
 endif ()
 if (BUILD_SHARED_LIBS)
-    target_compile_definitions(Civetweb PRIVATE -DCIVETWEB_DLL_EXPORTS INTERFACE -DCIVETWEB_DLL_IMPORTS)
+    target_compile_definitions(Civetweb PRIVATE -DCIVETWEB_DLL_EXPORTS)
 endif ()
 
 install (DIRECTORY include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.h)
+
+if (NOT URHO3D_MERGE_STATIC_LIBS)
+    install(TARGETS Civetweb EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
+endif ()

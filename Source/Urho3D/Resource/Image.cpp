@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -50,6 +50,10 @@
 #define FOURCC_DXT4 (MAKEFOURCC('D','X','T','4'))
 #define FOURCC_DXT5 (MAKEFOURCC('D','X','T','5'))
 #define FOURCC_DX10 (MAKEFOURCC('D','X','1','0'))
+
+#define FOURCC_ETC1 (MAKEFOURCC('E', 'T', 'C', '1'))
+#define FOURCC_ETC2 (MAKEFOURCC('E', 'T', 'C', '2'))
+#define FOURCC_ETC2A (MAKEFOURCC('E', 'T', '2', 'A'))
 
 static const unsigned DDSCAPS_COMPLEX = 0x00000008U;
 static const unsigned DDSCAPS_TEXTURE = 0x00001000U;
@@ -227,6 +231,10 @@ bool CompressedLevel::Decompress(unsigned char* dest)
         DecompressImageETC(dest, data_, width_, height_);
         return true;
 
+    case CF_ETC2_RGB:
+    case CF_ETC2_RGBA:
+        return false;
+
     case CF_PVRTC_RGB_2BPP:
     case CF_PVRTC_RGBA_2BPP:
     case CF_PVRTC_RGB_4BPP:
@@ -255,7 +263,7 @@ void Image::RegisterObject(Context* context)
 bool Image::BeginLoad(Deserializer& source)
 {
     // Check for DDS, KTX or PVR compressed format
-    String fileID = source.ReadFileID();
+    ea::string fileID = source.ReadFileID();
 
     if (fileID == "DDS ")
     {
@@ -320,6 +328,21 @@ bool Image::BeginLoad(Deserializer& source)
 
         case FOURCC_DXT5:
             compressedFormat_ = CF_DXT5;
+            components_ = 4;
+            break;
+
+        case FOURCC_ETC1:
+            compressedFormat_ = CF_ETC1;
+            components_ = 3;
+            break;
+
+        case FOURCC_ETC2:
+            compressedFormat_ = CF_ETC2_RGB;
+            components_ = 3;
+            break;
+
+        case FOURCC_ETC2A:
+            compressedFormat_ = CF_ETC2_RGBA;
             components_ = 4;
             break;
 
@@ -405,12 +428,12 @@ bool Image::BeginLoad(Deserializer& source)
             // even though it would be more proper for the first image to report the size of all siblings combined
             currentImage->SetMemoryUse(dataSize);
 
-            source.Read(currentImage->data_.Get(), dataSize);
+            source.Read(currentImage->data_.get(), dataSize);
 
             if (faceIndex < imageChainCount - 1)
             {
                 // Build the image chain
-                SharedPtr<Image> nextImage(new Image(context_));
+                SharedPtr<Image> nextImage(context_->CreateObject<Image>());
                 currentImage->nextSibling_ = nextImage;
                 currentImage = nextImage;
             }
@@ -451,14 +474,14 @@ bool Image::BeginLoad(Deserializer& source)
                 ADJUSTSHIFT(bMask, bShiftL, bShiftR)
                 ADJUSTSHIFT(aMask, aShiftL, aShiftR)
 
-                SharedArrayPtr<unsigned char> rgbaData(new unsigned char[numPixels * 4]);
+                ea::shared_array<unsigned char> rgbaData(new unsigned char[numPixels * 4]);
 
                 switch (sourcePixelByteSize)
                 {
                 case 4:
                 {
-                    auto* src = (unsigned*)currentImage->data_.Get();
-                    unsigned char* dest = rgbaData.Get();
+                    auto* src = (unsigned*)currentImage->data_.get();
+                    unsigned char* dest = rgbaData.get();
 
                     while (numPixels--)
                     {
@@ -473,8 +496,8 @@ bool Image::BeginLoad(Deserializer& source)
 
                 case 3:
                 {
-                    unsigned char* src = currentImage->data_.Get();
-                    unsigned char* dest = rgbaData.Get();
+                    unsigned char* src = currentImage->data_.get();
+                    unsigned char* dest = rgbaData.get();
 
                     while (numPixels--)
                     {
@@ -490,8 +513,8 @@ bool Image::BeginLoad(Deserializer& source)
 
                 default:
                 {
-                    auto* src = (unsigned short*)currentImage->data_.Get();
-                    unsigned char* dest = rgbaData.Get();
+                    auto* src = (unsigned short*)currentImage->data_.get();
+                    unsigned char* dest = rgbaData.get();
 
                     while (numPixels--)
                     {
@@ -574,6 +597,16 @@ bool Image::BeginLoad(Deserializer& source)
         case 0x8d64:
             compressedFormat_ = CF_ETC1;
             components_ = 3;
+            break;
+
+        case 0x9274:
+            compressedFormat_ = CF_ETC2_RGB;
+            components_ = 3;
+            break;
+
+        case 0x9278:
+            compressedFormat_ = CF_ETC2_RGBA;
+            components_ = 4;
             break;
 
         case 0x8c00:
@@ -702,6 +735,16 @@ bool Image::BeginLoad(Deserializer& source)
             components_ = 4;
             break;
 
+        case 22:
+            compressedFormat_ = CF_ETC2_RGB;
+            components_ = 3;
+            break;
+
+        case 23:
+            compressedFormat_ = CF_ETC2_RGBA;
+            components_ = 4;
+            break;
+
         default:
             compressedFormat_ = CF_NONE;
             break;
@@ -721,7 +764,7 @@ bool Image::BeginLoad(Deserializer& source)
         height_ = height;
         numCompressedLevels_ = mipmapCount;
 
-        source.Read(data_.Get(), dataSize);
+        source.Read(data_.get(), dataSize);
         SetMemoryUse(dataSize);
     }
 #ifdef URHO3D_WEBP
@@ -757,31 +800,31 @@ bool Image::BeginLoad(Deserializer& source)
 
         // Read the file to buffer.
         size_t dataSize(source.GetSize());
-        SharedArrayPtr<uint8_t> data(new uint8_t[dataSize]);
+        ea::shared_array<uint8_t> data(new uint8_t[dataSize]);
 
-        memset(data.Get(), 0, sizeof(uint8_t) * dataSize);
+        memset(data.get(), 0, sizeof(uint8_t) * dataSize);
         source.Seek(0);
-        source.Read(data.Get(), dataSize);
+        source.Read(data.get(), dataSize);
 
         WebPBitstreamFeatures features;
 
-        if (WebPGetFeatures(data.Get(), dataSize, &features) != VP8_STATUS_OK)
+        if (WebPGetFeatures(data.get(), dataSize, &features) != VP8_STATUS_OK)
         {
             URHO3D_LOGERROR("Error reading WebP image: " + source.GetName());
             return false;
         }
 
         size_t imgSize = (size_t)features.width * features.height * (features.has_alpha ? 4 : 3);
-        SharedArrayPtr<uint8_t> pixelData(new uint8_t[imgSize]);
+        ea::shared_array<uint8_t> pixelData(new uint8_t[imgSize]);
 
         bool decodeError(false);
         if (features.has_alpha)
         {
-            decodeError = WebPDecodeRGBAInto(data.Get(), dataSize, pixelData.Get(), imgSize, 4 * features.width) == nullptr;
+            decodeError = WebPDecodeRGBAInto(data.get(), dataSize, pixelData.get(), imgSize, 4 * features.width) == nullptr;
         }
         else
         {
-            decodeError = WebPDecodeRGBInto(data.Get(), dataSize, pixelData.Get(), imgSize, 3 * features.width) == nullptr;
+            decodeError = WebPDecodeRGBInto(data.get(), dataSize, pixelData.get(), imgSize, 3 * features.width) == nullptr;
         }
         if (decodeError)
         {
@@ -790,7 +833,7 @@ bool Image::BeginLoad(Deserializer& source)
         }
 
         SetSize(features.width, features.height, features.has_alpha ? 4 : 3);
-        SetData(pixelData);
+        SetData(pixelData.get());
     }
 #endif
     else
@@ -802,7 +845,7 @@ bool Image::BeginLoad(Deserializer& source)
         unsigned char* pixelData = GetImageData(source, width, height, components);
         if (!pixelData)
         {
-            URHO3D_LOGERROR("Could not load image " + source.GetName() + ": " + String(stbi_failure_reason()));
+            URHO3D_LOGERROR("Could not load image " + source.GetName() + ": " + ea::string(stbi_failure_reason()));
             return false;
         }
         SetSize(width, height, components);
@@ -830,24 +873,24 @@ bool Image::Save(Serializer& dest) const
     }
 
     int len;
-    unsigned char* png = stbi_write_png_to_mem(data_.Get(), 0, width_, height_, components_, &len);
+    unsigned char* png = stbi_write_png_to_mem(data_.get(), 0, width_, height_, components_, &len);
     bool success = dest.Write(png, (unsigned)len) == (unsigned)len;
     free(png);      // NOLINT(hicpp-no-malloc)
     return success;
 }
 
-bool Image::SaveFile(const String& fileName) const
+bool Image::SaveFile(const ea::string& fileName) const
 {
-    if (fileName.EndsWith(".dds", false))
+    if (fileName.ends_with(".dds", false))
         return SaveDDS(fileName);
-    else if (fileName.EndsWith(".bmp", false))
+    else if (fileName.ends_with(".bmp", false))
         return SaveBMP(fileName);
-    else if (fileName.EndsWith(".jpg", false) || fileName.EndsWith(".jpeg", false))
+    else if (fileName.ends_with(".jpg", false) || fileName.ends_with(".jpeg", false))
         return SaveJPG(fileName, 100);
-    else if (fileName.EndsWith(".tga", false))
+    else if (fileName.ends_with(".tga", false))
         return SaveTGA(fileName);
 #ifdef URHO3D_WEBP
-    else if (fileName.EndsWith(".webp", false))
+    else if (fileName.ends_with(".webp", false))
         return SaveWEBP(fileName, 100.0f);
 #endif
     else
@@ -906,7 +949,7 @@ void Image::SetPixelInt(int x, int y, int z, unsigned uintColor)
     if (!data_ || x < 0 || x >= width_ || y < 0 || y >= height_ || z < 0 || z >= depth_ || IsCompressed())
         return;
 
-    unsigned char* dest = data_ + (z * width_ * height_ + y * width_ + x) * components_;
+    unsigned char* dest = data_.get() + (z * width_ * height_ + y * width_ + x) * components_;
     auto* src = (unsigned char*)&uintColor;
 
     switch (components_)
@@ -939,15 +982,15 @@ void Image::SetData(const unsigned char* pixelData)
 
     auto size = (size_t)width_ * height_ * depth_ * components_;
     if (pixelData)
-        memcpy(data_.Get(), pixelData, size);
+        memcpy(data_.get(), pixelData, size);
     else
-        memset(data_.Get(), 0, size);
+        memset(data_.get(), 0, size);
     nextLevel_.Reset();
 }
 
 bool Image::LoadColorLUT(Deserializer& source)
 {
-    String fileID = source.ReadFileID();
+    ea::string fileID = source.ReadFileID();
 
     if (fileID == "DDS " || fileID == "\253KTX" || fileID == "PVR\3")
     {
@@ -961,7 +1004,7 @@ bool Image::LoadColorLUT(Deserializer& source)
     unsigned char* pixelDataIn = GetImageData(source, width, height, components);
     if (!pixelDataIn)
     {
-        URHO3D_LOGERROR("Could not load image " + source.GetName() + ": " + String(stbi_failure_reason()));
+        URHO3D_LOGERROR("Could not load image " + source.GetName() + ": " + ea::string(stbi_failure_reason()));
         return false;
     }
     if (components != 3)
@@ -1009,7 +1052,7 @@ bool Image::FlipHorizontal()
 
     if (!IsCompressed())
     {
-        SharedArrayPtr<unsigned char> newData(new unsigned char[width_ * height_ * components_]);
+        ea::shared_array<unsigned char> newData(new unsigned char[width_ * height_ * components_]);
         unsigned rowSize = width_ * components_;
 
         for (int y = 0; y < height_; ++y)
@@ -1032,7 +1075,7 @@ bool Image::FlipHorizontal()
         }
 
         // Memory use = combined size of the compressed mip levels
-        SharedArrayPtr<unsigned char> newData(new unsigned char[GetMemoryUse()]);
+        ea::shared_array<unsigned char> newData(new unsigned char[GetMemoryUse()]);
         unsigned dataOffset = 0;
 
         for (unsigned i = 0; i < numCompressedLevels_; ++i)
@@ -1049,7 +1092,7 @@ bool Image::FlipHorizontal()
                 for (unsigned x = 0; x < level.rowSize_; x += level.blockSize_)
                 {
                     unsigned char* src = level.data_ + y * level.rowSize_ + (level.rowSize_ - level.blockSize_ - x);
-                    unsigned char* dest = newData.Get() + y * level.rowSize_ + x;
+                    unsigned char* dest = newData.get() + y * level.rowSize_ + x;
                     FlipBlockHorizontal(dest, src, compressedFormat_);
                 }
             }
@@ -1076,7 +1119,7 @@ bool Image::FlipVertical()
 
     if (!IsCompressed())
     {
-        SharedArrayPtr<unsigned char> newData(new unsigned char[width_ * height_ * components_]);
+        ea::shared_array<unsigned char> newData(new unsigned char[width_ * height_ * components_]);
         unsigned rowSize = width_ * components_;
 
         for (int y = 0; y < height_; ++y)
@@ -1093,7 +1136,7 @@ bool Image::FlipVertical()
         }
 
         // Memory use = combined size of the compressed mip levels
-        SharedArrayPtr<unsigned char> newData(new unsigned char[GetMemoryUse()]);
+        ea::shared_array<unsigned char> newData(new unsigned char[GetMemoryUse()]);
         unsigned dataOffset = 0;
 
         for (unsigned i = 0; i < numCompressedLevels_; ++i)
@@ -1108,7 +1151,7 @@ bool Image::FlipVertical()
             for (unsigned y = 0; y < level.rows_; ++y)
             {
                 unsigned char* src = level.data_ + y * level.rowSize_;
-                unsigned char* dest = newData.Get() + dataOffset + (level.rows_ - y - 1) * level.rowSize_;
+                unsigned char* dest = newData.get() + dataOffset + (level.rows_ - y - 1) * level.rowSize_;
 
                 for (unsigned x = 0; x < level.rowSize_; x += level.blockSize_)
                     FlipBlockVertical(dest + x, src + x, compressedFormat_);
@@ -1143,7 +1186,7 @@ bool Image::Resize(int width, int height)
         return false;
 
     /// \todo Reducing image size does not sample all needed pixels
-    SharedArrayPtr<unsigned char> newData(new unsigned char[width * height * components_]);
+    ea::shared_array<unsigned char> newData(new unsigned char[width * height * components_]);
     for (int y = 0; y < height; ++y)
     {
         for (int x = 0; x < width; ++x)
@@ -1152,7 +1195,7 @@ bool Image::Resize(int width, int height)
             float xF = (width_ > 1) ? (float)x / (float)(width - 1) : 0.0f;
             float yF = (height_ > 1) ? (float)y / (float)(height - 1) : 0.0f;
             unsigned uintColor = GetPixelBilinear(xF, yF).ToUInt();
-            unsigned char* dest = newData + (y * width + x) * components_;
+            unsigned char* dest = newData.get() + (y * width + x) * components_;
             auto* src = (unsigned char*)&uintColor;
 
             switch (components_)
@@ -1214,7 +1257,7 @@ void Image::ClearInt(unsigned uintColor)
     }
 }
 
-bool Image::SaveBMP(const String& fileName) const
+bool Image::SaveBMP(const ea::string& fileName) const
 {
     URHO3D_PROFILE("SaveImageBMP");
 
@@ -1232,12 +1275,12 @@ bool Image::SaveBMP(const String& fileName) const
     }
 
     if (data_)
-        return stbi_write_bmp(fileName.CString(), width_, height_, components_, data_.Get()) != 0;
+        return stbi_write_bmp(fileName.c_str(), width_, height_, components_, data_.get()) != 0;
     else
         return false;
 }
 
-bool Image::SavePNG(const String& fileName) const
+bool Image::SavePNG(const ea::string& fileName) const
 {
     URHO3D_PROFILE("SaveImagePNG");
 
@@ -1248,7 +1291,7 @@ bool Image::SavePNG(const String& fileName) const
         return false;
 }
 
-bool Image::SaveTGA(const String& fileName) const
+bool Image::SaveTGA(const ea::string& fileName) const
 {
     URHO3D_PROFILE("SaveImageTGA");
 
@@ -1266,12 +1309,12 @@ bool Image::SaveTGA(const String& fileName) const
     }
 
     if (data_)
-        return stbi_write_tga(GetNativePath(fileName).CString(), width_, height_, components_, data_.Get()) != 0;
+        return stbi_write_tga(GetNativePath(fileName).c_str(), width_, height_, components_, data_.get()) != 0;
     else
         return false;
 }
 
-bool Image::SaveJPG(const String& fileName, int quality) const
+bool Image::SaveJPG(const ea::string& fileName, int quality) const
 {
     URHO3D_PROFILE("SaveImageJPG");
 
@@ -1289,12 +1332,12 @@ bool Image::SaveJPG(const String& fileName, int quality) const
     }
 
     if (data_)
-        return stbi_write_jpg(GetNativePath(fileName).CString(), width_, height_, components_, data_.Get(), quality) != 0;
+        return stbi_write_jpg(GetNativePath(fileName).c_str(), width_, height_, components_, data_.get(), quality) != 0;
     else
         return false;
 }
 
-bool Image::SaveDDS(const String& fileName) const
+bool Image::SaveDDS(const ea::string& fileName) const
 {
     URHO3D_PROFILE("SaveImageDDS");
 
@@ -1318,7 +1361,7 @@ bool Image::SaveDDS(const String& fileName) const
     }
 
     // Write image
-    PODVector<const Image*> levels;
+    ea::vector<const Image*> levels;
     GetLevels(levels);
 
     outFile.WriteFileID("DDS ");
@@ -1330,7 +1373,7 @@ bool Image::SaveDDS(const String& fileName) const
         | 0x00000002l /*DDSD_HEIGHT*/ | 0x00000004l /*DDSD_WIDTH*/ | 0x00020000l /*DDSD_MIPMAPCOUNT*/ | 0x00001000l /*DDSD_PIXELFORMAT*/;
     ddsd.dwWidth_ = width_;
     ddsd.dwHeight_ = height_;
-    ddsd.dwMipMapCount_ = levels.Size();
+    ddsd.dwMipMapCount_ = levels.size();
     ddsd.ddpfPixelFormat_.dwFlags_ = 0x00000040l /*DDPF_RGB*/ | 0x00000001l /*DDPF_ALPHAPIXELS*/;
     ddsd.ddpfPixelFormat_.dwSize_ = sizeof(ddsd.ddpfPixelFormat_);
     ddsd.ddpfPixelFormat_.dwRGBBitCount_ = 32;
@@ -1340,13 +1383,13 @@ bool Image::SaveDDS(const String& fileName) const
     ddsd.ddpfPixelFormat_.dwRGBAlphaBitMask_ = 0xff000000;
 
     outFile.Write(&ddsd, sizeof(ddsd));
-    for (unsigned i = 0; i < levels.Size(); ++i)
+    for (unsigned i = 0; i < levels.size(); ++i)
         outFile.Write(levels[i]->GetData(), levels[i]->GetWidth() * levels[i]->GetHeight() * 4);
 
     return true;
 }
 
-bool Image::SaveWEBP(const String& fileName, float compression /* = 0.0f */) const
+bool Image::SaveWEBP(const ea::string& fileName, float compression /* = 0.0f */) const
 {
 #ifdef URHO3D_WEBP
     URHO3D_PROFILE("SaveImageWEBP");
@@ -1368,7 +1411,7 @@ bool Image::SaveWEBP(const String& fileName, float compression /* = 0.0f */) con
 
     if (height_ > WEBP_MAX_DIMENSION || width_ > WEBP_MAX_DIMENSION)
     {
-        URHO3D_LOGERROR("Maximum dimension supported by WebP is " + String(WEBP_MAX_DIMENSION));
+        URHO3D_LOGERROR("Maximum dimension supported by WebP is " + ea::to_string(WEBP_MAX_DIMENSION));
         return false;
     }
 
@@ -1406,9 +1449,9 @@ bool Image::SaveWEBP(const String& fileName, float compression /* = 0.0f */) con
     WebPMemoryWriterInit(&wrt);
 
     if (components_ == 4)
-        importResult = WebPPictureImportRGBA(&pic, data_.Get(), components_ * width_);
+        importResult = WebPPictureImportRGBA(&pic, data_.get(), components_ * width_);
     else if (components_ == 3)
-        importResult = WebPPictureImportRGB(&pic, data_.Get(), components_ * width_);
+        importResult = WebPPictureImportRGB(&pic, data_.get(), components_ * width_);
 
     if (!importResult)
     {
@@ -1452,7 +1495,7 @@ Color Image::GetPixel(int x, int y, int z) const
     x = Clamp(x, 0, width_ - 1);
     y = Clamp(y, 0, height_ - 1);
 
-    unsigned char* src = data_ + (z * width_ * height_ + y * width_ + x) * components_;
+    unsigned char* src = data_.get() + (z * width_ * height_ + y * width_ + x) * components_;
     Color ret;
 
     switch (components_)
@@ -1487,7 +1530,7 @@ unsigned Image::GetPixelInt(int x, int y, int z) const
     x = Clamp(x, 0, width_ - 1);
     y = Clamp(y, 0, height_ - 1);
 
-    unsigned char* src = data_ + (z * width_ * height_ + y * width_ + x) * components_;
+    unsigned char* src = data_.get() + (z * width_ * height_ + y * width_ + x) * components_;
     unsigned ret = 0;
     if (components_ < 4)
         ret |= 0xff000000;
@@ -1585,15 +1628,15 @@ SharedPtr<Image> Image::GetNextLevel() const
     if (depthOut < 1)
         depthOut = 1;
 
-    SharedPtr<Image> mipImage(new Image(context_));
+    SharedPtr<Image> mipImage(context_->CreateObject<Image>());
 
     if (depth_ > 1)
         mipImage->SetSize(widthOut, heightOut, depthOut, components_);
     else
         mipImage->SetSize(widthOut, heightOut, components_);
 
-    const unsigned char* pixelDataIn = data_.Get();
-    unsigned char* pixelDataOut = mipImage->data_.Get();
+    const unsigned char* pixelDataIn = data_.get();
+    unsigned char* pixelDataOut = mipImage->data_.get();
 
     // 1D case
     if (depth_ == 1 && (height_ == 1 || width_ == 1))
@@ -1879,10 +1922,10 @@ SharedPtr<Image> Image::ConvertToRGBA() const
     if (components_ == 4)
         return SharedPtr<Image>(const_cast<Image*>(this));
 
-    SharedPtr<Image> ret(new Image(context_));
+    SharedPtr<Image> ret(context_->CreateObject<Image>());
     ret->SetSize(width_, height_, depth_, 4);
 
-    const unsigned char* src = data_;
+    const unsigned char* src = data_.get();
     unsigned char* dest = ret->GetData();
 
     switch (components_)
@@ -1964,13 +2007,13 @@ CompressedLevel Image::GetCompressedLevel(unsigned index) const
 
             level.rowSize_ = level.width_ * level.blockSize_;
             level.rows_ = (unsigned)level.height_;
-            level.data_ = data_.Get() + offset;
+            level.data_ = data_.get() + offset;
             level.dataSize_ = level.depth_ * level.rows_ * level.rowSize_;
 
             if (offset + level.dataSize_ > GetMemoryUse())
             {
-                URHO3D_LOGERROR("Compressed level is outside image data. Offset: " + String(offset) + " Size: " + String(level.dataSize_) +
-                         " Datasize: " + String(GetMemoryUse()));
+                URHO3D_LOGERROR("Compressed level is outside image data. Offset: " + ea::to_string(offset) + " Size: " + ea::to_string(level.dataSize_) +
+                         " Datasize: " + ea::to_string(GetMemoryUse()));
                 level.data_ = nullptr;
                 return level;
             }
@@ -1987,7 +2030,7 @@ CompressedLevel Image::GetCompressedLevel(unsigned index) const
     }
     else if (compressedFormat_ < CF_PVRTC_RGB_2BPP)
     {
-        level.blockSize_ = (compressedFormat_ == CF_DXT1 || compressedFormat_ == CF_ETC1) ? 8 : 16;
+        level.blockSize_ = (compressedFormat_ == CF_DXT1 || compressedFormat_ == CF_ETC1 || compressedFormat_ == CF_ETC2_RGB) ? 8 : 16;
         unsigned i = 0;
         unsigned offset = 0;
 
@@ -2002,13 +2045,13 @@ CompressedLevel Image::GetCompressedLevel(unsigned index) const
 
             level.rowSize_ = ((level.width_ + 3) / 4) * level.blockSize_;
             level.rows_ = (unsigned)((level.height_ + 3) / 4);
-            level.data_ = data_.Get() + offset;
+            level.data_ = data_.get() + offset;
             level.dataSize_ = level.depth_ * level.rows_ * level.rowSize_;
 
             if (offset + level.dataSize_ > GetMemoryUse())
             {
-                URHO3D_LOGERROR("Compressed level is outside image data. Offset: " + String(offset) + " Size: " + String(level.dataSize_) +
-                         " Datasize: " + String(GetMemoryUse()));
+                URHO3D_LOGERROR("Compressed level is outside image data. Offset: " + ea::to_string(offset) + " Size: " + ea::to_string(level.dataSize_) +
+                         " Datasize: " + ea::to_string(GetMemoryUse()));
                 level.data_ = nullptr;
                 return level;
             }
@@ -2038,15 +2081,15 @@ CompressedLevel Image::GetCompressedLevel(unsigned index) const
 
             int dataWidth = Max(level.width_, level.blockSize_ == 2 ? 16 : 8);
             int dataHeight = Max(level.height_, 8);
-            level.data_ = data_.Get() + offset;
+            level.data_ = data_.get() + offset;
             level.dataSize_ = (dataWidth * dataHeight * level.blockSize_ + 7) >> 3;
             level.rows_ = (unsigned)dataHeight;
             level.rowSize_ = level.dataSize_ / level.rows_;
 
             if (offset + level.dataSize_ > GetMemoryUse())
             {
-                URHO3D_LOGERROR("Compressed level is outside image data. Offset: " + String(offset) + " Size: " + String(level.dataSize_) +
-                         " Datasize: " + String(GetMemoryUse()));
+                URHO3D_LOGERROR("Compressed level is outside image data. Offset: " + ea::to_string(offset) + " Size: " + ea::to_string(level.dataSize_) +
+                         " Datasize: " + ea::to_string(GetMemoryUse()));
                 level.data_ = nullptr;
                 return level;
             }
@@ -2062,7 +2105,7 @@ CompressedLevel Image::GetCompressedLevel(unsigned index) const
     }
 }
 
-Image* Image::GetSubimage(const IntRect& rect) const
+SharedPtr<Image> Image::GetSubimage(const IntRect& rect) const
 {
     if (!data_)
         return nullptr;
@@ -2086,11 +2129,11 @@ Image* Image::GetSubimage(const IntRect& rect) const
         int width = rect.Width();
         int height = rect.Height();
 
-        auto* image = new Image(context_);
+        auto image = context_->CreateObject<Image>();
         image->SetSize(width, height, components_);
 
         unsigned char* dest = image->GetData();
-        unsigned char* src = data_.Get() + (y * width_ + x) * components_;
+        unsigned char* src = data_.get() + (y * width_ + x) * components_;
         for (int i = 0; i < height; ++i)
         {
             memcpy(dest, src, (size_t)width * components_);
@@ -2110,7 +2153,7 @@ Image* Image::GetSubimage(const IntRect& rect) const
         paddedRect.bottom_ = (rect.bottom_ / 4) * 4;
         IntRect currentRect = paddedRect;
 
-        PODVector<unsigned char> subimageData;
+        ea::vector<unsigned char> subimageData;
         unsigned subimageLevels = 0;
 
         // Save as many mips as possible until the next mip would cross a block boundary
@@ -2121,13 +2164,13 @@ Image* Image::GetSubimage(const IntRect& rect) const
                 break;
 
             // Mips are stored continuously
-            unsigned destStartOffset = subimageData.Size();
+            unsigned destStartOffset = subimageData.size();
             unsigned destRowSize = currentRect.Width() / 4 * level.blockSize_;
             unsigned destSize = currentRect.Height() / 4 * destRowSize;
             if (!destSize)
                 break;
 
-            subimageData.Resize(destStartOffset + destSize);
+            subimageData.resize(destStartOffset + destSize);
             unsigned char* dest = &subimageData[destStartOffset];
 
             for (int y = currentRect.top_; y < currentRect.bottom_; y += 4)
@@ -2155,16 +2198,16 @@ Image* Image::GetSubimage(const IntRect& rect) const
             return nullptr;
         }
 
-        auto* image = new Image(context_);
+        auto image = context_->CreateObject<Image>();
         image->width_ = paddedRect.Width();
         image->height_ = paddedRect.Height();
         image->depth_ = 1;
         image->compressedFormat_ = compressedFormat_;
         image->numCompressedLevels_ = subimageLevels;
         image->components_ = components_;
-        image->data_ = new unsigned char[subimageData.Size()];
-        memcpy(image->data_.Get(), &subimageData[0], subimageData.Size());
-        image->SetMemoryUse(subimageData.Size());
+        image->data_ = new unsigned char[subimageData.size()];
+        memcpy(image->data_.get(), &subimageData[0], subimageData.size());
+        image->SetMemoryUse(subimageData.size());
 
         return image;
     }
@@ -2220,7 +2263,7 @@ SDL_Surface* Image::GetSDLSurface(const IntRect& rect) const
         SDL_LockSurface(surface);
 
         auto* destination = reinterpret_cast<unsigned char*>(surface->pixels);
-        unsigned char* source = data_ + components_ * (imageWidth * imageRect.top_ + imageRect.left_);
+        unsigned char* source = data_.get() + components_ * (imageWidth * imageRect.top_ + imageRect.left_);
         for (int i = 0; i < height; ++i)
         {
             memcpy(destination, source, (size_t)components_ * width);
@@ -2262,26 +2305,26 @@ void Image::CleanupLevels()
     nextLevel_.Reset();
 }
 
-void Image::GetLevels(PODVector<Image*>& levels)
+void Image::GetLevels(ea::vector<Image*>& levels)
 {
-    levels.Clear();
+    levels.clear();
 
     Image* image = this;
     while (image)
     {
-        levels.Push(image);
+        levels.push_back(image);
         image = image->nextLevel_;
     }
 }
 
-void Image::GetLevels(PODVector<const Image*>& levels) const
+void Image::GetLevels(ea::vector<const Image*>& levels) const
 {
-    levels.Clear();
+    levels.clear();
 
     const Image* image = this;
     while (image)
     {
-        levels.Push(image);
+        levels.push_back(image);
         image = image->nextLevel_;
     }
 }
@@ -2290,9 +2333,9 @@ unsigned char* Image::GetImageData(Deserializer& source, int& width, int& height
 {
     unsigned dataSize = source.GetSize();
 
-    SharedArrayPtr<unsigned char> buffer(new unsigned char[dataSize]);
-    source.Read(buffer.Get(), dataSize);
-    return stbi_load_from_memory(buffer.Get(), dataSize, &width, &height, (int*)&components, 0);
+    ea::shared_array<unsigned char> buffer(new unsigned char[dataSize]);
+    source.Read(buffer.get(), dataSize);
+    return stbi_load_from_memory(buffer.get(), dataSize, &width, &height, (int*)&components, 0);
 }
 
 void Image::FreeImageData(unsigned char* pixelData)
@@ -2337,7 +2380,7 @@ bool Image::SetSubimage(const Image* image, const IntRect& rect)
     if (destWidth == image->GetWidth() && destHeight == image->GetHeight())
     {
         unsigned char* src = image->GetData();
-        unsigned char* dest = data_.Get() + (rect.top_ * width_ + rect.left_) * components_;
+        unsigned char* dest = data_.get() + (rect.top_ * width_ + rect.left_) * components_;
         for (int i = 0; i < destHeight; ++i)
         {
             memcpy(dest, src, (size_t)destWidth * components_);
@@ -2348,7 +2391,7 @@ bool Image::SetSubimage(const Image* image, const IntRect& rect)
     }
     else
     {
-        unsigned char* dest = data_.Get() + (rect.top_ * width_ + rect.left_) * components_;
+        unsigned char* dest = data_.get() + (rect.top_ * width_ + rect.left_) * components_;
         for (int y = 0; y < destHeight; ++y)
         {
             for (int x = 0; x < destWidth; ++x)

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,6 @@
 //
 
 #pragma once
-
 
 #include "ToolboxAPI.h"
 #include <Urho3D/Scene/Node.h>
@@ -59,7 +58,7 @@ public:
     /// \param camera which observes the node.
     /// \param nodes to be manipulated. Specifying more than one node manipulates them in world space.
     /// \returns true if node was manipulated on current frame.
-    bool Manipulate(const Camera* camera, const Vector<WeakPtr<Node>>& nodes);
+    bool Manipulate(const Camera* camera, const ea::vector<WeakPtr<Node>>& nodes);
     /// Manipulate current node selection. Should be called from within E_UPDATE event.
     /// \param camera which observes the node.
     /// \returns true if node(s) were manipulated on current frame.
@@ -80,7 +79,7 @@ public:
     /// Add a node to selection.
     bool Select(Node* node);
     /// Add a node to selection.
-    bool Select(PODVector<Node*> nodes);
+    bool Select(ea::vector<Node*> nodes);
     /// Remove a node from selection.
     bool Unselect(Node* node);
     /// Select if node was not selected or unselect if node was selected.
@@ -89,31 +88,25 @@ public:
     bool UnselectAll();
     /// Return true if node is selected by gizmo.
     bool IsSelected(Node* node) const;
-    /// Enable auto-selection and gizmo rendering on scene to which specified camera belongs.
-    void EnableAutoMode(Camera* camera);
     /// Return list of selected nodes.
-    const Vector<WeakPtr<Node>>& GetSelection() const { return nodeSelection_; }
+    const ea::vector<WeakPtr<Node>>& GetSelection() const { return nodeSelection_; }
     /// Set screen rect to which gizmo rendering will be limited. Use when putting gizmo in a window.
     void SetScreenRect(const IntVector2& pos, const IntVector2& size);
     /// Set screen rect to which gizmo rendering will be limited. Use when putting gizmo in a window.
     void SetScreenRect(const IntRect& rect);
 
 protected:
-    /// Renders debug info of selected nodes if scene has debug renderer component.
-    void RenderDebugInfo();
-    /// Process mouse clicks and auto-select nodes.
-    void HandleAutoSelection();
 
     /// Current gizmo operation. Translation, rotation or scaling.
     GizmoOperation operation_ = GIZMOOP_TRANSLATE;
     /// Current coordinate space to operate in. World or local.
     TransformSpace transformSpace_ = TS_WORLD;
     /// Saved node scale on operation start.
-    HashMap<Node*, Vector3> nodeScaleStart_;
+    ea::unordered_map<Node*, Vector3> nodeScaleStart_;
     /// Current operation origin. This is center point between all nodes that are being manipulated.
     Matrix4 currentOrigin_;
     /// Current node selection. Nodes removed from the scene are automatically unselected.
-    Vector<WeakPtr<Node> > nodeSelection_;
+    ea::vector<WeakPtr<Node> > nodeSelection_;
     /// Camera which is used for automatic node selection in the scene camera belongs to.
     WeakPtr<Camera> autoModeCamera_;
     /// Position of display area gizmo is rendered in.
@@ -123,7 +116,7 @@ protected:
     /// Flag indicating that gizmo was active on the last frame.
     bool wasActive_ = false;
     /// A map of initial transforms.
-    HashMap<Node*, Matrix3x4> initialTransforms_;
+    ea::unordered_map<Node*, Matrix3x4> initialTransforms_;
 };
 
 }

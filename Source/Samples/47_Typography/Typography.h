@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include <Urho3D/UI/CheckBox.h>
+#include <Urho3D/UI/DropDownList.h>
 #include "Sample.h"
 
 /// Text rendering example.
@@ -39,7 +41,7 @@ public:
 
 protected:
     /// Return XML patch instructions for screen joystick layout for a specific sample app, if any.
-    String GetScreenJoystickPatchString() const override { return
+    ea::string GetScreenJoystickPatchString() const override { return
         "<patch>"
         "    <add sel=\"/element/element[./attribute[@name='Name' and @value='Hat0']]\">"
         "        <attribute name=\"Is Visible\" value=\"false\" />"
@@ -51,8 +53,8 @@ private:
     SharedPtr<UIElement> uielement_;
 
     void CreateText();
-    SharedPtr<CheckBox> CreateCheckbox(const String& label, EventHandler* handler);
-    SharedPtr<DropDownList> CreateMenu(const String& label, const char** items, EventHandler* handler);
+    SharedPtr<CheckBox> CreateCheckbox(const ea::string& label, EventHandler* handler);
+    SharedPtr<DropDownList> CreateMenu(const ea::string& label, const char** items, EventHandler* handler);
 
     void HandleWhiteBackground(StringHash eventType, VariantMap& eventData);
     void HandleSRGB(StringHash eventType, VariantMap& eventData);

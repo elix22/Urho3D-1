@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,13 +23,17 @@
 #include "../Precompiled.h"
 
 #include "../IO/VectorBuffer.h"
+#include "VectorBuffer.h"
+
 
 namespace Urho3D
 {
 
+static ea::string vectorBufferName{"VectorBuffer"};
+
 VectorBuffer::VectorBuffer() = default;
 
-VectorBuffer::VectorBuffer(const PODVector<unsigned char>& data)
+VectorBuffer::VectorBuffer(const ea::vector<unsigned char>& data)
 {
     SetData(data);
 }
@@ -55,22 +59,7 @@ unsigned VectorBuffer::Read(void* dest, unsigned size)
     auto* destPtr = (unsigned char*)dest;
     position_ += size;
 
-    unsigned copySize = size;
-    while (copySize >= sizeof(unsigned))
-    {
-        *((unsigned*)destPtr) = *((unsigned*)srcPtr);
-        srcPtr += sizeof(unsigned);
-        destPtr += sizeof(unsigned);
-        copySize -= sizeof(unsigned);
-    }
-    if (copySize & sizeof(unsigned short))
-    {
-        *((unsigned short*)destPtr) = *((unsigned short*)srcPtr);
-        srcPtr += sizeof(unsigned short);
-        destPtr += sizeof(unsigned short);
-    }
-    if (copySize & 1u)
-        *destPtr = *srcPtr;
+    memcpy(destPtr, srcPtr, size);
 
     return size;
 }
@@ -92,38 +81,23 @@ unsigned VectorBuffer::Write(const void* data, unsigned size)
     if (size + position_ > size_)
     {
         size_ = size + position_;
-        buffer_.Resize(size_);
+        buffer_.resize(size_);
     }
 
     auto* srcPtr = (unsigned char*)data;
     unsigned char* destPtr = &buffer_[position_];
     position_ += size;
 
-    unsigned copySize = size;
-    while (copySize >= sizeof(unsigned))
-    {
-        *((unsigned*)destPtr) = *((unsigned*)srcPtr);
-        srcPtr += sizeof(unsigned);
-        destPtr += sizeof(unsigned);
-        copySize -= sizeof(unsigned);
-    }
-    if (copySize & sizeof(unsigned short))
-    {
-        *((unsigned short*)destPtr) = *((unsigned short*)srcPtr);
-        srcPtr += sizeof(unsigned short);
-        destPtr += sizeof(unsigned short);
-    }
-    if (copySize & 1u)
-        *destPtr = *srcPtr;
+    memcpy(destPtr, srcPtr, size);
 
     return size;
 }
 
-void VectorBuffer::SetData(const PODVector<unsigned char>& data)
+void VectorBuffer::SetData(const ea::vector<unsigned char>& data)
 {
     buffer_ = data;
     position_ = 0;
-    size_ = data.Size();
+    size_ = data.size();
 }
 
 void VectorBuffer::SetData(const void* data, unsigned size)
@@ -131,7 +105,7 @@ void VectorBuffer::SetData(const void* data, unsigned size)
     if (!data)
         size = 0;
 
-    buffer_.Resize(size);
+    buffer_.resize(size);
     if (size)
         memcpy(&buffer_[0], data, size);
 
@@ -141,10 +115,10 @@ void VectorBuffer::SetData(const void* data, unsigned size)
 
 void VectorBuffer::SetData(Deserializer& source, unsigned size)
 {
-    buffer_.Resize(size);
+    buffer_.resize(size);
     unsigned actualSize = source.Read(&buffer_[0], size);
     if (actualSize != size)
-        buffer_.Resize(actualSize);
+        buffer_.resize(actualSize);
 
     position_ = 0;
     size_ = actualSize;
@@ -152,17 +126,22 @@ void VectorBuffer::SetData(Deserializer& source, unsigned size)
 
 void VectorBuffer::Clear()
 {
-    buffer_.Clear();
+    buffer_.clear();
     position_ = 0;
     size_ = 0;
 }
 
 void VectorBuffer::Resize(unsigned size)
 {
-    buffer_.Resize(size);
+    buffer_.resize(size);
     size_ = size;
     if (position_ > size_)
         position_ = size_;
+}
+
+const ea::string& VectorBuffer::GetName() const
+{
+    return vectorBufferName;
 }
 
 }

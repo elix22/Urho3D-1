@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -38,9 +38,9 @@ namespace Urho3D
 
 #define URHO3D_LOGD3DERROR(msg, hr) URHO3D_LOGERRORF("%s (HRESULT %x)", msg, (unsigned)hr)
 
-using ShaderProgramMap = HashMap<Pair<ShaderVariation*, ShaderVariation*>, SharedPtr<ShaderProgram> >;
-using VertexDeclarationMap = HashMap<unsigned long long, SharedPtr<VertexDeclaration> >;
-using ConstantBufferMap = HashMap<unsigned, SharedPtr<ConstantBuffer> >;
+using ShaderProgramMap = ea::unordered_map<ea::pair<ShaderVariation*, ShaderVariation*>, SharedPtr<ShaderProgram> >;
+using VertexDeclarationMap = ea::unordered_map<unsigned long long, SharedPtr<VertexDeclaration> >;
+using ConstantBufferMap = ea::unordered_map<unsigned, SharedPtr<ConstantBuffer> >;
 
 /// %Graphics implementation. Holds API-specific objects.
 class URHO3D_API GraphicsImpl
@@ -84,11 +84,11 @@ private:
     /// Current depth-stencil view.
     ID3D11DepthStencilView* depthStencilView_;
     /// Created blend state objects.
-    HashMap<unsigned, ID3D11BlendState*> blendStates_;
+    ea::unordered_map<unsigned, ID3D11BlendState*> blendStates_;
     /// Created depth state objects.
-    HashMap<unsigned, ID3D11DepthStencilState*> depthStates_;
+    ea::unordered_map<unsigned, ID3D11DepthStencilState*> depthStates_;
     /// Created rasterizer state objects.
-    HashMap<unsigned, ID3D11RasterizerState*> rasterizerStates_;
+    ea::unordered_map<unsigned, ID3D11RasterizerState*> rasterizerStates_;
     /// Intermediate texture for multisampled screenshots and less than whole viewport multisampled resolve, created on demand.
     ID3D11Texture2D* resolveTexture_;
     /// Bound shader resource views.
@@ -138,7 +138,7 @@ private:
     /// Constant buffer search map.
     ConstantBufferMap allConstantBuffers_;
     /// Currently dirty constant buffers.
-    PODVector<ConstantBuffer*> dirtyConstantBuffers_;
+    ea::vector<ConstantBuffer*> dirtyConstantBuffers_;
     /// Shader programs.
     ShaderProgramMap shaderPrograms_;
     /// Shader program in use.

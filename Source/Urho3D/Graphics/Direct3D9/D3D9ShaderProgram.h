@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../../Container/HashMap.h"
+#include <EASTL/unordered_map.h>
+
 #include "../../Math/MathDefs.h"
 #include "../../Graphics/ShaderVariation.h"
 
@@ -36,20 +37,20 @@ public:
     /// Construct.
     ShaderProgram(ShaderVariation* vertexShader, ShaderVariation* pixelShader)
     {
-        const HashMap<StringHash, ShaderParameter>& vsParams = vertexShader->GetParameters();
-        for (HashMap<StringHash, ShaderParameter>::ConstIterator i = vsParams.Begin(); i != vsParams.End(); ++i)
-            parameters_[i->first_] = i->second_;
+        const ea::unordered_map<StringHash, ShaderParameter>& vsParams = vertexShader->GetParameters();
+        for (auto i = vsParams.begin(); i != vsParams.end(); ++i)
+            parameters_[i->first] = i->second;
 
-        const HashMap<StringHash, ShaderParameter>& psParams = pixelShader->GetParameters();
-        for (HashMap<StringHash, ShaderParameter>::ConstIterator i = psParams.Begin(); i != psParams.End(); ++i)
-            parameters_[i->first_] = i->second_;
+        const ea::unordered_map<StringHash, ShaderParameter>& psParams = pixelShader->GetParameters();
+        for (auto i = psParams.begin(); i != psParams.end(); ++i)
+            parameters_[i->first] = i->second;
 
         // Optimize shader parameter lookup by rehashing to next power of two
-        parameters_.Rehash(NextPowerOfTwo(parameters_.Size()));
+        parameters_.rehash(Max(2, NextPowerOfTwo(parameters_.size())));
     }
 
     /// Combined parameters from the vertex and pixel shader.
-    HashMap<StringHash, ShaderParameter> parameters_;
+    ea::unordered_map<StringHash, ShaderParameter> parameters_;
 };
 
 }

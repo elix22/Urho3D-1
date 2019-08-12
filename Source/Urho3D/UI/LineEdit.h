@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -67,10 +67,10 @@ public:
     /// React to a key press.
     void OnKey(Key key, MouseButtonFlags buttons, QualifierFlags qualifiers) override;
     /// React to text input event.
-    void OnTextInput(const String& text) override;
+    void OnTextInput(const ea::string& text) override;
 
     /// Set text.
-    void SetText(const String& text);
+    void SetText(const ea::string& text);
     /// Set cursor position.
     void SetCursorPosition(unsigned position);
     /// Set cursor blink rate. 0 disables blinking.
@@ -87,7 +87,7 @@ public:
     void SetTextCopyable(bool enable);
 
     /// Return text.
-    const String& GetText() const { return line_; }
+    const ea::string& GetText() const { return line_; }
 
     /// Return cursor position.
     unsigned GetCursorPosition() const { return cursorPosition_; }
@@ -131,7 +131,7 @@ protected:
     /// Cursor element.
     SharedPtr<BorderImage> cursor_;
     /// Text line.
-    String line_;
+    ea::string line_;
     /// Last used text font.
     Font* lastFont_;
     /// Last used text size.

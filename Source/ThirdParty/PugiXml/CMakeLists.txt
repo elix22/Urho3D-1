@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2018 the Urho3D project.
+# Copyright (c) 2008-2019 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,7 @@
 file (GLOB_RECURSE SOURCE_FILES *.cpp *.hpp)
 add_library (PugiXml STATIC ${SOURCE_FILES})
 if (BUILD_SHARED_LIBS)
-    target_compile_definitions(PugiXml PRIVATE -DPUGIXML_EXPORTS INTERFACE -DPUGIXML_IMPORTS)
+    target_compile_definitions(PugiXml PRIVATE -DPUGIXML_EXPORTS)
 endif ()
 target_include_directories(PugiXml
     INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -31,3 +31,7 @@ target_include_directories(PugiXml
 )
 
 install (DIRECTORY include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.hpp)
+
+if (NOT URHO3D_MERGE_STATIC_LIBS)
+    install(TARGETS PugiXml EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
+endif ()

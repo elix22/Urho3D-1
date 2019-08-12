@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,8 @@
 
 #pragma once
 
-#include "../Container/HashSet.h"
-#include "../Container/List.h"
+#include <EASTL/unique_ptr.h>
+
 #include "../Core/Object.h"
 #include "../Graphics/Batch.h"
 #include "../Graphics/Light.h"
@@ -57,9 +57,9 @@ struct LightQueryResult
     /// Light.
     Light* light_;
     /// Lit geometries.
-    PODVector<Drawable*> litGeometries_;
+    ea::vector<Drawable*> litGeometries_;
     /// Shadow casters.
-    PODVector<Drawable*> shadowCasters_;
+    ea::vector<Drawable*> shadowCasters_;
     /// Shadow cameras.
     Camera* shadowCameras_[MAX_LIGHT_SPLITS];
     /// Shadow caster start indices.
@@ -95,9 +95,9 @@ struct ScenePassInfo
 struct PerThreadSceneResult
 {
     /// Geometry objects.
-    PODVector<Drawable*> geometries_;
+    ea::vector<Drawable*> geometries_;
     /// Lights.
-    PODVector<Light*> lights_;
+    ea::vector<Light*> lights_;
     /// Scene minimum Z value.
     float minZ_;
     /// Scene maximum Z value.
@@ -119,6 +119,9 @@ public:
     explicit View(Context* context);
     /// Destruct.
     ~View() override = default;
+
+    /// Register object with the engine.
+    static void RegisterObject(Context* context);
 
     /// Define with rendertarget and viewport. Return true if successful.
     bool Define(RenderSurface* renderTarget, Viewport* viewport);
@@ -155,16 +158,16 @@ public:
     const IntVector2& GetViewSize() const { return viewSize_; }
 
     /// Return geometry objects.
-    const PODVector<Drawable*>& GetGeometries() const { return geometries_; }
+    const ea::vector<Drawable*>& GetGeometries() const { return geometries_; }
 
     /// Return occluder objects.
-    const PODVector<Drawable*>& GetOccluders() const { return occluders_; }
+    const ea::vector<Drawable*>& GetOccluders() const { return occluders_; }
 
     /// Return lights.
-    const PODVector<Light*>& GetLights() const { return lights_; }
+    const ea::vector<Light*>& GetLights() const { return lights_; }
 
     /// Return light batch queues.
-    const Vector<LightBatchQueue>& GetLightQueues() const { return lightQueues_; }
+    const ea::vector<LightBatchQueue>& GetLightQueues() const { return lightQueues_; }
 
     /// Return the last used software occlusion buffer.
     OcclusionBuffer* GetOcclusionBuffer() const { return occlusionBuffer_; }
@@ -188,7 +191,7 @@ public:
     void DrawFullscreenQuad(bool setIdentityProjection = false);
 
     /// Get a named texture from the rendertarget list or from the resource cache, to be either used as a rendertarget or texture binding.
-    Texture* FindNamedTexture(const String& name, bool isRenderTarget, bool isVolumeMap = false);
+    Texture* FindNamedTexture(const ea::string& name, bool isRenderTarget, bool isVolumeMap = false);
 
 private:
     /// Query the octree for drawable objects.
@@ -226,13 +229,13 @@ private:
     /// Blit the viewport from one surface to another.
     void BlitFramebuffer(Texture* source, RenderSurface* destination, bool depthWrite);
     /// Query for occluders as seen from a camera.
-    void UpdateOccluders(PODVector<Drawable*>& occluders, Camera* camera);
+    void UpdateOccluders(ea::vector<Drawable*>& occluders, Camera* camera);
     /// Draw occluders to occlusion buffer.
-    void DrawOccluders(OcclusionBuffer* buffer, const PODVector<Drawable*>& occluders);
+    void DrawOccluders(OcclusionBuffer* buffer, const ea::vector<Drawable*>& occluders);
     /// Query for lit geometries and shadow casters for a light.
     void ProcessLight(LightQueryResult& query, unsigned threadIndex);
     /// Process shadow casters' visibilities and build their combined view- or projection-space bounding box.
-    void ProcessShadowCasters(LightQueryResult& query, const PODVector<Drawable*>& drawables, unsigned splitIndex);
+    void ProcessShadowCasters(LightQueryResult& query, const ea::vector<Drawable*>& drawables, unsigned splitIndex);
     /// Set up initial shadow camera view(s).
     void SetupShadowCameras(LightQueryResult& query);
     /// Set up a directional light shadow camera
@@ -295,10 +298,10 @@ private:
     }
 
     /// Return hash code for a vertex light queue.
-    unsigned long long GetVertexLightQueueHash(const PODVector<Light*>& vertexLights)
+    unsigned long long GetVertexLightQueueHash(const ea::vector<Light*>& vertexLights)
     {
         unsigned long long hash = 0;
-        for (PODVector<Light*>::ConstIterator i = vertexLights.Begin(); i != vertexLights.End(); ++i)
+        for (auto i = vertexLights.begin(); i != vertexLights.end(); ++i)
             hash += (unsigned long long)(*i);
         return hash;
     }
@@ -380,38 +383,38 @@ private:
     /// Renderpath.
     RenderPath* renderPath_{};
     /// Per-thread octree query results.
-    Vector<PODVector<Drawable*> > tempDrawables_;
+    ea::vector<ea::vector<Drawable*> > tempDrawables_;
     /// Per-thread geometries, lights and Z range collection results.
-    Vector<PerThreadSceneResult> sceneResults_;
+    ea::vector<PerThreadSceneResult> sceneResults_;
     /// Visible zones.
-    PODVector<Zone*> zones_;
+    ea::vector<Zone*> zones_;
     /// Visible geometry objects.
-    PODVector<Drawable*> geometries_;
+    ea::vector<Drawable*> geometries_;
     /// Geometry objects that will be updated in the main thread.
-    PODVector<Drawable*> nonThreadedGeometries_;
+    ea::vector<Drawable*> nonThreadedGeometries_;
     /// Geometry objects that will be updated in worker threads.
-    PODVector<Drawable*> threadedGeometries_;
+    ea::vector<Drawable*> threadedGeometries_;
     /// Occluder objects.
-    PODVector<Drawable*> occluders_;
+    ea::vector<Drawable*> occluders_;
     /// Lights.
-    PODVector<Light*> lights_;
+    ea::vector<Light*> lights_;
     /// Number of active occluders.
     unsigned activeOccluders_{};
 
     /// Drawables that limit their maximum light count.
-    HashSet<Drawable*> maxLightsDrawables_;
+    ea::hash_set<Drawable*> maxLightsDrawables_;
     /// Rendertargets defined by the renderpath.
-    HashMap<StringHash, Texture*> renderTargets_;
+    ea::unordered_map<StringHash, Texture*> renderTargets_;
     /// Intermediate light processing results.
-    Vector<LightQueryResult> lightQueryResults_;
+    ea::vector<LightQueryResult> lightQueryResults_;
     /// Info for scene render passes defined by the renderpath.
-    PODVector<ScenePassInfo> scenePasses_;
+    ea::vector<ScenePassInfo> scenePasses_;
     /// Per-pixel light queues.
-    Vector<LightBatchQueue> lightQueues_;
+    ea::vector<LightBatchQueue> lightQueues_;
     /// Per-vertex light queues.
-    HashMap<unsigned long long, LightBatchQueue> vertexLightQueues_;
+    ea::unordered_map<unsigned long long, LightBatchQueue> vertexLightQueues_;
     /// Batch queues by pass index.
-    HashMap<unsigned, BatchQueue> batchQueues_;
+    ea::unordered_map<unsigned, BatchQueue> batchQueues_;
     /// Index of the GBuffer pass.
     unsigned gBufferPassIndex_{};
     /// Index of the opaque forward base pass.

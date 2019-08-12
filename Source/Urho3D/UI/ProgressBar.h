@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -72,10 +72,10 @@ public:
     BorderImage *GetKnob() const { return knob_; }
 
     /// Sets the loading percent style.
-    void SetLoadingPercentStyle(const String &style) { loadingPercentStyle_ = style; }
+    void SetLoadingPercentStyle(const ea::string &style) { loadingPercentStyle_ = style; }
 
     /// Returns the loading percent style.
-    const String& GetLoadingPercentStyle() const { return loadingPercentStyle_; }
+    const ea::string& GetLoadingPercentStyle() const { return loadingPercentStyle_; }
 
     /// Sets the flag to display the percent text.
     void SetShowPercentText(bool enable);
@@ -97,7 +97,7 @@ protected:
     /// Orientation.
     Orientation orientation_;
     /// ProgressBar text style
-    String loadingPercentStyle_;
+    ea::string loadingPercentStyle_;
     /// ProgressBar range.
     float range_;
     /// ProgressBar current value.

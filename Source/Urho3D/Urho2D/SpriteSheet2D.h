@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -54,16 +54,16 @@ public:
     /// Set texture.
     void SetTexture(Texture2D* texture);
     /// Define sprite.
-    void DefineSprite(const String& name, const IntRect& rectangle, const Vector2& hotSpot = Vector2(0.5f, 0.5f),
+    void DefineSprite(const ea::string& name, const IntRect& rectangle, const Vector2& hotSpot = Vector2(0.5f, 0.5f),
         const IntVector2& offset = IntVector2::ZERO);
 
     /// Return texture.
     Texture2D* GetTexture() const { return texture_; }
     /// Return sprite.
-    Sprite2D* GetSprite(const String& name) const;
+    Sprite2D* GetSprite(const ea::string& name) const;
 
     /// Return sprite mapping.
-    const HashMap<String, SharedPtr<Sprite2D> >& GetSpriteMapping() const { return spriteMapping_; }
+    const ea::unordered_map<ea::string, SharedPtr<Sprite2D> >& GetSpriteMapping() const { return spriteMapping_; }
 
 private:
     /// Begin load from PList file.
@@ -83,7 +83,7 @@ private:
     /// Texture.
     SharedPtr<Texture2D> texture_;
     /// Sprite mapping.
-    HashMap<String, SharedPtr<Sprite2D> > spriteMapping_;
+    ea::unordered_map<ea::string, SharedPtr<Sprite2D> > spriteMapping_;
     /// PList file used while loading.
     SharedPtr<PListFile> loadPListFile_;
     /// XML file used while loading.
@@ -91,7 +91,7 @@ private:
     /// JSON file used while loading.
     SharedPtr<JSONFile> loadJSONFile_;
     /// Texture name used while loading.
-    String loadTextureName_;
+    ea::string loadTextureName_;
 };
 
 }

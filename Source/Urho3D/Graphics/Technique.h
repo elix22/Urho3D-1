@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include "../Container/Hash.h"
 #include "../Graphics/GraphicsDefs.h"
 #include "../Resource/Resource.h"
 
@@ -29,6 +30,40 @@ namespace Urho3D
 {
 
 class ShaderVariation;
+
+static const char* blendModeNames[] =
+{
+    "replace",
+    "add",
+    "multiply",
+    "alpha",
+    "addalpha",
+    "premulalpha",
+    "invdestalpha",
+    "subtract",
+    "subtractalpha",
+    nullptr
+};
+
+static const char* compareModeNames[] =
+{
+    "always",
+    "equal",
+    "notequal",
+    "less",
+    "lessequal",
+    "greater",
+    "greaterequal",
+    nullptr
+};
+
+static const char* lightingModeNames[] =
+{
+    "unlit",
+    "pervertex",
+    "perpixel",
+    nullptr
+};
 
 /// Lighting mode of a pass.
 enum PassLightingMode
@@ -43,7 +78,7 @@ class URHO3D_API Pass : public RefCounted
 {
 public:
     /// Construct.
-    explicit Pass(const String& name);
+    explicit Pass(const ea::string& name);
     /// Destruct.
     ~Pass() override;
 
@@ -62,24 +97,24 @@ public:
     /// Set whether requires desktop level hardware.
     void SetIsDesktop(bool enable);
     /// Set vertex shader name.
-    void SetVertexShader(const String& name);
+    void SetVertexShader(const ea::string& name);
     /// Set pixel shader name.
-    void SetPixelShader(const String& name);
+    void SetPixelShader(const ea::string& name);
     /// Set vertex shader defines. Separate multiple defines with spaces.
-    void SetVertexShaderDefines(const String& defines);
+    void SetVertexShaderDefines(const ea::string& defines);
     /// Set pixel shader defines. Separate multiple defines with spaces.
-    void SetPixelShaderDefines(const String& defines);
+    void SetPixelShaderDefines(const ea::string& defines);
     /// Set vertex shader define excludes. Use to mark defines that the shader code will not recognize, to prevent compiling redundant shader variations.
-    void SetVertexShaderDefineExcludes(const String& excludes);
+    void SetVertexShaderDefineExcludes(const ea::string& excludes);
     /// Set pixel shader define excludes. Use to mark defines that the shader code will not recognize, to prevent compiling redundant shader variations.
-    void SetPixelShaderDefineExcludes(const String& excludes);
+    void SetPixelShaderDefineExcludes(const ea::string& excludes);
     /// Reset shader pointers.
     void ReleaseShaders();
     /// Mark shaders loaded this frame.
     void MarkShadersLoaded(unsigned frameNumber);
 
     /// Return pass name.
-    const String& GetName() const { return name_; }
+    const ea::string& GetName() const { return name_; }
 
     /// Return pass index. This is used for optimal render-time pass queries that avoid map lookups.
     unsigned GetIndex() const { return index_; }
@@ -109,37 +144,37 @@ public:
     bool IsDesktop() const { return isDesktop_; }
 
     /// Return vertex shader name.
-    const String& GetVertexShader() const { return vertexShaderName_; }
+    const ea::string& GetVertexShader() const { return vertexShaderName_; }
 
     /// Return pixel shader name.
-    const String& GetPixelShader() const { return pixelShaderName_; }
+    const ea::string& GetPixelShader() const { return pixelShaderName_; }
 
     /// Return vertex shader defines.
-    const String& GetVertexShaderDefines() const { return vertexShaderDefines_; }
+    const ea::string& GetVertexShaderDefines() const { return vertexShaderDefines_; }
 
     /// Return pixel shader defines.
-    const String& GetPixelShaderDefines() const { return pixelShaderDefines_; }
+    const ea::string& GetPixelShaderDefines() const { return pixelShaderDefines_; }
 
     /// Return vertex shader define excludes.
-    const String& GetVertexShaderDefineExcludes() const { return vertexShaderDefineExcludes_; }
+    const ea::string& GetVertexShaderDefineExcludes() const { return vertexShaderDefineExcludes_; }
 
     /// Return pixel shader define excludes.
-    const String& GetPixelShaderDefineExcludes() const { return pixelShaderDefineExcludes_; }
+    const ea::string& GetPixelShaderDefineExcludes() const { return pixelShaderDefineExcludes_; }
 
     /// Return vertex shaders.
-    Vector<SharedPtr<ShaderVariation> >& GetVertexShaders() { return vertexShaders_; }
+    ea::vector<SharedPtr<ShaderVariation> >& GetVertexShaders() { return vertexShaders_; }
 
     /// Return pixel shaders.
-    Vector<SharedPtr<ShaderVariation> >& GetPixelShaders() { return pixelShaders_; }
+    ea::vector<SharedPtr<ShaderVariation> >& GetPixelShaders() { return pixelShaders_; }
 
     /// Return vertex shaders with extra defines from the renderpath.
-    Vector<SharedPtr<ShaderVariation> >& GetVertexShaders(const StringHash& extraDefinesHash);
+    ea::vector<SharedPtr<ShaderVariation> >& GetVertexShaders(const StringHash& extraDefinesHash);
     /// Return pixel shaders with extra defines from the renderpath.
-    Vector<SharedPtr<ShaderVariation> >& GetPixelShaders(const StringHash& extraDefinesHash);
+    ea::vector<SharedPtr<ShaderVariation> >& GetPixelShaders(const StringHash& extraDefinesHash);
     /// Return the effective vertex shader defines, accounting for excludes. Called internally by Renderer.
-    String GetEffectiveVertexShaderDefines() const;
+    ea::string GetEffectiveVertexShaderDefines() const;
     /// Return the effective pixel shader defines, accounting for excludes. Called internally by Renderer.
-    String GetEffectivePixelShaderDefines() const;
+    ea::string GetEffectivePixelShaderDefines() const;
 
 private:
     /// Pass index.
@@ -161,27 +196,27 @@ private:
     /// Require desktop level hardware flag.
     bool isDesktop_;
     /// Vertex shader name.
-    String vertexShaderName_;
+    ea::string vertexShaderName_;
     /// Pixel shader name.
-    String pixelShaderName_;
+    ea::string pixelShaderName_;
     /// Vertex shader defines.
-    String vertexShaderDefines_;
+    ea::string vertexShaderDefines_;
     /// Pixel shader defines.
-    String pixelShaderDefines_;
+    ea::string pixelShaderDefines_;
     /// Vertex shader define excludes.
-    String vertexShaderDefineExcludes_;
+    ea::string vertexShaderDefineExcludes_;
     /// Pixel shader define excludes.
-    String pixelShaderDefineExcludes_;
+    ea::string pixelShaderDefineExcludes_;
     /// Vertex shaders.
-    Vector<SharedPtr<ShaderVariation> > vertexShaders_;
+    ea::vector<SharedPtr<ShaderVariation> > vertexShaders_;
     /// Pixel shaders.
-    Vector<SharedPtr<ShaderVariation> > pixelShaders_;
+    ea::vector<SharedPtr<ShaderVariation> > pixelShaders_;
     /// Vertex shaders with extra defines from the renderpath.
-    HashMap<StringHash, Vector<SharedPtr<ShaderVariation> > > extraVertexShaders_;
+    ea::unordered_map<StringHash, ea::vector<SharedPtr<ShaderVariation> > > extraVertexShaders_;
     /// Pixel shaders with extra defines from the renderpath.
-    HashMap<StringHash, Vector<SharedPtr<ShaderVariation> > > extraPixelShaders_;
+    ea::unordered_map<StringHash, ea::vector<SharedPtr<ShaderVariation> > > extraPixelShaders_;
     /// Pass name.
-    String name_;
+    ea::string name_;
 };
 
 /// %Material technique. Consists of several passes.
@@ -205,13 +240,13 @@ public:
     /// Set whether requires desktop level hardware.
     void SetIsDesktop(bool enable);
     /// Create a new pass.
-    Pass* CreatePass(const String& name);
+    Pass* CreatePass(const ea::string& name);
     /// Remove a pass.
-    void RemovePass(const String& name);
+    void RemovePass(const ea::string& name);
     /// Reset shader pointers in all passes.
     void ReleaseShaders();
     /// Clone the technique. Passes will be deep copied to allow independent modification.
-    SharedPtr<Technique> Clone(const String& cloneName = String::EMPTY) const;
+    SharedPtr<Technique> Clone(const ea::string& cloneName = EMPTY_STRING) const;
 
     /// Return whether requires desktop level hardware.
     bool IsDesktop() const { return isDesktop_; }
@@ -220,39 +255,39 @@ public:
     bool IsSupported() const { return !isDesktop_ || desktopSupport_; }
 
     /// Return whether has a pass.
-    bool HasPass(unsigned passIndex) const { return passIndex < passes_.Size() && passes_[passIndex].Get() != nullptr; }
+    bool HasPass(unsigned passIndex) const { return passIndex < passes_.size() && passes_[passIndex] != nullptr; }
 
     /// Return whether has a pass by name. This overload should not be called in time-critical rendering loops; use a pre-acquired pass index instead.
-    bool HasPass(const String& name) const;
+    bool HasPass(const ea::string& name) const;
 
     /// Return a pass, or null if not found.
-    Pass* GetPass(unsigned passIndex) const { return passIndex < passes_.Size() ? passes_[passIndex].Get() : nullptr; }
+    Pass* GetPass(unsigned passIndex) const { return passIndex < passes_.size() ? passes_[passIndex] : nullptr; }
 
     /// Return a pass by name, or null if not found. This overload should not be called in time-critical rendering loops; use a pre-acquired pass index instead.
-    Pass* GetPass(const String& name) const;
+    Pass* GetPass(const ea::string& name) const;
 
     /// Return a pass that is supported for rendering, or null if not found.
     Pass* GetSupportedPass(unsigned passIndex) const
     {
-        Pass* pass = passIndex < passes_.Size() ? passes_[passIndex].Get() : nullptr;
+        Pass* pass = passIndex < passes_.size() ? passes_[passIndex] : nullptr;
         return pass && (!pass->IsDesktop() || desktopSupport_) ? pass : nullptr;
     }
 
     /// Return a supported pass by name. This overload should not be called in time-critical rendering loops; use a pre-acquired pass index instead.
-    Pass* GetSupportedPass(const String& name) const;
+    Pass* GetSupportedPass(const ea::string& name) const;
 
     /// Return number of passes.
     unsigned GetNumPasses() const;
     /// Return all pass names.
-    Vector<String> GetPassNames() const;
+    ea::vector<ea::string> GetPassNames() const;
     /// Return all passes.
-    PODVector<Pass*> GetPasses() const;
+    ea::vector<Pass*> GetPasses() const;
 
     /// Return a clone with added shader compilation defines. Called internally by Material.
-    SharedPtr<Technique> CloneWithDefines(const String& vsDefines, const String& psDefines);
+    SharedPtr<Technique> CloneWithDefines(const ea::string& vsDefines, const ea::string& psDefines);
 
     /// Return a pass type index by name. Allocate new if not used yet.
-    static unsigned GetPassIndex(const String& passName);
+    static unsigned GetPassIndex(const ea::string& passName);
 
     /// Index for base pass. Initialized once GetPassIndex() has been called for the first time.
     static unsigned basePassIndex;
@@ -277,12 +312,12 @@ private:
     /// Cached desktop GPU support flag.
     bool desktopSupport_;
     /// Passes.
-    Vector<SharedPtr<Pass> > passes_;
+    ea::vector<SharedPtr<Pass> > passes_;
     /// Cached clones with added shader compilation defines.
-    HashMap<Pair<StringHash, StringHash>, SharedPtr<Technique> > cloneTechniques_;
+    ea::unordered_map<ea::pair<StringHash, StringHash>, SharedPtr<Technique> > cloneTechniques_;
 
     /// Pass index assignments.
-    static HashMap<String, unsigned> passIndices;
+    static ea::unordered_map<ea::string, unsigned> passIndices;
 };
 
 }

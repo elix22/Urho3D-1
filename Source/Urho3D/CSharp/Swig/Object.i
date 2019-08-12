@@ -5,16 +5,14 @@
     %ignore Urho3D::Context::RegisterSubsystem(name*);
 %enddef
 
-IGNORE_SUBSYSTEM(FileSystem)
 IGNORE_SUBSYSTEM(WorkQueue)
-IGNORE_SUBSYSTEM(Network)
 IGNORE_SUBSYSTEM(Tasks)
 
 %typemap(csout, excode=SWIGEXCODE) Urho3D::StringHash GetType {
     return new $typemap(cstype, Urho3D::StringHash)(GetType().Name);
 }
 
-%typemap(csout, excode=SWIGEXCODE) const Urho3D::String& GetTypeName, const Urho3D::String& GetTypeName {
+%typemap(csout, excode=SWIGEXCODE) const eastl::string& GetTypeName, const eastl::string& GetTypeName {
     return GetType().Name;
 }
 
@@ -42,8 +40,7 @@ IGNORE_SUBSYSTEM(Tasks)
             System.Runtime.InteropServices.GCHandle.Alloc(
                 System.Runtime.InteropServices.GCHandle.FromIntPtr(handle).Target));
     }
-    private delegate System.IntPtr CloneGCHandleDelegate(System.IntPtr handle);
-    private static CloneGCHandleDelegate CloneGCHandleDelegateInstance = new CloneGCHandleDelegate(CloneGCHandle);
+    internal delegate System.IntPtr CloneGCHandleDelegate(System.IntPtr handle);
 }%}
 
 %csexposefunc(runtime, FreeGCHandle, void, void*) %{
@@ -51,7 +48,6 @@ IGNORE_SUBSYSTEM(Tasks)
     {
         System.Runtime.InteropServices.GCHandle.FromIntPtr(handle).Free();
     }
-    private delegate void FreeGCHandleDelegate(System.IntPtr handle);
-    private static FreeGCHandleDelegate FreeGCHandleDelegateInstance = new FreeGCHandleDelegate(FreeGCHandle);
+    internal delegate void FreeGCHandleDelegate(System.IntPtr handle);
 }%}
 

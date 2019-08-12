@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,18 +22,15 @@
 
 #pragma once
 
-#include "../Container/Str.h"
+#include <EASTL/string.h>
+
+#include "../Container/Hash.h"
 #include "../Math/MathDefs.h"
-#ifdef URHO3D_HASH_DEBUG
-#include "../Core/StringHashRegister.h"
-#endif
 
 namespace Urho3D
 {
 
-#ifndef URHO3D_HASH_DEBUG
 class StringHashRegister;
-#endif
 
 /// 32-bit hash value for a string.
 class URHO3D_API StringHash
@@ -54,16 +51,17 @@ public:
     {
     }
 
-    /// Construct from a C string case-insensitively.
-    constexpr StringHash(const char* str) noexcept :      // NOLINT(google-explicit-constructor)
-        value_(Calculate(str))
+    /// Construct from a C string.
+#ifndef URHO3D_HASH_DEBUG
+    constexpr StringHash(const char* str) noexcept      // NOLINT(google-explicit-constructor)
+        : value_(Calculate(str))
     {
-#ifdef URHO3D_HASH_DEBUG
-        Urho3D::GetGlobalStringHashRegister().RegisterString(*this, str);
-#endif
     }
-    /// Construct from a string case-insensitively.
-    StringHash(const String& str) noexcept;      // NOLINT(google-explicit-constructor)
+#else
+    StringHash(const char* str) noexcept;      // NOLINT(google-explicit-constructor)
+#endif
+    /// Construct from a string.
+    StringHash(const ea::string& str) noexcept;      // NOLINT(google-explicit-constructor)
 
     /// Assign from another hash.
     StringHash& operator =(const StringHash& rhs) noexcept = default;
@@ -102,19 +100,22 @@ public:
     unsigned Value() const { return value_; }
 
     /// Return as string.
-    String ToString() const;
+    ea::string ToString() const;
 
     /// Return string which has specific hash value. Return first string if many (in order of calculation). Use for debug purposes only. Return empty string if URHO3D_HASH_DEBUG is off.
-    String Reverse() const;
+    ea::string Reverse() const;
 
     /// Return hash value for HashSet & HashMap.
     unsigned ToHash() const { return value_; }
 #ifndef URHO3D_HASH_DEBUG
-    /// Calculate hash value case-insensitively from a C string.
+    /// Calculate hash value from a C string.
     static constexpr unsigned Calculate(const char* str, unsigned hash = 0)
     {
-        return str == nullptr || *str == 0 ? hash : Calculate(str + 1, SDBMHash(hash, (unsigned char)(((*str) >= 'A' && (*str) <= 'Z') ? (*str) + ('a' - 'A') : (*str))));
+        return str == nullptr || *str == 0 ? hash : Calculate(str + 1, SDBMHash(hash, (unsigned char)*str));
     }
+#else
+    /// Calculate hash value from a C string.
+    static unsigned Calculate(const char* str, unsigned hash = 0);
 #endif
     /// Calculate hash value from binary data.
     static unsigned Calculate(void* data, unsigned length, unsigned hash = 0);

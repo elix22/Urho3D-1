@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -45,12 +45,12 @@ public:
     /// Handle scene update. Called by LogicComponent base class.
     void Update(float timeStep) override;
     /// Return path attribute.
-    PODVector<unsigned char> GetPathAttr() const;
+    ea::vector<unsigned char> GetPathAttr() const;
     /// Set path attribute.
-    void SetPathAttr(const PODVector<unsigned char>& value);
+    void SetPathAttr(const ea::vector<unsigned char>& value);
 
     /// Path.
-    PODVector<Vector2> path_;
+    ea::vector<Vector2> path_;
     /// Movement speed.
     float speed_;
     /// ID of the current path point.

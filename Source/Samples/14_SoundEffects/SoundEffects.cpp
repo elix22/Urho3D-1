@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -56,7 +56,6 @@ static const char* soundResourceNames[] = {
     "Sounds/Powerup.wav"
 };
 
-URHO3D_DEFINE_APPLICATION_MAIN(SoundEffects)
 
 SoundEffects::SoundEffects(Context* context) :
     Sample(context),
@@ -67,8 +66,6 @@ SoundEffects::SoundEffects(Context* context) :
 void SoundEffects::Setup()
 {
     // Modify engine startup parameters
-    Sample::Setup();
-    engineParameters_[EP_SOUND] = true;
 }
 
 void SoundEffects::Start()
@@ -130,7 +127,7 @@ void SoundEffects::CreateUI()
     SubscribeToEvent(slider, E_SLIDERCHANGED, URHO3D_HANDLER(SoundEffects, HandleMusicVolume));
 }
 
-Button* SoundEffects::CreateButton(int x, int y, int xSize, int ySize, const String& text)
+Button* SoundEffects::CreateButton(int x, int y, int xSize, int ySize, const ea::string& text)
 {
     UIElement* root = GetSubsystem<UI>()->GetRoot();
     auto* cache = GetSubsystem<ResourceCache>();
@@ -150,7 +147,7 @@ Button* SoundEffects::CreateButton(int x, int y, int xSize, int ySize, const Str
     return button;
 }
 
-Slider* SoundEffects::CreateSlider(int x, int y, int xSize, int ySize, const String& text)
+Slider* SoundEffects::CreateSlider(int x, int y, int xSize, int ySize, const ea::string& text)
 {
     UIElement* root = GetSubsystem<UI>()->GetRoot();
     auto* cache = GetSubsystem<ResourceCache>();
@@ -175,7 +172,7 @@ Slider* SoundEffects::CreateSlider(int x, int y, int xSize, int ySize, const Str
 void SoundEffects::HandlePlaySound(StringHash eventType, VariantMap& eventData)
 {
     auto* button = static_cast<Button*>(GetEventSender());
-    const String& soundResourceName = button->GetVar(VAR_SOUNDRESOURCE).GetString();
+    const ea::string& soundResourceName = button->GetVar(VAR_SOUNDRESOURCE).GetString();
 
     // Get the sound resource
     auto* cache = GetSubsystem<ResourceCache>();

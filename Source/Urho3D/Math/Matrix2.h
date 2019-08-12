@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -202,8 +202,28 @@ public:
     /// Return float data.
     const float* Data() const { return &m00_; }
 
+
+    /// Return whether is NaN.
+    bool IsNaN() const {
+        return (
+            Urho3D::IsInf(m00_) ||
+            Urho3D::IsInf(m01_) ||
+            Urho3D::IsInf(m10_) ||
+            Urho3D::IsInf(m11_));
+    }
+
+    /// Return whether is Inf.
+    bool IsInf() const {
+        return (
+            Urho3D::IsInf(m00_) ||
+            Urho3D::IsInf(m01_) ||
+            Urho3D::IsInf(m10_) ||
+            Urho3D::IsInf(m11_));
+    }
+
+
     /// Return as string.
-    String ToString() const;
+    ea::string ToString() const;
 
     float m00_;
     float m01_;

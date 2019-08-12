@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -44,8 +44,8 @@ bool Resource::Load(Deserializer& source)
     // Because BeginLoad() / EndLoad() can be called from worker threads, where profiling would be a no-op,
     // create a type name -based profile block here
     URHO3D_PROFILE_C("Load", PROFILER_COLOR_RESOURCES);
-    String eventName = ToString("%s::Load(\"%s\")", GetTypeName().CString(), GetName().CString());
-    URHO3D_PROFILE_ZONENAME(eventName.CString(), eventName.Length());
+    ea::string eventName = ToString("%s::Load(\"%s\")", GetTypeName().c_str(), GetName().c_str());
+    URHO3D_PROFILE_ZONENAME(eventName.c_str(), eventName.length());
 
     // If we are loading synchronously in a non-main thread, behave as if async loading (for example use
     // GetTempResource() instead of GetResource() to load resource dependencies)
@@ -76,19 +76,19 @@ bool Resource::Save(Serializer& dest) const
     return false;
 }
 
-bool Resource::LoadFile(const String& fileName)
+bool Resource::LoadFile(const ea::string& fileName)
 {
     File file(context_);
     return file.Open(fileName, FILE_READ) && Load(file);
 }
 
-bool Resource::SaveFile(const String& fileName) const
+bool Resource::SaveFile(const ea::string& fileName) const
 {
     File file(context_);
     return file.Open(fileName, FILE_WRITE) && Save(file);
 }
 
-void Resource::SetName(const String& name)
+void Resource::SetName(const ea::string& name)
 {
     name_ = name;
     nameHash_ = name;
@@ -121,35 +121,37 @@ unsigned Resource::GetUseTimer()
         return useTimer_.GetMSec(false);
 }
 
-void ResourceWithMetadata::AddMetadata(const String& name, const Variant& value)
+void ResourceWithMetadata::AddMetadata(const ea::string& name, const Variant& value)
 {
-    bool exists;
-    metadata_.Insert(MakePair(StringHash(name), value), exists);
+    bool exists = metadata_.insert(ea::make_pair(StringHash(name), value)).second;
     if (!exists)
-        metadataKeys_.Push(name);
+        metadataKeys_.push_back(name);
 }
 
-void ResourceWithMetadata::RemoveMetadata(const String& name)
+void ResourceWithMetadata::RemoveMetadata(const ea::string& name)
 {
-    metadata_.Erase(name);
-    metadataKeys_.Remove(name);
+    metadata_.erase(name);
+    metadataKeys_.erase_first(name);
 }
 
 void ResourceWithMetadata::RemoveAllMetadata()
 {
-    metadata_.Clear();
-    metadataKeys_.Clear();
+    metadata_.clear();
+    metadataKeys_.clear();
 }
 
-const Urho3D::Variant& ResourceWithMetadata::GetMetadata(const String& name) const
+const Urho3D::Variant& ResourceWithMetadata::GetMetadata(const ea::string& name) const
 {
-    const Variant* value = metadata_[name];
-    return value ? *value : Variant::EMPTY;
+    auto it = metadata_.find(name);
+    if (it != metadata_.end())
+        return it->second;
+
+    return Variant::EMPTY;
 }
 
 bool ResourceWithMetadata::HasMetadata() const
 {
-    return !metadata_.Empty();
+    return !metadata_.empty();
 }
 
 void ResourceWithMetadata::LoadMetadataFromXML(const XMLElement& source)
@@ -160,16 +162,16 @@ void ResourceWithMetadata::LoadMetadataFromXML(const XMLElement& source)
 
 void ResourceWithMetadata::LoadMetadataFromJSON(const JSONArray& array)
 {
-    for (unsigned i = 0; i < array.Size(); i++)
+    for (unsigned i = 0; i < array.size(); i++)
     {
-        const JSONValue& value = array.At(i);
+        const JSONValue& value = array.at(i);
         AddMetadata(value.Get("name").GetString(), value.GetVariant());
     }
 }
 
 void ResourceWithMetadata::SaveMetadataToXML(XMLElement& destination) const
 {
-    for (unsigned i = 0; i < metadataKeys_.Size(); ++i)
+    for (unsigned i = 0; i < metadataKeys_.size(); ++i)
     {
         XMLElement elem = destination.CreateChild("metadata");
         elem.SetString("name", metadataKeys_[i]);

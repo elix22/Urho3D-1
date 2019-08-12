@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,7 +20,6 @@
 // THE SOFTWARE.
 //
 
-#include <Urho3D/Container/Vector.h>
 #include <Urho3D/Core/CoreEvents.h>
 #include <Urho3D/Engine/Engine.h>
 #include <Urho3D/Graphics/Camera.h>
@@ -62,7 +61,6 @@
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(Urho2DConstraints)
 
 Node* pickedNode;
 RigidBody2D* dummyBody;
@@ -184,7 +182,7 @@ void Urho2DConstraints::CreateScene()
     auto* polygonBody = polygon->CreateComponent<RigidBody2D>();
     polygonBody->SetBodyType(BT_DYNAMIC);
     auto* polygonShape = polygon->CreateComponent<CollisionPolygon2D>();
-    // TODO: create from PODVector<Vector2> using SetVertices()
+    // TODO: create from ea::vector<Vector2> using SetVertices()
     polygonShape->SetVertexCount(6); // Set number of vertices (mandatory when using SetVertex())
     polygonShape->SetVertex(0, Vector2(-0.8f, -0.3f));
     polygonShape->SetVertex(1, Vector2(0.5f, -0.8f));
@@ -403,7 +401,7 @@ void Urho2DConstraints::CreateScene()
     constraintWheel->SetCollideConnected(true); // doesn't work
 }
 
-void Urho2DConstraints::CreateFlag(const String& text, float x, float y) // Used to create Tex3D flags
+void Urho2DConstraints::CreateFlag(const ea::string& text, float x, float y) // Used to create Tex3D flags
 {
     Node* flagNode = scene_->CreateChild("Flag");
     flagNode->SetPosition(Vector3(x, y, 0.0f));

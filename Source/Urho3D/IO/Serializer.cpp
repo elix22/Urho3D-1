@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,9 @@
 
 #include "../Precompiled.h"
 
+#include "../Core/Macros.h"
 #include "../IO/Serializer.h"
+#include "../Scene/Serializable.h"
 
 #include "../DebugNew.h"
 
@@ -179,21 +181,21 @@ bool Serializer::WriteBoundingBox(const BoundingBox& value)
     return success;
 }
 
-bool Serializer::WriteString(const String& value)
+bool Serializer::WriteString(const ea::string& value)
 {
-    const char* chars = value.CString();
+    const char* chars = value.c_str();
     // Count length to the first zero, because ReadString() does the same
-    unsigned length = String::CStringLength(chars);
+    unsigned length = CStringLength(chars);
     return Write(chars, length + 1) == length + 1;
 }
 
-bool Serializer::WriteFileID(const String& value)
+bool Serializer::WriteFileID(const ea::string& value)
 {
     bool success = true;
-    unsigned length = Min(value.Length(), 4U);
+    unsigned length = Min(value.length(), 4U);
 
-    success &= Write(value.CString(), length) == length;
-    for (unsigned i = value.Length(); i < 4; ++i)
+    success &= Write(value.c_str(), length) == length;
+    for (unsigned i = value.length(); i < 4; ++i)
         success &= WriteByte(' ');
     return success;
 }
@@ -203,10 +205,10 @@ bool Serializer::WriteStringHash(const StringHash& value)
     return WriteUInt(value.Value());
 }
 
-bool Serializer::WriteBuffer(const PODVector<unsigned char>& value)
+bool Serializer::WriteBuffer(const ea::vector<unsigned char>& value)
 {
     bool success = true;
-    unsigned size = value.Size();
+    unsigned size = value.size();
 
     success &= WriteVLE(size);
     if (size)
@@ -227,8 +229,8 @@ bool Serializer::WriteResourceRefList(const ResourceRefList& value)
     bool success = true;
 
     success &= WriteStringHash(value.type_);
-    success &= WriteVLE(value.names_.Size());
-    for (unsigned i = 0; i < value.names_.Size(); ++i)
+    success &= WriteVLE(value.names_.size());
+    for (unsigned i = 0; i < value.names_.size(); ++i)
         success &= WriteString(value.names_[i]);
 
     return success;
@@ -285,10 +287,19 @@ bool Serializer::WriteVariantData(const Variant& value)
         return WriteBuffer(value.GetBuffer());
 
         // Serializing pointers and custom values is not supported. Write null
+    case VAR_CUSTOM:
+    {
+        if (const Serializable* object = value.GetCustom<SharedPtr<Serializable>>())
+        {
+            WriteUInt(object->GetType().Value());
+            return object->Save(*this);
+        }
+        // When this variant contains null SharedPtr<Serializable> or something else entirely - write a null. This indicates empty value.
+        URHO3D_FALLTHROUGH;
+    }
+
     case VAR_VOIDPTR:
     case VAR_PTR:
-    case VAR_CUSTOM_HEAP:
-    case VAR_CUSTOM_STACK:
         return WriteUInt(0);
 
     case VAR_RESOURCEREF:
@@ -302,6 +313,9 @@ bool Serializer::WriteVariantData(const Variant& value)
 
     case VAR_STRINGVECTOR:
         return WriteStringVector(value.GetStringVector());
+
+    case VAR_RECT:
+        return WriteRect(value.GetRect());
 
     case VAR_VARIANTMAP:
         return WriteVariantMap(value.GetVariantMap());
@@ -335,8 +349,8 @@ bool Serializer::WriteVariantData(const Variant& value)
 bool Serializer::WriteVariantVector(const VariantVector& value)
 {
     bool success = true;
-    success &= WriteVLE(value.Size());
-    for (VariantVector::ConstIterator i = value.Begin(); i != value.End(); ++i)
+    success &= WriteVLE(value.size());
+    for (auto i = value.begin(); i != value.end(); ++i)
         success &= WriteVariant(*i);
     return success;
 }
@@ -344,8 +358,8 @@ bool Serializer::WriteVariantVector(const VariantVector& value)
 bool Serializer::WriteStringVector(const StringVector& value)
 {
     bool success = true;
-    success &= WriteVLE(value.Size());
-    for (StringVector::ConstIterator i = value.Begin(); i != value.End(); ++i)
+    success &= WriteVLE(value.size());
+    for (auto i = value.begin(); i != value.end(); ++i)
         success &= WriteString(*i);
     return success;
 }
@@ -353,11 +367,11 @@ bool Serializer::WriteStringVector(const StringVector& value)
 bool Serializer::WriteVariantMap(const VariantMap& value)
 {
     bool success = true;
-    success &= WriteVLE(value.Size());
-    for (VariantMap::ConstIterator i = value.Begin(); i != value.End(); ++i)
+    success &= WriteVLE(value.size());
+    for (auto i = value.begin(); i != value.end(); ++i)
     {
-        WriteStringHash(i->first_);
-        WriteVariant(i->second_);
+        WriteStringHash(i->first);
+        WriteVariant(i->second);
     }
     return success;
 }
@@ -396,10 +410,10 @@ bool Serializer::WriteNetID(unsigned value)
     return Write(&value, 3) == 3;
 }
 
-bool Serializer::WriteLine(const String& value)
+bool Serializer::WriteLine(const ea::string& value)
 {
     bool success = true;
-    success &= Write(value.CString(), value.Length()) == value.Length();
+    success &= Write(value.c_str(), value.length()) == value.length();
     success &= WriteUByte(13);
     success &= WriteUByte(10);
     return success;

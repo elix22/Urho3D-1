@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -42,7 +42,7 @@ class XMLFile;
 struct FileSelectorEntry
 {
     /// Name.
-    String name_;
+    ea::string name_;
     /// Directory flag.
     bool directory_;
 };
@@ -63,15 +63,15 @@ public:
     /// Set fileselector UI style.
     void SetDefaultStyle(XMLFile* style);
     /// Set title text.
-    void SetTitle(const String& text);
+    void SetTitle(const ea::string& text);
     /// Set button texts.
-    void SetButtonTexts(const String& okText, const String& cancelText);
+    void SetButtonTexts(const ea::string& okText, const ea::string& cancelText);
     /// Set current path.
-    void SetPath(const String& path);
+    void SetPath(const ea::string& path);
     /// Set current filename.
-    void SetFileName(const String& fileName);
+    void SetFileName(const ea::string& fileName);
     /// Set filters.
-    void SetFilters(const Vector<String>& filters, unsigned defaultIndex);
+    void SetFilters(const ea::vector<ea::string>& filters, unsigned defaultIndex);
     /// Set directory selection mode. Default false.
     void SetDirectoryMode(bool enable);
     /// Update elements to layout properly. Call this after manually adjusting the sub-elements.
@@ -108,15 +108,15 @@ public:
     Button* GetCloseButton() const { return closeButton_; }
 
     /// Return window title.
-    const String& GetTitle() const;
+    const ea::string& GetTitle() const;
 
     /// Return current path.
-    const String& GetPath() const { return path_; }
+    const ea::string& GetPath() const { return path_; }
 
     /// Return current filename.
-    const String& GetFileName() const;
+    const ea::string& GetFileName() const;
     /// Return current filter.
-    const String& GetFilter() const;
+    const ea::string& GetFilter() const;
     /// Return current filter index.
     unsigned GetFilterIndex() const;
 
@@ -125,7 +125,7 @@ public:
 
 private:
     /// Set the text of an edit field and ignore the resulting event.
-    void SetLineEditText(LineEdit* edit, const String& text);
+    void SetLineEditText(LineEdit* edit, const ea::string& text);
     /// Refresh the directory listing.
     void RefreshFiles();
     /// Enter a directory or confirm a file. Return true if a directory entered.
@@ -148,41 +148,41 @@ private:
     /// Fileselector window.
     SharedPtr<Window> window_;
     /// Title layout.
-    UIElement* titleLayout;
+    SharedPtr<UIElement> titleLayout;
     /// Window title text.
-    Text* titleText_;
+    SharedPtr<Text> titleText_;
     /// File list.
-    ListView* fileList_;
+    SharedPtr<ListView> fileList_;
     /// Path editor.
-    LineEdit* pathEdit_;
+    SharedPtr<LineEdit> pathEdit_;
     /// Filename editor.
-    LineEdit* fileNameEdit_;
+    SharedPtr<LineEdit> fileNameEdit_;
     /// Filter dropdown.
-    DropDownList* filterList_;
+    SharedPtr<DropDownList> filterList_;
     /// OK button.
-    Button* okButton_;
+    SharedPtr<Button> okButton_;
     /// OK button text.
-    Text* okButtonText_;
+    SharedPtr<Text> okButtonText_;
     /// Cancel button.
-    Button* cancelButton_;
+    SharedPtr<Button> cancelButton_;
     /// Cancel button text.
-    Text* cancelButtonText_;
+    SharedPtr<Text> cancelButtonText_;
     /// Close button.
-    Button* closeButton_;
+    SharedPtr<Button> closeButton_;
     /// Filename and filter layout.
-    UIElement* fileNameLayout_;
+    SharedPtr<UIElement> fileNameLayout_;
     /// Separator layout.
-    UIElement* separatorLayout_;
+    SharedPtr<UIElement> separatorLayout_;
     /// Button layout.
-    UIElement* buttonLayout_;
+    SharedPtr<UIElement> buttonLayout_;
     /// Current directory.
-    String path_;
+    ea::string path_;
     /// Filters.
-    Vector<String> filters_;
+    ea::vector<ea::string> filters_;
     /// File entries.
-    Vector<FileSelectorEntry> fileEntries_;
+    ea::vector<FileSelectorEntry> fileEntries_;
     /// Filter used to get the file list.
-    String lastUsedFilter_;
+    ea::string lastUsedFilter_;
     /// Directory mode flag.
     bool directoryMode_;
     /// Ignore events flag, used when changing line edits manually.

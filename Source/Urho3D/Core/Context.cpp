@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,9 +30,8 @@
 #include "../Engine/Engine.h"
 #include "../Core/WorkQueue.h"
 #include "../Core/Thread.h"
-#if URHO3D_TASKS
-#include "../Core/Tasks.h"
-#endif
+#include "../Graphics/Graphics.h"
+#include "../Graphics/Renderer.h"
 #include "../IO/FileSystem.h"
 #include "../Resource/ResourceCache.h"
 #include "../Resource/Localization.h"
@@ -85,10 +84,10 @@ void EventReceiverGroup::EndSendEvent()
     if (inSend_ == 0 && dirty_)
     {
         /// \todo Could be optimized by erase-swap, but this keeps the receiver order
-        for (unsigned i = receivers_.Size() - 1; i < receivers_.Size(); --i)
+        for (unsigned i = receivers_.size() - 1; i < receivers_.size(); --i)
         {
             if (!receivers_[i])
-                receivers_.Erase(i);
+                receivers_.erase_at(i);
         }
 
         dirty_ = false;
@@ -98,44 +97,44 @@ void EventReceiverGroup::EndSendEvent()
 void EventReceiverGroup::Add(Object* object)
 {
     if (object)
-        receivers_.Push(object);
+        receivers_.push_back(object);
 }
 
 void EventReceiverGroup::Remove(Object* object)
 {
     if (inSend_ > 0)
     {
-        PODVector<Object*>::Iterator i = receivers_.Find(object);
-        if (i != receivers_.End())
+        auto i = receivers_.find(object);
+        if (i != receivers_.end())
         {
             (*i) = nullptr;
             dirty_ = true;
         }
     }
     else
-        receivers_.Remove(object);
+        receivers_.erase_first(object);
 }
 
-void RemoveNamedAttribute(HashMap<StringHash, Vector<AttributeInfo> >& attributes, StringHash objectType, const char* name)
+void RemoveNamedAttribute(ea::unordered_map<StringHash, ea::vector<AttributeInfo> >& attributes, StringHash objectType, const char* name)
 {
-    HashMap<StringHash, Vector<AttributeInfo> >::Iterator i = attributes.Find(objectType);
-    if (i == attributes.End())
+    auto i = attributes.find(objectType);
+    if (i == attributes.end())
         return;
 
-    Vector<AttributeInfo>& infos = i->second_;
+    ea::vector<AttributeInfo>& infos = i->second;
 
-    for (Vector<AttributeInfo>::Iterator j = infos.Begin(); j != infos.End(); ++j)
+    for (auto j = infos.begin(); j != infos.end(); ++j)
     {
-        if (!j->name_.Compare(name, true))
+        if (!j->name_.comparei(name))
         {
-            infos.Erase(j);
+            infos.erase(j);
             break;
         }
     }
 
     // If the vector became empty, erase the object type from the map
-    if (infos.Empty())
-        attributes.Erase(i);
+    if (infos.empty())
+        attributes.erase(i);
 }
 
 Context::Context() :
@@ -152,28 +151,36 @@ Context::Context() :
 
 Context::~Context()
 {
+#ifndef MINI_URHO
+    // Destroying resource cache does clear it, however some resources depend on resource cache being available when
+    // destructor executes.
+    if (auto* cache = GetSubsystem<ResourceCache>())
+        cache->Clear();
+#endif
     // Remove subsystems that use SDL in reverse order of construction, so that Graphics can shut down SDL last
     /// \todo Context should not need to know about subsystems
     RemoveSubsystem("Audio");
     RemoveSubsystem("UI");
+    RemoveSubsystem("SystemUI");
+    RemoveSubsystem("ResourceCache");
     RemoveSubsystem("Input");
     RemoveSubsystem("Renderer");
     RemoveSubsystem("Graphics");
 
-    subsystems_.Clear();
-    factories_.Clear();
+    subsystems_.clear();
+    factories_.clear();
 
     // Delete allocated event data maps
-    for (PODVector<VariantMap*>::Iterator i = eventDataMaps_.Begin(); i != eventDataMaps_.End(); ++i)
+    for (auto i = eventDataMaps_.begin(); i != eventDataMaps_.end(); ++i)
         delete *i;
-    eventDataMaps_.Clear();
+    eventDataMaps_.clear();
 }
 
 SharedPtr<Object> Context::CreateObject(StringHash objectType)
 {
-    HashMap<StringHash, SharedPtr<ObjectFactory> >::ConstIterator i = factories_.Find(objectType);
-    if (i != factories_.End())
-        return i->second_->CreateObject();
+    auto i = factories_.find(objectType);
+    if (i != factories_.end())
+        return i->second->CreateObject();
     else
         return SharedPtr<Object>();
 }
@@ -183,6 +190,14 @@ void Context::RegisterFactory(ObjectFactory* factory)
     if (!factory)
         return;
 
+    auto it = factories_.find(factory->GetType());
+    if (it != factories_.end())
+    {
+        URHO3D_LOGERRORF("Failed to register '%s' because type '%s' is already registered with same type hash.",
+            factory->GetTypeName().c_str(), it->second->GetTypeName().c_str());
+        assert(false);
+        return;
+    }
     factories_[factory->GetType()] = factory;
 }
 
@@ -192,20 +207,20 @@ void Context::RegisterFactory(ObjectFactory* factory, const char* category)
         return;
 
     RegisterFactory(factory);
-    if (String::CStringLength(category))
-        objectCategories_[category].Push(factory->GetType());
+    if (CStringLength(category))
+        objectCategories_[category].push_back(factory->GetType());
 }
 
 void Context::RemoveFactory(StringHash type)
 {
-    factories_.Erase(type);
+    factories_.erase(type);
 }
 
 void Context::RemoveFactory(StringHash type, const char* category)
 {
     RemoveFactory(type);
-    if (String::CStringLength(category))
-        objectCategories_[category].Remove(type);
+    if (CStringLength(category))
+        objectCategories_[category].erase_first_unsorted(type);
 }
 
 void Context::RegisterSubsystem(Object* object)
@@ -218,33 +233,39 @@ void Context::RegisterSubsystem(Object* object)
 
 void Context::RemoveSubsystem(StringHash objectType)
 {
-    HashMap<StringHash, SharedPtr<Object> >::Iterator i = subsystems_.Find(objectType);
-    if (i != subsystems_.End())
-        subsystems_.Erase(i);
+    auto i = subsystems_.find(objectType);
+    if (i != subsystems_.end())
+        subsystems_.erase(i);
 }
 
 AttributeHandle Context::RegisterAttribute(StringHash objectType, const AttributeInfo& attr)
 {
     // None or pointer types can not be supported
-    if (attr.type_ == VAR_NONE || attr.type_ == VAR_VOIDPTR || attr.type_ == VAR_PTR
-        || attr.type_ == VAR_CUSTOM_HEAP || attr.type_ == VAR_CUSTOM_STACK)
+    if (attr.type_ == VAR_NONE || attr.type_ == VAR_VOIDPTR || attr.type_ == VAR_PTR)
     {
-        URHO3D_LOGWARNING("Attempt to register unsupported attribute type " + Variant::GetTypeName(attr.type_) + " to class " +
+        URHO3D_LOGWARNING("Attempt to register unsupported attribute type {} to class {}", Variant::GetTypeName(attr.type_),
             GetTypeName(objectType));
+        return AttributeHandle();
+    }
+
+    // Only SharedPtr<> of Serializable or it's subclasses are supported in attributes
+    if (attr.type_ == VAR_CUSTOM && !attr.defaultValue_.IsCustomType<SharedPtr<Serializable>>())
+    {
+        URHO3D_LOGWARNING("Attempt to register unsupported attribute of custom type to class {}", GetTypeName(objectType));
         return AttributeHandle();
     }
 
     AttributeHandle handle;
 
-    Vector<AttributeInfo>& objectAttributes = attributes_[objectType];
-    objectAttributes.Push(attr);
-    handle.attributeInfo_ = &objectAttributes.Back();
+    ea::vector<AttributeInfo>& objectAttributes = attributes_[objectType];
+    objectAttributes.push_back(attr);
+    handle.attributeInfo_ = &objectAttributes.back();
 
     if (attr.mode_ & AM_NET)
     {
-        Vector<AttributeInfo>& objectNetworkAttributes = networkAttributes_[objectType];
-        objectNetworkAttributes.Push(attr);
-        handle.networkAttributeInfo_ = &objectNetworkAttributes.Back();
+        ea::vector<AttributeInfo>& objectNetworkAttributes = networkAttributes_[objectType];
+        objectNetworkAttributes.push_back(attr);
+        handle.networkAttributeInfo_ = &objectNetworkAttributes.back();
     }
     return handle;
 }
@@ -257,8 +278,8 @@ void Context::RemoveAttribute(StringHash objectType, const char* name)
 
 void Context::RemoveAllAttributes(StringHash objectType)
 {
-    attributes_.Erase(objectType);
-    networkAttributes_.Erase(objectType);
+    attributes_.erase(objectType);
+    networkAttributes_.erase(objectType);
 }
 
 void Context::UpdateAttributeDefaultValue(StringHash objectType, const char* name, const Variant& defaultValue)
@@ -270,12 +291,12 @@ void Context::UpdateAttributeDefaultValue(StringHash objectType, const char* nam
 
 VariantMap& Context::GetEventDataMap()
 {
-    unsigned nestingLevel = eventSenders_.Size();
-    while (eventDataMaps_.Size() < nestingLevel + 1)
-        eventDataMaps_.Push(new VariantMap());
+    unsigned nestingLevel = eventSenders_.size();
+    while (eventDataMaps_.size() < nestingLevel + 1)
+        eventDataMaps_.push_back(new VariantMap());
 
     VariantMap& ret = *eventDataMaps_[nestingLevel];
-    ret.Clear();
+    ret.clear();
     return ret;
 }
 
@@ -368,32 +389,32 @@ void Context::CopyBaseAttributes(StringHash baseType, StringHash derivedType)
         return;
     }
 
-    const Vector<AttributeInfo>* baseAttributes = GetAttributes(baseType);
+    const ea::vector<AttributeInfo>* baseAttributes = GetAttributes(baseType);
     if (baseAttributes)
     {
-        for (unsigned i = 0; i < baseAttributes->Size(); ++i)
+        for (unsigned i = 0; i < baseAttributes->size(); ++i)
         {
-            const AttributeInfo& attr = baseAttributes->At(i);
-            attributes_[derivedType].Push(attr);
+            const AttributeInfo& attr = baseAttributes->at(i);
+            attributes_[derivedType].push_back(attr);
             if (attr.mode_ & AM_NET)
-                networkAttributes_[derivedType].Push(attr);
+                networkAttributes_[derivedType].push_back(attr);
         }
     }
 }
 
 Object* Context::GetSubsystem(StringHash type) const
 {
-    HashMap<StringHash, SharedPtr<Object> >::ConstIterator i = subsystems_.Find(type);
-    if (i != subsystems_.End())
-        return i->second_;
+    auto i = subsystems_.find(type);
+    if (i != subsystems_.end())
+        return i->second;
     else
         return nullptr;
 }
 
 const Variant& Context::GetGlobalVar(StringHash key) const
 {
-    VariantMap::ConstIterator i = globalVars_.Find(key);
-    return i != globalVars_.End() ? i->second_ : Variant::EMPTY;
+    auto i = globalVars_.find(key);
+    return i != globalVars_.end() ? i->second : Variant::EMPTY;
 }
 
 void Context::SetGlobalVar(StringHash key, const Variant& value)
@@ -403,30 +424,30 @@ void Context::SetGlobalVar(StringHash key, const Variant& value)
 
 Object* Context::GetEventSender() const
 {
-    if (!eventSenders_.Empty())
-        return eventSenders_.Back();
+    if (!eventSenders_.empty())
+        return eventSenders_.back();
     else
         return nullptr;
 }
 
-const String& Context::GetTypeName(StringHash objectType) const
+const ea::string& Context::GetTypeName(StringHash objectType) const
 {
     // Search factories to find the hash-to-name mapping
-    HashMap<StringHash, SharedPtr<ObjectFactory> >::ConstIterator i = factories_.Find(objectType);
-    return i != factories_.End() ? i->second_->GetTypeName() : String::EMPTY;
+    auto i = factories_.find(objectType);
+    return i != factories_.end() ? i->second->GetTypeName() : EMPTY_STRING;
 }
 
 AttributeInfo* Context::GetAttribute(StringHash objectType, const char* name)
 {
-    HashMap<StringHash, Vector<AttributeInfo> >::Iterator i = attributes_.Find(objectType);
-    if (i == attributes_.End())
+    auto i = attributes_.find(objectType);
+    if (i == attributes_.end())
         return nullptr;
 
-    Vector<AttributeInfo>& infos = i->second_;
+    ea::vector<AttributeInfo>& infos = i->second;
 
-    for (Vector<AttributeInfo>::Iterator j = infos.Begin(); j != infos.End(); ++j)
+    for (auto j = infos.begin(); j != infos.end(); ++j)
     {
-        if (!j->name_.Compare(name, true))
+        if (!j->name_.comparei(name))
             return &(*j);
     }
 
@@ -451,19 +472,21 @@ void Context::AddEventReceiver(Object* receiver, Object* sender, StringHash even
 
 void Context::RemoveEventSender(Object* sender)
 {
-    HashMap<Object*, HashMap<StringHash, SharedPtr<EventReceiverGroup> > >::Iterator i = specificEventReceivers_.Find(sender);
-    if (i != specificEventReceivers_.End())
+    auto i = specificEventReceivers_.find(
+        sender);
+    if (i != specificEventReceivers_.end())
     {
-        for (HashMap<StringHash, SharedPtr<EventReceiverGroup> >::Iterator j = i->second_.Begin(); j != i->second_.End(); ++j)
+        for (auto j = i->second.begin(); j != i->second.end(); ++j)
         {
-            for (PODVector<Object*>::Iterator k = j->second_->receivers_.Begin(); k != j->second_->receivers_.End(); ++k)
+            for (auto k = j->second->receivers_.begin(); k !=
+                j->second->receivers_.end(); ++k)
             {
                 Object* receiver = *k;
                 if (receiver)
                     receiver->RemoveEventSender(sender);
             }
         }
-        specificEventReceivers_.Erase(i);
+        specificEventReceivers_.erase(i);
     }
 }
 
@@ -483,12 +506,12 @@ void Context::RemoveEventReceiver(Object* receiver, Object* sender, StringHash e
 
 void Context::BeginSendEvent(Object* sender, StringHash eventType)
 {
-    eventSenders_.Push(sender);
+    eventSenders_.push_back(sender);
 }
 
 void Context::EndSendEvent()
 {
-    eventSenders_.Pop();
+    eventSenders_.pop_back();
 }
 
 void Context::RegisterSubsystem(Engine* subsystem)
@@ -555,13 +578,6 @@ void Context::RegisterSubsystem(UI* subsystem)
     ui_ = subsystem;
     RegisterSubsystem((Object*) subsystem);
 }
-#if URHO3D_TASKS
-void Context::RegisterSubsystem(Tasks* subsystem)
-{
-    tasks_ = subsystem;
-    RegisterSubsystem((Object*) subsystem);
-}
-#endif
 #if URHO3D_SYSTEMUI
 void Context::RegisterSubsystem(SystemUI* subsystem)
 {
@@ -569,4 +585,16 @@ void Context::RegisterSubsystem(SystemUI* subsystem)
     RegisterSubsystem((Object*) subsystem);
 }
 #endif
+void Context::RegisterSubsystem(Graphics* subsystem)
+{
+    graphics_ = subsystem;
+    RegisterSubsystem((Object*) subsystem);
+}
+
+void Context::RegisterSubsystem(Renderer* subsystem)
+{
+    renderer_ = subsystem;
+    RegisterSubsystem((Object*) subsystem);
+}
+
 }

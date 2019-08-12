@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,8 +20,13 @@
 // THE SOFTWARE.
 //
 
+#include <Urho3D/IO/Log.h>
+#include <ImGui/imgui.h>
+#include <ImGui/imgui_stdlib.h>
 #include "EditorEvents.h"
 #include "InspectorTab.h"
+#include "Editor.h"
+
 
 namespace Urho3D
 {
@@ -29,20 +34,37 @@ namespace Urho3D
 InspectorTab::InspectorTab(Context* context)
     : Tab(context)
 {
+    SetID("6e62fa62-811c-4bf2-9b85-bffaf7be239f");
     SetTitle("Inspector");
     isUtility_ = true;
-    SubscribeToEvent(E_EDITORRENDERINSPECTOR, [&](StringHash, VariantMap& args) {
-        instance_ = dynamic_cast<Tab*>(args[EditorRenderInspector::P_INSPECTABLE].GetPtr());
-        inspectorProvider_ = dynamic_cast<IInspectorProvider*>(instance_.Get());
-    });
 }
 
 bool InspectorTab::RenderWindowContent()
 {
-    if (!instance_.Expired())
-        inspectorProvider_->RenderInspector();
+    ui::PushItemWidth(-1);
+    ui::InputText("###Filter", &filter_);
+    ui::PopItemWidth();
+    if (ui::IsItemHovered())
+        ui::SetTooltip("Filter attributes by name.");
+
+    if (provider_.first.NotNull())
+        provider_.second->RenderInspector(filter_.c_str());
+
     return true;
 }
 
+void InspectorTab::SetProvider(IInspectorProvider* provider)
+{
+    if (provider_.first.NotNull() && provider_.second != provider)
+        provider_.second->ClearSelection();
+
+    if (auto* ptr = dynamic_cast<RefCounted*>(provider))
+    {
+        provider_.first = ptr;
+        provider_.second = provider;
+    }
+    else
+        URHO3D_LOGERROR("Classes that inherit IInspectorProvider must also inherit RefCounted.");
+}
 
 }

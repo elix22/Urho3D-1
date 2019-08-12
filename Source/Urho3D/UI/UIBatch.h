@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -44,7 +44,7 @@ public:
     /// Construct with defaults.
     UIBatch();
     /// Construct.
-    UIBatch(UIElement* element, BlendMode blendMode, const IntRect& scissor, Texture* texture, PODVector<float>* vertexData);
+    UIBatch(UIElement* element, BlendMode blendMode, const IntRect& scissor, Texture* texture, ea::vector<float>* vertexData);
 
     /// Set new color for the batch. Overrides gradient.
     void SetColor(const Color& color, bool overrideAlpha = false);
@@ -70,7 +70,7 @@ public:
     unsigned GetInterpolatedColor(float x, float y);
 
     /// Add or merge a batch.
-    static void AddOrMerge(const UIBatch& batch, PODVector<UIBatch>& batches);
+    static void AddOrMerge(const UIBatch& batch, ea::vector<UIBatch>& batches);
 
     /// Element this batch represents.
     UIElement* element_{};
@@ -83,7 +83,7 @@ public:
     /// Inverse texture size.
     Vector2 invTextureSize_{Vector2::ONE};
     /// Vertex data.
-    PODVector<float>* vertexData_{};
+    ea::vector<float>* vertexData_{};
     /// Vertex data start index.
     unsigned vertexStart_{};
     /// Vertex data end index.

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -65,7 +65,7 @@ Font::~Font()
 {
     // To ensure FreeType deallocates properly, first clear all faces, then release the raw font data
     ReleaseFaces();
-    fontData_.Reset();
+    fontData_.reset();
 }
 
 void Font::RegisterObject(Context* context)
@@ -81,7 +81,7 @@ bool Font::BeginLoad(Deserializer& source)
         return true;
 
     fontType_ = FONT_NONE;
-    faces_.Clear();
+    faces_.clear();
 
     fontDataSize_ = source.GetSize();
     if (fontDataSize_)
@@ -92,11 +92,11 @@ bool Font::BeginLoad(Deserializer& source)
     }
     else
     {
-        fontData_.Reset();
+        fontData_.reset();
         return false;
     }
 
-    String ext = GetExtension(GetName());
+    ea::string ext = GetExtension(GetName());
     if (ext == ".ttf" || ext == ".otf" || ext == ".woff")
     {
         fontType_ = FONT_FREETYPE;
@@ -111,7 +111,7 @@ bool Font::BeginLoad(Deserializer& source)
     return true;
 }
 
-bool Font::SaveXML(Serializer& dest, int pointSize, bool usedGlyphs, const String& indentation)
+bool Font::SaveXML(Serializer& dest, int pointSize, bool usedGlyphs, const ea::string& indentation)
 {
     FontFace* fontFace = GetFace(pointSize);
     if (!fontFace)
@@ -151,15 +151,15 @@ FontFace* Font::GetFace(float pointSize)
 
     // For outline fonts, we return the nearest size in 1/64th increments, as that's what FreeType supports.
     int key = FloatToFixed(pointSize);
-    HashMap<int, SharedPtr<FontFace> >::Iterator i = faces_.Find(key);
-    if (i != faces_.End())
+    auto i = faces_.find(key);
+    if (i != faces_.end())
     {
-        if (!i->second_->IsDataLost())
-            return i->second_;
+        if (!i->second->IsDataLost())
+            return i->second;
         else
         {
             // Erase and reload face if texture data lost (OpenGL mode only)
-            faces_.Erase(i);
+            faces_.erase(i);
         }
     }
 
@@ -186,13 +186,13 @@ IntVector2 Font::GetTotalGlyphOffset(float pointSize) const
 
 void Font::ReleaseFaces()
 {
-    faces_.Clear();
+    faces_.clear();
 }
 
 void Font::LoadParameters()
 {
     auto* cache = GetSubsystem<ResourceCache>();
-    String xmlName = ReplaceExtension(GetName(), ".xml");
+    ea::string xmlName = ReplaceExtension(GetName(), ".xml");
     SharedPtr<XMLFile> xml = cache->GetTempResource<XMLFile>(xmlName, false);
     if (!xml)
         return;

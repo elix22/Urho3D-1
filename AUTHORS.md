@@ -4,6 +4,7 @@ Urho3D development, contributions and bugfixes by:
 - Wei Tjong Yao
 - Aster Jian
 - Ricardo Abreu
+- Eli Aloni
 - Vivienne Anthony
 - Christopher Augustus
 - Colin Barrett
@@ -55,6 +56,7 @@ Urho3D development, contributions and bugfixes by:
 - Justin Miller
 - Jonne Nauha
 - Huy Nguyen
+- Neal Nicdao
 - Paul Noome
 - David Palacios
 - Alex Parlett
@@ -104,12 +106,14 @@ Urho3D development, contributions and bugfixes by:
 - TheComet93
 - Y-way
 - 1vanK
+- ab4daa
 - andmar1x
 - amadeus_osa
 - atship
 - att
 - att-kin9
 - celeron55
+- chenjie199234
 - cosmy1
 - damu
 - dragonCASTjosh
@@ -117,6 +121,7 @@ Urho3D development, contributions and bugfixes by:
 - fredakilla
 - gleblebedev
 - hdunderscore
+- holyfight6
 - hsnabn
 - lhinuz
 - lvshiling
@@ -127,6 +132,7 @@ Urho3D development, contributions and bugfixes by:
 - nemerle
 - ninjastone
 - orefkov
+- pat2nav
 - proller
 - raould
 - rasteron
@@ -135,11 +141,13 @@ Urho3D development, contributions and bugfixes by:
 - rikorin
 - skaiware
 - ssinai1
+- sssooonnnggg
 - svifylabs
 - szamq
 - thebluefish
 - tommy3
 - yushli
+- zlum
 
 Urho3D is greatly inspired by OGRE (http://www.ogre3d.org) and Horde3D
 (http://www.horde3d.org). Additional inspiration & research used:

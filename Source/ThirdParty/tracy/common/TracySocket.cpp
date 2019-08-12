@@ -9,15 +9,20 @@
 #include "TracyAlloc.hpp"
 #include "TracySocket.hpp"
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #  include <winsock2.h>
 #  include <ws2tcpip.h>
-#  pragma warning(disable:4244)
-#  pragma warning(disable:4267)
+#  ifdef _MSC_VER
+#    pragma warning(disable:4244)
+#    pragma warning(disable:4267)
+#  endif
+#  define poll WSAPoll
 #else
+#  include <arpa/inet.h>
 #  include <sys/socket.h>
 #  include <netdb.h>
 #  include <unistd.h>
+#  include <poll.h>
 #endif
 
 #ifndef MSG_NOSIGNAL
@@ -27,13 +32,13 @@
 namespace tracy
 {
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 typedef SOCKET socket_t;
 #else
 typedef int socket_t;
 #endif
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 struct __wsinit
 {
     __wsinit()
@@ -54,20 +59,20 @@ void InitWinSock()
 #endif
 
 Socket::Socket()
-    : m_sock( -1 )
-    , m_buf( (char*)tracy_malloc( BufSize ) )
+    : m_buf( (char*)tracy_malloc( BufSize ) )
     , m_bufPtr( nullptr )
+    , m_sock( -1 )
     , m_bufLeft( 0 )
 {
-#ifdef _MSC_VER
+#ifdef _WIN32
     InitWinSock();
 #endif
 }
 
 Socket::Socket( int sock )
-    : m_sock( sock )
-    , m_buf( (char*)tracy_malloc( BufSize ) )
+    : m_buf( (char*)tracy_malloc( BufSize ) )
     , m_bufPtr( nullptr )
+    , m_sock( sock )
     , m_bufLeft( 0 )
 {
 }
@@ -99,11 +104,11 @@ bool Socket::Connect( const char* addr, const char* port )
         if( ( sock = socket( ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol ) ) == -1 ) continue;
 #if defined __APPLE__
         int val = 1;
-        setsockopt( m_sock, SOL_SOCKET, SO_NOSIGPIPE, &val, sizeof( val ) );
+        setsockopt( sock, SOL_SOCKET, SO_NOSIGPIPE, &val, sizeof( val ) );
 #endif
         if( connect( sock, ptr->ai_addr, ptr->ai_addrlen ) == -1 )
         {
-#ifdef _MSC_VER
+#ifdef _WIN32
             closesocket( sock );
 #else
             close( sock );
@@ -122,7 +127,7 @@ bool Socket::Connect( const char* addr, const char* port )
 void Socket::Close()
 {
     assert( m_sock != -1 );
-#ifdef _MSC_VER
+#ifdef _WIN32
     closesocket( m_sock );
 #else
     close( m_sock );
@@ -145,7 +150,20 @@ int Socket::Send( const void* _buf, int len )
     return int( buf - start );
 }
 
-int Socket::RecvBuffered( void* buf, int len, const timeval* tv )
+int Socket::GetSendBufSize()
+{
+    int bufSize;
+#if defined _WIN32 || defined __CYGWIN__
+    int sz = sizeof( bufSize );
+    getsockopt( m_sock, SOL_SOCKET, SO_SNDBUF, (char*)&bufSize, &sz );
+#else
+    socklen_t sz = sizeof( bufSize );
+    getsockopt( m_sock, SOL_SOCKET, SO_SNDBUF, &bufSize, &sz );
+#endif
+    return bufSize;
+}
+
+int Socket::RecvBuffered( void* buf, int len, int timeout )
 {
     if( len <= m_bufLeft )
     {
@@ -163,9 +181,9 @@ int Socket::RecvBuffered( void* buf, int len, const timeval* tv )
         return ret;
     }
 
-    if( len >= BufSize ) return Recv( buf, len, tv );
+    if( len >= BufSize ) return Recv( buf, len, timeout );
 
-    m_bufLeft = Recv( m_buf, BufSize, tv );
+    m_bufLeft = Recv( m_buf, BufSize, timeout );
     if( m_bufLeft <= 0 ) return m_bufLeft;
 
     const auto sz = std::min( len, m_bufLeft );
@@ -175,21 +193,15 @@ int Socket::RecvBuffered( void* buf, int len, const timeval* tv )
     return sz;
 }
 
-int Socket::Recv( void* _buf, int len, const timeval* tv )
+int Socket::Recv( void* _buf, int len, int timeout )
 {
     auto buf = (char*)_buf;
 
-    fd_set fds;
-    FD_ZERO( &fds );
-    FD_SET( static_cast<socket_t>(m_sock), &fds );
+    struct pollfd fd;
+    fd.fd = (socket_t)m_sock;
+    fd.events = POLLIN;
 
-#ifndef _WIN32
-    timeval _tv = *tv;
-    select( m_sock+1, &fds, nullptr, nullptr, &_tv );
-#else
-    select( m_sock+1, &fds, nullptr, nullptr, tv );
-#endif
-    if( FD_ISSET( m_sock, &fds ) )
+    if( poll( &fd, 1, timeout ) > 0 )
     {
         return recv( m_sock, buf, len, 0 );
     }
@@ -199,14 +211,14 @@ int Socket::Recv( void* _buf, int len, const timeval* tv )
     }
 }
 
-bool Socket::Read( void* _buf, int len, const timeval* tv, std::function<bool()> exitCb )
+bool Socket::Read( void* _buf, int len, int timeout, std::function<bool()> exitCb )
 {
     auto buf = (char*)_buf;
 
     while( len > 0 )
     {
         if( exitCb() ) return false;
-        const auto sz = RecvBuffered( buf, len, tv );
+        const auto sz = RecvBuffered( buf, len, timeout );
         switch( sz )
         {
         case 0:
@@ -229,12 +241,12 @@ bool Socket::Read( void* _buf, int len, const timeval* tv, std::function<bool()>
     return true;
 }
 
-bool Socket::ReadRaw( void* _buf, int len, const timeval* tv )
+bool Socket::ReadRaw( void* _buf, int len, int timeout )
 {
     auto buf = (char*)_buf;
     while( len > 0 )
     {
-        const auto sz = Recv( buf, len, tv );
+        const auto sz = Recv( buf, len, timeout );
         if( sz <= 0 ) return false;
         len -= sz;
         buf += sz;
@@ -246,27 +258,25 @@ bool Socket::HasData()
 {
     if( m_bufLeft > 0 ) return true;
 
-    struct timeval tv;
-    memset( &tv, 0, sizeof( tv ) );
+    struct pollfd fd;
+    fd.fd = (socket_t)m_sock;
+    fd.events = POLLIN;
 
-    fd_set fds;
-    FD_ZERO( &fds );
-    FD_SET( static_cast<socket_t>(m_sock), &fds );
-
-    return select( m_sock+1, &fds, nullptr, nullptr, &tv ) > 0;
+    return poll( &fd, 1, 0 ) > 0;
 }
 
 
 ListenSocket::ListenSocket()
     : m_sock( -1 )
 {
-#ifdef _MSC_VER
+#ifdef _WIN32
     InitWinSock();
 #endif
 }
 
 ListenSocket::~ListenSocket()
 {
+    if( m_sock != -1 ) Close();
 }
 
 bool ListenSocket::Listen( const char* port, int backlog )
@@ -284,7 +294,7 @@ bool ListenSocket::Listen( const char* port, int backlog )
     if( getaddrinfo( nullptr, port, &hints, &res ) != 0 ) return false;
 
     m_sock = socket( res->ai_family, res->ai_socktype, res->ai_protocol );
-#if defined _MSC_VER || defined __CYGWIN__
+#if defined _WIN32 || defined __CYGWIN__
     unsigned long val = 0;
     setsockopt( m_sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&val, sizeof( val ) );
 #else
@@ -301,32 +311,23 @@ Socket* ListenSocket::Accept()
     struct sockaddr_storage remote;
     socklen_t sz = sizeof( remote );
 
-    struct timeval tv;
-    tv.tv_sec = 0;
-    tv.tv_usec = 10000;
+    struct pollfd fd;
+    fd.fd = (socket_t)m_sock;
+    fd.events = POLLIN;
 
-    fd_set fds;
-    FD_ZERO( &fds );
-    FD_SET( static_cast<socket_t>(m_sock), &fds );
-
-    select( m_sock+1, &fds, nullptr, nullptr, &tv );
-    if( FD_ISSET( m_sock, &fds ) )
+    if( poll( &fd, 1, 10 ) > 0 )
     {
         int sock = accept( m_sock, (sockaddr*)&remote, &sz);
+        if( sock == -1 ) return nullptr;
+
 #if defined __APPLE__
         int val = 1;
         setsockopt( sock, SOL_SOCKET, SO_NOSIGPIPE, &val, sizeof( val ) );
 #endif
-        if( sock == -1 )
-        {
-            return nullptr;
-        }
-        else
-        {
-            auto ptr = (Socket*)tracy_malloc( sizeof( Socket ) );
-            new(ptr) Socket( sock );
-            return ptr;
-        }
+
+        auto ptr = (Socket*)tracy_malloc( sizeof( Socket ) );
+        new(ptr) Socket( sock );
+        return ptr;
     }
     else
     {
@@ -337,12 +338,205 @@ Socket* ListenSocket::Accept()
 void ListenSocket::Close()
 {
     assert( m_sock != -1 );
-#ifdef _MSC_VER
+#ifdef _WIN32
     closesocket( m_sock );
 #else
     close( m_sock );
 #endif
     m_sock = -1;
+}
+
+UdpBroadcast::UdpBroadcast()
+    : m_sock( -1 )
+{
+#ifdef _WIN32
+    InitWinSock();
+#endif
+}
+
+UdpBroadcast::~UdpBroadcast()
+{
+    if( m_sock != -1 ) Close();
+}
+
+bool UdpBroadcast::Open( const char* addr, const char* port )
+{
+    assert( m_sock == -1 );
+
+    struct addrinfo hints;
+    struct addrinfo *res, *ptr;
+
+    memset( &hints, 0, sizeof( hints ) );
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+
+    if( getaddrinfo( addr, port, &hints, &res ) != 0 ) return false;
+    int sock = 0;
+    for( ptr = res; ptr; ptr = ptr->ai_next )
+    {
+        if( ( sock = socket( ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol ) ) == -1 ) continue;
+#if defined __APPLE__
+        int val = 1;
+        setsockopt( sock, SOL_SOCKET, SO_NOSIGPIPE, &val, sizeof( val ) );
+#endif
+#if defined _WIN32 || defined __CYGWIN__
+        unsigned long broadcast = 1;
+        if( setsockopt( sock, SOL_SOCKET, SO_BROADCAST, (const char*)&broadcast, sizeof( broadcast ) ) == -1 )
+#else
+        int broadcast = 1;
+        if( setsockopt( sock, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof( broadcast ) ) == -1 )
+#endif
+        {
+#ifdef _WIN32
+            closesocket( sock );
+#else
+            close( sock );
+#endif
+            continue;
+        }
+        break;
+    }
+    freeaddrinfo( res );
+    if( !ptr ) return false;
+
+    m_sock = sock;
+    return true;
+}
+
+void UdpBroadcast::Close()
+{
+    assert( m_sock != -1 );
+#ifdef _WIN32
+    closesocket( m_sock );
+#else
+    close( m_sock );
+#endif
+    m_sock = -1;
+}
+
+int UdpBroadcast::Send( int port, const void* data, int len )
+{
+    assert( m_sock != -1 );
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons( port );
+    addr.sin_addr.s_addr = INADDR_BROADCAST;
+    return sendto( m_sock, (const char*)data, len, MSG_NOSIGNAL, (sockaddr*)&addr, sizeof( addr ) );
+}
+
+IpAddress::IpAddress()
+    : m_number( 0 )
+{
+    *m_text = '\0';
+}
+
+IpAddress::~IpAddress()
+{
+}
+
+void IpAddress::Set( const struct sockaddr& addr )
+{
+#if __MINGW32__
+    auto ai = (struct sockaddr_in*)&addr;
+#else
+    auto ai = (const struct sockaddr_in*)&addr;
+#endif
+    inet_ntop( AF_INET, &ai->sin_addr, m_text, 17 );
+    m_number = ai->sin_addr.s_addr;
+}
+
+UdpListen::UdpListen()
+    : m_sock( -1 )
+{
+#ifdef _WIN32
+    InitWinSock();
+#endif
+}
+
+UdpListen::~UdpListen()
+{
+    if( m_sock != -1 ) Close();
+}
+
+bool UdpListen::Listen( int port )
+{
+    assert( m_sock == -1 );
+
+    int sock;
+    if( ( sock = socket( AF_INET, SOCK_DGRAM, 0 ) ) == -1 ) return false;
+
+#if defined __APPLE__
+    int val = 1;
+    setsockopt( sock, SOL_SOCKET, SO_NOSIGPIPE, &val, sizeof( val ) );
+#endif
+#if defined _WIN32 || defined __CYGWIN__
+    unsigned long reuse = 1;
+    setsockopt( m_sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof( reuse ) );
+#else
+    int reuse = 1;
+    setsockopt( m_sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof( reuse ) );
+#endif
+#if defined _WIN32 || defined __CYGWIN__
+    unsigned long broadcast = 1;
+    if( setsockopt( sock, SOL_SOCKET, SO_BROADCAST, (const char*)&broadcast, sizeof( broadcast ) ) == -1 )
+#else
+    int broadcast = 1;
+    if( setsockopt( sock, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof( broadcast ) ) == -1 )
+#endif
+    {
+#ifdef _WIN32
+        closesocket( sock );
+#else
+        close( sock );
+#endif
+        return false;
+    }
+
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons( port );
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    if( bind( sock, (sockaddr*)&addr, sizeof( addr ) ) == -1 )
+    {
+#ifdef _WIN32
+        closesocket( sock );
+#else
+        close( sock );
+#endif
+        return false;
+    }
+
+    m_sock = sock;
+    return true;
+}
+
+void UdpListen::Close()
+{
+    assert( m_sock != -1 );
+#ifdef _WIN32
+    closesocket( m_sock );
+#else
+    close( m_sock );
+#endif
+    m_sock = -1;
+}
+
+const char* UdpListen::Read( size_t& len, IpAddress& addr )
+{
+    static char buf[2048];
+
+    struct pollfd fd;
+    fd.fd = (socket_t)m_sock;
+    fd.events = POLLIN;
+    if( poll( &fd, 1, 10 ) <= 0 ) return nullptr;
+
+    sockaddr sa;
+    socklen_t salen = sizeof( struct sockaddr );
+    len = (size_t)recvfrom( m_sock, buf, 2048, 0, &sa, &salen );
+    addr.Set( sa );
+
+    return buf;
 }
 
 }

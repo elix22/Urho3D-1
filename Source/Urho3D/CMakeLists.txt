@@ -42,22 +42,27 @@ macro (define_engine_source_files)
         )
         list (APPEND HEADER_FILES ${_files})
         # Install them
-        install (FILES ${_files} DESTINATION ${DEST_INCLUDE_DIR}/${path})
+        if (NOT MINI_URHO)
+            install (FILES ${_files} DESTINATION ${DEST_INCLUDE_DIR}/${path})
+        endif ()
         # Get source files
         file (${_action} _files RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${path}/*.cpp)
         list (APPEND SOURCE_FILES ${_files})
     endforeach ()
 endmacro()
 
-define_engine_source_files (NORECURSE . Graphics)
-define_engine_source_files (Audio Container Core Engine Input IO Math Resource Scene UI)
+define_engine_source_files (Container Core Engine IO Math)
 
-if (URHO3D_OPENGL)
-    define_engine_source_files (Graphics/OpenGL)
-elseif (URHO3D_D3D11)
-    define_engine_source_files (Graphics/Direct3D11)
-elseif (URHO3D_D3D9)
-    define_engine_source_files (Graphics/Direct3D9)
+if (NOT MINI_URHO)
+    define_engine_source_files (Audio Input Resource Scene UI)
+    define_engine_source_files (NORECURSE . Graphics)
+    if (URHO3D_OPENGL)
+        define_engine_source_files (Graphics/OpenGL)
+    elseif (URHO3D_D3D11)
+        define_engine_source_files (Graphics/Direct3D11)
+    elseif (URHO3D_D3D9)
+        define_engine_source_files (Graphics/Direct3D9)
+    endif ()
 endif ()
 
 if (URHO3D_IK)
@@ -84,14 +89,23 @@ if (URHO3D_SYSTEMUI)
     define_engine_source_files (SystemUI)
 endif ()
 
+if (URHO3D_CSHARP)
+    define_engine_source_files (Script)
+endif ()
+
 # Group source code in VS solution
 group_sources()
 
-if (APPLE)
+if (APPLE AND NOT IOS)
     list (APPEND SOURCE_FILES IO/MacFileWatcher.m)
 endif ()
 
-add_library(Urho3D ${URHO3D_LIBRARY_TYPE} ${SOURCE_FILES} ${HEADER_FILES})
+if (MINI_URHO)
+    # Avoid building freetype
+    list (REMOVE_ITEM SOURCE_FILES UI/FontFaceFreeType.cpp)
+endif ()
+
+add_library(Urho3D ${SOURCE_FILES} ${HEADER_FILES} $<$<CXX_COMPILER_ID:MSVC>:${rbfx_SOURCE_DIR}/script/rbfx.natvis>)
 target_include_directories(Urho3D PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/..>        # For parent projects to find auto-generated engine headers
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>        # For parent projects to find engine headers
@@ -124,14 +138,13 @@ endforeach()
 
 # Define generated source files
 if (NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/librevision.h)
-    execute_process (COMMAND ${CMAKE_COMMAND} -DFILENAME=${CMAKE_CURRENT_BINARY_DIR}/librevision.h -P ${Urho3D_SOURCE_DIR}/CMake/Modules/GetUrhoRevision.cmake
+    execute_process (COMMAND ${CMAKE_COMMAND} -DFILENAME=${CMAKE_CURRENT_BINARY_DIR}/librevision.h -P ${rbfx_SOURCE_DIR}/CMake/Modules/GetUrhoRevision.cmake
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_QUIET ERROR_QUIET)
 endif ()
 
 # Link dependencies
 set (THIRD_PARTY_DEPENDENCIES
     FreeType
-    JO
     LZ4
     PugiXml
     rapidjson
@@ -140,7 +153,7 @@ set (THIRD_PARTY_DEPENDENCIES
     STB
     IconFontCppHeaders
     Civetweb
-    kNet
+    SLikeNet
     ik
     Detour
     DetourCrowd
@@ -148,19 +161,29 @@ set (THIRD_PARTY_DEPENDENCIES
     Recast
     Box2D
     WebP
-    Bullet
     ImGui
     LibCpuId
     GLEW
     MojoShader
-    sc
     cr
-    yaml-cpp
     nativefiledialog
+    CLI11
+    fmt
+    spdlog
+    EASTL
 )
 
-if (BUILD_SHARED_LIBS AND NOT MSVC AND NOT APPLE)
-    target_link_libraries(Urho3D PRIVATE -Wl,--whole-archive)
+if (URHO3D_MERGE_STATIC_LIBS)
+    list (APPEND THIRD_PARTY_DEPENDENCIES Bullet)
+elseif (TARGET Bullet)
+    # This library can not be exported from .dll on windows platforms.
+    if (WEB AND BUILD_SHARED_LIBS)
+        # With this configuration public linking causes some symbols to be multiply defined.
+        target_link_libraries(Urho3D PRIVATE Bullet)
+        target_include_directories(Urho3D PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../ThirdParty/Bullet>)
+    else ()
+        target_link_libraries(Urho3D PUBLIC Bullet)
+    endif ()
 endif ()
 
 foreach (dep ${THIRD_PARTY_DEPENDENCIES})
@@ -195,8 +218,14 @@ foreach (dep ${THIRD_PARTY_DEPENDENCIES})
                 endif ()
             endforeach ()
         endif ()
-        if (BUILD_SHARED_LIBS)
+        if (BUILD_SHARED_LIBS OR NOT URHO3D_MERGE_STATIC_LIBS)
+            if (BUILD_SHARED_LIBS AND NOT MSVC AND NOT APPLE)
+                target_link_libraries(Urho3D PRIVATE -Wl,--whole-archive)
+            endif ()
             target_link_libraries(Urho3D PRIVATE ${dep})
+            if (BUILD_SHARED_LIBS AND NOT MSVC AND NOT APPLE)
+                target_link_libraries(Urho3D PRIVATE -Wl,--no-whole-archive)
+            endif ()
         else ()
             if (${_TARGET_TYPE} STREQUAL "STATIC_LIBRARY")
                 list (APPEND DEPENDENCY_TARGET_FILES $<TARGET_FILE:${dep}>)
@@ -205,12 +234,168 @@ foreach (dep ${THIRD_PARTY_DEPENDENCIES})
     endif ()
 endforeach()
 
-if (BUILD_SHARED_LIBS AND NOT MSVC AND NOT APPLE)
-    target_link_libraries(Urho3D PRIVATE -Wl,--no-whole-archive)
+if (URHO3D_SSE)
+    if (MSVC)
+        if (URHO3D_64BIT AND "${URHO3D_SSE}" MATCHES "SSE2?")
+            # 64bit instruction set has sse2 included and thus it is always enabled.
+            # Specifying this parameter to msvc creates a warning.
+        else ()
+            target_compile_options (Urho3D PUBLIC /arch:${URHO3D_SSE})
+        endif ()
+    else ()
+        target_compile_options (Urho3D PUBLIC -m${URHO3D_SSE})
+    endif ()
+    target_compile_definitions (Urho3D PUBLIC -DURHO3D_SSE)
 endif ()
 
-if (NOT BUILD_SHARED_LIBS)
+if (WIN32)
+    if (URHO3D_MINIDUMPS OR URHO3D_PROFILING)
+        target_link_libraries (Urho3D PUBLIC dbghelp)
+    endif ()
+    target_link_libraries (Urho3D PUBLIC rpcrt4)
+else ()
+    target_link_libraries (Urho3D PUBLIC dl)
+    if (ANDROID)
+        target_link_libraries (Urho3D PUBLIC log android)
+        target_compile_definitions (Urho3D PUBLIC -DANDROID_ABI=${ANDROID_ABI})
+    elseif (DESKTOP)
+        target_link_libraries (Urho3D PUBLIC m pthread)
+        if (NOT APPLE)
+            target_link_libraries (Urho3D PUBLIC rt uuid)
+        endif ()
+    endif ()
+endif ()
+
+# Disable very annoying warning
+if (GNU OR Clang)
+    target_compile_options(Urho3D PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof>)
+endif ()
+
+if (URHO3D_PROFILING)
+    target_link_libraries(Urho3D PUBLIC tracy-lib)
+endif ()
+
+# Graphics
+if (NOT MINI_URHO)
+    if (URHO3D_OPENGL)
+        if (APPLE)
+            # Do nothing
+        elseif (WIN32)
+            target_link_libraries (Urho3D PUBLIC opengl32)
+        elseif (ANDROID OR ARM)
+            if (URHO3D_GLES2)
+                target_link_libraries (Urho3D PUBLIC GLESv1_CM GLESv2)
+            elseif (URHO3D_GLES3)
+                target_link_libraries (Urho3D PUBLIC GLESv3)
+            endif ()
+        else ()
+            target_link_libraries (Urho3D PUBLIC GL)
+        endif ()
+    else ()
+        if (URHO3D_D3D9)
+            find_package(DirectX REQUIRED D3D9)
+        else ()
+            find_package(DirectX REQUIRED D3D11)
+        endif ()
+        target_link_libraries (Urho3D PUBLIC ${DIRECT3D_LIBRARIES})
+    endif ()
+endif ()
+
+if (WEB)
+    target_link_libraries(Urho3D PUBLIC "-s WASM=$<BOOL:URHO3D_WEB_ASSEMBLY>")
+    target_compile_options(Urho3D PRIVATE -Wno-warn-absolute-paths -Wno-unknown-warning-option)
+    if (URHO3D_THREADING)
+        target_compile_options(Urho3D PRIVATE "-s USE_PTHREADS=1")
+    endif ()
+    # Since version 1.37.25 emcc reduces default runtime exports, but we need "UTF8ToString" so it needs to be explicitly declared now
+    # (See https://github.com/kripken/emscripten/commit/3bc1f9f08b9f420680124af703c787244468cedc for more detail)
+    if (NOT EMSCRIPTEN_EMCC_VERSION VERSION_LESS 1.37.25)
+        target_link_libraries(Urho3D PUBLIC "-s EXTRA_EXPORTED_RUNTIME_METHODS=\"['UTF8ToString']\"")
+    endif ()
+    # Since version 1.37.28 emcc reduces default runtime exports, but we need "FS" so it needs to be explicitly requested now
+    # (See https://github.com/kripken/emscripten/commit/f2191c1223e8261bf45f4e27d2ba4d2e9d8b3341 for more detail)
+    if (NOT EMSCRIPTEN_EMCC_VERSION VERSION_LESS 1.37.28)
+        target_link_libraries(Urho3D PUBLIC "-s FORCE_FILESYSTEM=1")
+    endif ()
+    # Remove variables to make the -O3 regalloc easier, embed data in asm.js to reduce number of moving part
+    target_compile_options(Urho3D PUBLIC --memory-init-file 0)
+    target_link_libraries(Urho3D PUBLIC "-s AGGRESSIVE_VARIABLE_ELIMINATION=1")
+    # Preserve LLVM debug information, show line number debug comments, and generate source maps; always disable exception handling codegen
+    target_compile_options(Urho3D PUBLIC $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:-g4>)
+    target_link_libraries(Urho3D PUBLIC "-s DISABLE_EXCEPTION_CATCHING=1")
+endif ()
+
+if (BUILD_SHARED_LIBS)
+    target_compile_definitions(Urho3D PRIVATE -DURHO3D_EXPORTS INTERFACE -DURHO3D_IMPORTS)
+else ()
+    target_compile_definitions (Urho3D PUBLIC -DURHO3D_STATIC)
+endif ()
+
+# Check existence of various header files and their functions required by some of the third-party libraries and Urho3D library
+# Set the CMake variables in this scope but only add the compiler defines in the respective library's scope
+include (CheckIncludeFile)
+foreach (HEADER stdint.h inttypes.h malloc.h)
+    string (TOUPPER HAVE_${HEADER} HAVE_HEADER)
+    string (REPLACE . _ HAVE_HEADER ${HAVE_HEADER})
+    check_include_file (${HEADER} ${HAVE_HEADER})
+endforeach ()
+include (CheckFunctionExists)
+foreach (FUNCT __sincosf sincosf malloc_usable_size)
+    string (TOUPPER HAVE_${FUNCT} HAVE_FUNCT)
+    check_symbol_exists (${FUNCT} "math.h;malloc.h" ${HAVE_FUNCT})
+endforeach ()
+if (MINGW)
+    include (CheckStructHasMember)
+    check_struct_has_member (RTL_OSVERSIONINFOW dwOSVersionInfoSize minwindef.h\;winnt.h HAVE_RTL_OSVERSIONINFOW)
+endif ()
+
+# Workarounds
+if (WEB OR ANDROID)
+    target_compile_options(Urho3D PUBLIC -std=gnu++${URHO3D_CXX_STANDARD})
+endif ()
+if (APPLE)
+    target_link_options(Urho3D PUBLIC -stdlib=libc++)
+endif ()
+# Group them together under 'Resources' in Xcode IDE
+source_group(Resources FILES ${RESOURCE_FILES})     # RESOURCE_PAKS could be empty if packaging is not requested
+target_sources(Urho3D PRIVATE ${RESOURCE_DIRS})
+
+if (URHO3D_CSHARP)
+    csharp_bind_target(
+        TARGET Urho3D
+        SWIG CSharp/Swig/Urho3D.i
+        CSPROJ ${CMAKE_CURRENT_SOURCE_DIR}/CSharp/Urho3DNet.csproj
+        NAMESPACE Urho3DNet
+    )
+    if (URHO3D_SYSTEMUI)
+        csharp_bind_target(
+            TARGET ImGui
+            NATIVE Urho3D
+            SWIG CSharp/Swig/ImGui.i
+            NAMESPACE ImGuiNet
+        )
+    endif ()
+    unset (CMAKE_SWIG_OUTDIR)
+    configure_file(CSharp/Managed/AssemblyInfo.cs.in ${CMAKE_CURRENT_BINARY_DIR}/Urho3DCSharp/Managed/AssemblyInfo.cs @ONLY)
+    file (GLOB_RECURSE EXTRA_NATIVE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/CSharp/Native/*.h ${CMAKE_CURRENT_SOURCE_DIR}/CSharp/Native/*.cpp)
+    file (GLOB_RECURSE WRAPPER_FILES )
+    target_sources(Urho3D PRIVATE ${EXTRA_NATIVE_FILES} ${CMAKE_CURRENT_BINARY_DIR}/Urho3DCSharp/Urho3DCSHARP_wrap.cxx)
+    if (URHO3D_SYSTEMUI)
+        target_sources(Urho3D PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/ImGuiCSharp/ImGuiCSHARP_wrap.cxx)
+    endif ()
+    if (MSVC)
+        target_compile_options(Urho3D PRIVATE /bigobj)
+    endif ()
+endif ()
+
+################################################### SDK preparation ####################################################
+if (MINI_URHO)
+    return ()
+endif ()
+
+if (URHO3D_MERGE_STATIC_LIBS)
     # Merge static libraries of third party dependencies to final engine static library
+    add_custom_command (TARGET Urho3D PRE_BUILD COMMAND ${CMAKE_COMMAND} -E remove -f $<TARGET_FILE:Urho3D>)
     if (MSVC)
         # If merged library is not deleted in this step then sometimes build system will try to merge dependencies
         # to already merged library inflating it further.
@@ -242,69 +427,6 @@ if (NOT BUILD_SHARED_LIBS)
     endif ()
 endif ()
 
-if (URHO3D_SSE AND NOT MSVC)
-    target_compile_options (Urho3D PUBLIC -msse -msse2)
-endif ()
-
-if (URHO3D_TASKS)
-    include(CheckIncludeFile)
-    check_include_file("valgrind/valgrind.h" HAVE_VALGRIND)
-    if (HAVE_VALGRIND EQUAL 1)
-        target_compile_definitions(Urho3D PRIVATE -DHAVE_VALGRIND=${HAVE_VALGRIND})
-    endif ()
-endif ()
-
-if (WIN32)
-    if (URHO3D_MINIDUMPS)
-        target_link_libraries (Urho3D PUBLIC dbghelp)
-    endif ()
-    target_link_libraries (Urho3D PUBLIC rpcrt4)
-else ()
-    if (ANDROID)
-        target_link_libraries (Urho3D PUBLIC dl log android)
-    elseif (DESKTOP)
-        target_link_libraries (Urho3D PUBLIC dl m rt pthread uuid)
-    endif ()
-endif ()
-
-# Disable very annoying warning
-if (GNU OR Clang)
-    target_compile_options(Urho3D PUBLIC -Wno-invalid-offsetof)
-endif ()
-
-if (URHO3D_PROFILING)
-    target_compile_options(Urho3D PUBLIC -DTRACY_ENABLE=1)
-    if (TARGET tracy-lib)
-        target_link_libraries(Urho3D INTERFACE tracy-lib)
-    endif ()
-endif ()
-
-# Graphics
-if (URHO3D_OPENGL)
-    if (APPLE)
-        # Do nothing
-    elseif (WIN32)
-        target_link_libraries (Urho3D PUBLIC opengl32)
-    elseif (ANDROID OR ARM)
-        target_link_libraries (Urho3D PUBLIC GLESv1_CM GLESv2)
-    else ()
-        target_link_libraries (Urho3D PUBLIC GL)
-    endif ()
-else ()
-    if (URHO3D_D3D9)
-        find_package(DirectX REQUIRED D3D9)
-    else ()
-        find_package(DirectX REQUIRED D3D11)
-    endif ()
-    target_link_libraries (Urho3D PUBLIC ${DIRECT3D_LIBRARIES})
-endif ()
-
-if (BUILD_SHARED_LIBS OR EMSCRIPTEN)
-    target_compile_definitions(Urho3D PRIVATE -DURHO3D_EXPORTS INTERFACE -DURHO3D_IMPORTS)
-else ()
-    target_compile_definitions (Urho3D PUBLIC -DURHO3D_STATIC)
-endif ()
-
 # SDK installation
 install(TARGETS Urho3D
     EXPORT Urho3D
@@ -313,16 +435,24 @@ install(TARGETS Urho3D
     ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR}
 )
 
-# Generate include header with all engine headers
-list (REMOVE_ITEM HEADER_FILES Urho3D.h DebugNew.h Precompiled.h)
-string (REPLACE ";" ">\n#include <Urho3D/" HEADER_FILES "${HEADER_FILES}")
-set (HEADER_FILES "#include <Urho3D/${HEADER_FILES}>")
-configure_file (${CMAKE_CURRENT_SOURCE_DIR}/Urho3DAll.h.in ${CMAKE_CURRENT_BINARY_DIR}/Urho3DAll.h @ONLY)
-install (FILES ${CMAKE_CURRENT_BINARY_DIR}/Urho3DAll.h DESTINATION ${DEST_INCLUDE_DIR})
+if (URHO3D_MONOLITHIC_HEADER)
+    # Generate include header with all engine headers
+    list (REMOVE_ITEM HEADER_FILES Urho3D.h DebugNew.h Precompiled.h Core/Main.h)
+    string (REPLACE ";" ">\n#include <Urho3D/" HEADER_FILES "${HEADER_FILES}")
+    set (HEADER_FILES "#include <Urho3D/${HEADER_FILES}>")
+    configure_file (${CMAKE_CURRENT_SOURCE_DIR}/Urho3DAll.h.in ${CMAKE_CURRENT_BINARY_DIR}/Urho3DAll.h @ONLY)
+    install (FILES ${CMAKE_CURRENT_BINARY_DIR}/Urho3DAll.h DESTINATION ${DEST_INCLUDE_DIR})
+endif ()
 
 # Generate import/export header with engine configuration defines
 get_property(URHO3D_ENGINE_CONFIG TARGET Urho3D PROPERTY INTERFACE_COMPILE_DEFINITIONS)
-list (REMOVE_ITEM URHO3D_ENGINE_CONFIG URHO3D_64BIT URHO3D_SSE URHO3D_IS_BUILDING)
+list (REMOVE_ITEM URHO3D_ENGINE_CONFIG URHO3D_64BIT URHO3D_IS_BUILDING)
+# TODO: Maybe these should be directly in header?
+foreach(HAVE HAVE___SINCOSF HAVE_MALLOC_USABLE_SIZE HAVE_STDINT_H HAVE_INTTYPES_H HAVE_MALLOC_H HAVE_SINCOSF HAVE_RTL_OSVERSIONINFOW)
+    if (${${HAVE}})
+        list (APPEND URHO3D_ENGINE_CONFIG ${HAVE})
+    endif ()
+endforeach()
 list (REMOVE_DUPLICATES URHO3D_ENGINE_CONFIG)
 list (APPEND URHO3D_ENGINE_CONFIG "")   # For last item to be processed correctly.
 # Give defines without value a value "1".
@@ -334,7 +464,3 @@ list (INSERT URHO3D_ENGINE_CONFIG 0 "Engine configuration")
 string (REPLACE ";" "\n" URHO3D_ENGINE_CONFIG "${URHO3D_ENGINE_CONFIG}")
 configure_file (${CMAKE_CURRENT_SOURCE_DIR}/Urho3D.h ${CMAKE_CURRENT_BINARY_DIR}/Urho3D.h @ONLY)
 install (FILES ${CMAKE_CURRENT_BINARY_DIR}/Urho3D.h DESTINATION ${DEST_INCLUDE_DIR})
-
-if (URHO3D_CSHARP)
-    add_subdirectory(CSharp)
-endif ()

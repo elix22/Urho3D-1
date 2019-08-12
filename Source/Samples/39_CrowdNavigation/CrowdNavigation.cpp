@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -49,7 +49,6 @@
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(CrowdNavigation)
 
 CrowdNavigation::CrowdNavigation(Context* context) :
     Sample(context)
@@ -293,8 +292,8 @@ void CrowdNavigation::CreateMushroom(const Vector3& pos)
 
 void CrowdNavigation::CreateBoxOffMeshConnections(DynamicNavigationMesh* navMesh, Node* boxGroup)
 {
-    const Vector<SharedPtr<Node> >& boxes = boxGroup->GetChildren();
-    for (unsigned i=0; i < boxes.Size(); ++i)
+    const ea::vector<SharedPtr<Node> >& boxes = boxGroup->GetChildren();
+    for (unsigned i=0; i < boxes.size(); ++i)
     {
         Node* box = boxes[i];
         Vector3 boxPos = box->GetPosition();
@@ -389,10 +388,10 @@ bool CrowdNavigation::Raycast(float maxDistance, Vector3& hitPos, Drawable*& hit
     auto* camera = cameraNode_->GetComponent<Camera>();
     Ray cameraRay = camera->GetScreenRay((float)pos.x_ / graphics->GetWidth(), (float)pos.y_ / graphics->GetHeight());
     // Pick only geometry objects, not eg. zones or lights, only get the first (closest) hit
-    PODVector<RayQueryResult> results;
+    ea::vector<RayQueryResult> results;
     RayOctreeQuery query(results, cameraRay, RAY_TRIANGLE, maxDistance, DRAWABLE_GEOMETRY);
     scene_->GetComponent<Octree>()->RaycastSingle(query);
-    if (results.Size())
+    if (results.size())
     {
         RayQueryResult& result = results[0];
         hitPos = result.position_;
@@ -507,7 +506,7 @@ void CrowdNavigation::UpdateStreaming()
     const IntVector2 endTile = VectorMin(jackTile + IntVector2::ONE * streamingDistance_, numTiles - IntVector2::ONE);
 
     // Remove tiles
-    for (HashSet<IntVector2>::Iterator i = addedTiles_.Begin(); i != addedTiles_.End();)
+    for (auto i = addedTiles_.begin(); i != addedTiles_.end();)
     {
         const IntVector2 tileIdx = *i;
         if (beginTile.x_ <= tileIdx.x_ && tileIdx.x_ <= endTile.x_ && beginTile.y_ <= tileIdx.y_ && tileIdx.y_ <= endTile.y_)
@@ -515,7 +514,7 @@ void CrowdNavigation::UpdateStreaming()
         else
         {
             navMesh->RemoveTile(tileIdx);
-            i = addedTiles_.Erase(i);
+            i = addedTiles_.erase(i);
         }
     }
 
@@ -524,9 +523,9 @@ void CrowdNavigation::UpdateStreaming()
         for (int x = beginTile.x_; x <= endTile.x_; ++x)
         {
             const IntVector2 tileIdx(x, z);
-            if (!navMesh->HasTile(tileIdx) && tileData_.Contains(tileIdx))
+            if (!navMesh->HasTile(tileIdx) && tileData_.contains(tileIdx))
             {
-                addedTiles_.Insert(tileIdx);
+                addedTiles_.insert(tileIdx);
                 navMesh->AddTile(tileData_[tileIdx]);
             }
         }
@@ -535,8 +534,8 @@ void CrowdNavigation::UpdateStreaming()
 void CrowdNavigation::SaveNavigationData()
 {
     auto* navMesh = scene_->GetComponent<DynamicNavigationMesh>();
-    tileData_.Clear();
-    addedTiles_.Clear();
+    tileData_.clear();
+    addedTiles_.clear();
     const IntVector2 numTiles = navMesh->GetNumTiles();
     for (int z = 0; z < numTiles.y_; ++z)
         for (int x = 0; x <= numTiles.x_; ++x)

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -46,7 +46,6 @@
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(Hello3DUI)
 
 Hello3DUI::Hello3DUI(Context* context) :
     Sample(context),
@@ -62,9 +61,6 @@ void Hello3DUI::Start()
 {
     // Execute base class startup
     Sample::Start();
-
-    // Enable OS cursor
-    GetSubsystem<Input>()->SetMouseVisible(true);
 
     // Load XML file containing default UI style sheet
     auto* cache = GetSubsystem<ResourceCache>();
@@ -277,8 +273,7 @@ void Hello3DUI::HandleDragEnd(StringHash eventType, VariantMap& eventData) // Fo
 
 void Hello3DUI::HandleClosePressed(StringHash eventType, VariantMap& eventData)
 {
-    if (GetPlatform() != "Web")
-        engine_->Exit();
+    CloseSample();
 }
 
 void Hello3DUI::HandleControlClicked(StringHash eventType, VariantMap& eventData)
@@ -289,7 +284,7 @@ void Hello3DUI::HandleControlClicked(StringHash eventType, VariantMap& eventData
     // Get control that was clicked
     auto* clicked = static_cast<UIElement*>(eventData[UIMouseClick::P_ELEMENT].GetPtr());
 
-    String name = "...?";
+    ea::string name = "...?";
     if (clicked)
     {
         // Get the name of the control that was clicked
@@ -323,7 +318,7 @@ void Hello3DUI::HandleUpdate(StringHash, VariantMap& eventData)
     auto* input = GetSubsystem<Input>();
     Node* node = scene_->GetChild("Box");
 
-    if (current_.NotNull() && drawDebug_)
+    if (current_ && drawDebug_)
         GetSubsystem<UI>()->DebugDraw(current_);
 
     if (input->GetMouseButtonPress(MOUSEB_LEFT))

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -41,7 +41,7 @@ void Controls::Reset()
     buttons_ = 0;
     yaw_ = 0.0f;
     pitch_ = 0.0f;
-    extraData_.Clear();
+    extraData_.clear();
 }
 
 }

@@ -1,5 +1,6 @@
 //
 // Copyright (c) 2008-2017 the Urho3D project.
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
+
+#include <EASTL/sort.h>
 
 #include "../Core/CoreEvents.h"
 #include "../Core/Profiler.h"
@@ -84,13 +87,6 @@ void DebugHud::SetExtents(const IntVector2& position, IntVector2 size)
 
     auto bottomRight = position + size;
     extents_ = IntRect(position.x_, position.y_, bottomRight.x_, bottomRight.y_);
-    RecalculateWindowPositions();
-}
-
-void DebugHud::RecalculateWindowPositions()
-{
-    posMode_ = WithinExtents({ui::GetStyle().WindowPadding.x, -ui::GetStyle().WindowPadding.y - 10});
-    posStats_ = WithinExtents({ui::GetStyle().WindowPadding.x, ui::GetStyle().WindowPadding.y});
 }
 
 void DebugHud::SetMode(DebugHudModeFlags mode)
@@ -133,74 +129,38 @@ void DebugHud::ToggleAll()
     Toggle(DEBUGHUD_SHOW_ALL);
 }
 
-void DebugHud::SetAppStats(const String& label, const Variant& stats)
+void DebugHud::SetAppStats(const ea::string& label, const Variant& stats)
 {
     SetAppStats(label, stats.ToString());
 }
 
-void DebugHud::SetAppStats(const String& label, const String& stats)
+void DebugHud::SetAppStats(const ea::string& label, const ea::string& stats)
 {
-    bool newLabel = !appStats_.Contains(label);
     appStats_[label] = stats;
-    if (newLabel)
-        appStats_.Sort();
 }
 
-bool DebugHud::ResetAppStats(const String& label)
+bool DebugHud::ResetAppStats(const ea::string& label)
 {
-    return appStats_.Erase(label);
+    return appStats_.erase(label);
 }
 
 void DebugHud::ClearAppStats()
 {
-    appStats_.Clear();
+    appStats_.clear();
 }
-
-Vector2 DebugHud::WithinExtents(Vector2 pos)
-{
-    if (pos.x_ < 0)
-        pos.x_ += extents_.right_;
-    else if (pos.x_ > 0)
-        pos.x_ += extents_.left_;
-    else
-        pos.x_ = extents_.left_;
-
-    if (pos.y_ < 0)
-        pos.y_ += extents_.bottom_;
-    else if (pos.y_ > 0)
-        pos.y_ += extents_.top_;
-    else
-        pos.y_ = extents_.top_;
-
-    return pos;
-};
 
 void DebugHud::RenderUi(VariantMap& eventData)
 {
     Renderer* renderer = GetSubsystem<Renderer>();
     Graphics* graphics = GetSubsystem<Graphics>();
 
-    ui::SetNextWindowPos({0, 0});
-    ui::SetNextWindowSize({(float)extents_.Width(), (float)extents_.Height()});
-    ui::PushStyleColor(ImGuiCol_WindowBg, 0);
-    if (ui::Begin("DebugHud mode", nullptr, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar|
-                                            ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoInputs))
-    {
-        if (mode_ & DEBUGHUD_SHOW_MODE)
-        {
-            ui::SetCursorPos({posMode_.x_, posMode_.y_});
-            ui::Text("Tex:%s Mat:%s Spec:%s Shadows:%s Size:%i Quality:%s Occlusion:%s Instancing:%s API:%s",
-                     qualityTexts[renderer->GetTextureQuality()],
-                     qualityTexts[renderer->GetMaterialQuality()],
-                     renderer->GetSpecularLighting() ? "On" : "Off",
-                     renderer->GetDrawShadows() ? "On" : "Off",
-                     renderer->GetShadowMapSize(),
-                     shadowQualityTexts[renderer->GetShadowQuality()],
-                     renderer->GetMaxOccluderTriangles() > 0 ? "On" : "Off",
-                     renderer->GetDynamicInstancing() ? "On" : "Off",
-                     graphics->GetApiName().CString());
-        }
 
+    ui::SetNextWindowPos(ToImGui(Vector2(extents_.Min())));
+    ui::SetNextWindowSize(ToImGui(Vector2(extents_.Size())));
+    ui::PushStyleColor(ImGuiCol_WindowBg, 0);
+    if (ui::Begin("DebugHud", nullptr, ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoMove|
+                                       ImGuiWindowFlags_NoInputs|ImGuiWindowFlags_NoScrollbar))
+    {
         if (mode_ & DEBUGHUD_SHOW_STATS)
         {
             // Update stats regardless of them being shown.
@@ -210,7 +170,7 @@ void DebugHud::RenderUi(VariantMap& eventData)
                 fpsTimer_.Reset();
             }
 
-            String stats;
+            ea::string stats;
             unsigned primitives, batches;
             if (!useRendererStats_)
             {
@@ -223,7 +183,6 @@ void DebugHud::RenderUi(VariantMap& eventData)
                 batches = GetRenderer()->GetNumBatches();
             }
 
-            ui::SetCursorPos({posStats_.x_, posStats_.y_});
             ui::Text("FPS %d", fps_);
             ui::Text("Triangles %u", primitives);
             ui::Text("Batches %u", batches);
@@ -232,8 +191,25 @@ void DebugHud::RenderUi(VariantMap& eventData)
             ui::Text("Shadowmaps %u", renderer->GetNumShadowMaps(true));
             ui::Text("Occluders %u", renderer->GetNumOccluders(true));
 
-            for (HashMap<String, String>::ConstIterator i = appStats_.Begin(); i != appStats_.End(); ++i)
-                ui::Text("%s %s", i->first_.CString(), i->second_.CString());
+            for (auto i = appStats_.begin(); i !=
+                appStats_.end(); ++i)
+                ui::Text("%s %s", i->first.c_str(), i->second.c_str());
+        }
+
+        if (mode_ & DEBUGHUD_SHOW_MODE)
+        {
+            auto& style = ui::GetStyle();
+            ui::SetCursorPos({style.WindowPadding.x, ui::GetWindowSize().y - ui::GetStyle().WindowPadding.y - 10});
+            ui::Text("Tex:%s | Mat:%s | Spec:%s | Shadows:%s | Size:%i | Quality:%s | Occlusion:%s | Instancing:%s | API:%s",
+                qualityTexts[renderer->GetTextureQuality()],
+                qualityTexts[renderer->GetMaterialQuality()],
+                renderer->GetSpecularLighting() ? "On" : "Off",
+                renderer->GetDrawShadows() ? "On" : "Off",
+                renderer->GetShadowMapSize(),
+                shadowQualityTexts[renderer->GetShadowQuality()],
+                renderer->GetMaxOccluderTriangles() > 0 ? "On" : "Off",
+                renderer->GetDynamicInstancing() ? "On" : "Off",
+                graphics->GetApiName().c_str());
         }
     }
     ui::End();

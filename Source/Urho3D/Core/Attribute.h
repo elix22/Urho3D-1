@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -60,6 +60,8 @@ class Serializable;
 class URHO3D_API AttributeAccessor : public RefCounted
 {
 public:
+    /// Construct.
+    AttributeAccessor() = default;
     /// Get the attribute.
     virtual void Get(const Serializable* ptr, Variant& dest) const = 0;
     /// Set the attribute.
@@ -71,7 +73,7 @@ struct AttributeInfo
 {
     /// Construct empty.
     AttributeInfo() = default;
-
+#ifndef SWIG
     /// Construct attribute.
     AttributeInfo(VariantType type, const char* name, const SharedPtr<AttributeAccessor>& accessor, const char** enumNames, const Variant& defaultValue, AttributeModeFlags mode) :
         type_(type),
@@ -82,9 +84,9 @@ struct AttributeInfo
         mode_(mode)
     {
     }
-
+#endif
     /// Construct attribute.
-    AttributeInfo(VariantType type, const char* name, const SharedPtr<AttributeAccessor>& accessor, const Vector<String>& enumNames, const Variant& defaultValue, AttributeModeFlags mode) :
+    AttributeInfo(VariantType type, const char* name, const SharedPtr<AttributeAccessor>& accessor, const ea::vector<ea::string>& enumNames, const Variant& defaultValue, AttributeModeFlags mode) :
         type_(type),
         name_(name),
         enumNames_(nullptr),
@@ -109,15 +111,15 @@ struct AttributeInfo
         ptr_ = other.ptr_;
         enumNamesStorage_ = other.enumNamesStorage_;
 
-        if (!enumNamesStorage_.Empty())
+        if (!enumNamesStorage_.empty())
             InitializeEnumNamesFromStorage();
     }
 
     /// Get attribute metadata.
     const Variant& GetMetadata(const StringHash& key) const
     {
-        auto elem = metadata_.Find(key);
-        return elem != metadata_.End() ? elem->second_ : Variant::EMPTY;
+        auto elem = metadata_.find(key);
+        return elem != metadata_.end() ? elem->second : Variant::EMPTY;
     }
 
     /// Get attribute metadata of specified type.
@@ -141,7 +143,7 @@ struct AttributeInfo
     /// Attribute type.
     VariantType type_ = VAR_NONE;
     /// Name.
-    String name_;
+    ea::string name_;
     /// Enum names.
     const char** enumNames_ = nullptr;
     /// Helper object for accessor mode.
@@ -155,21 +157,21 @@ struct AttributeInfo
     /// Attribute data pointer if elsewhere than in the Serializable.
     void* ptr_ = nullptr;
     /// List of enum names. Used when names can not be stored externally.
-    Vector<String> enumNamesStorage_;
+    ea::vector<ea::string> enumNamesStorage_;
     /// List of enum name pointers. Front of this vector will be assigned to enumNames_ when enumNamesStorage_ is in use.
-    Vector<const char*> enumNamesPointers_;
+    ea::vector<const char*> enumNamesPointers_;
 
 private:
     void InitializeEnumNamesFromStorage()
     {
-        if (enumNamesStorage_.Empty())
+        if (enumNamesStorage_.empty())
             enumNames_ = nullptr;
         else
         {
             for (const auto& enumName : enumNamesStorage_)
-                enumNamesPointers_.EmplaceBack(enumName.CString());
-            enumNamesPointers_.EmplaceBack(nullptr);
-            enumNames_ = &enumNamesPointers_.Front();
+                enumNamesPointers_.emplace_back(enumName.c_str());
+            enumNamesPointers_.emplace_back(nullptr);
+            enumNames_ = &enumNamesPointers_.front();
         }
     }
 };

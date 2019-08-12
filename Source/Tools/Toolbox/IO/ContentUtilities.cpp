@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,42 +20,46 @@
 // THE SOFTWARE.
 //
 
+#include <Urho3D/Core/Context.h>
+#include <Urho3D/IO/FileSystem.h>
+#include <Urho3D/Resource/ResourceCache.h>
+#include <Urho3D/Resource/XMLFile.h>
+#include <Urho3D/SystemUI/SystemUI.h>
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
-#include <Urho3D/Urho3DAll.h>
 #include "ContentUtilities.h"
 
 
 namespace Urho3D
 {
 
-const Vector<String> archiveExtensions_{".rar", ".zip", ".tar", ".gz", ".xz", ".7z", ".pak"};
-const Vector<String> wordExtensions_{".doc", ".docx", ".odt"};
-const Vector<String> codeExtensions_{".c", ".cpp", ".h", ".hpp", ".hxx", ".py", ".py3", ".js", ".cs"};
-const Vector<String> imagesExtensions_{".png", ".jpg", ".jpeg", ".gif", ".ttf", ".dds", ".psd"};
-const Vector<String> textExtensions_{".xml", ".json", ".txt", ".yml", ".scene", ".material", ".ui", ".uistyle", ".node", ".particle"};
-const Vector<String> audioExtensions_{".waw", ".ogg", ".mp3"};
+const ea::vector<ea::string> archiveExtensions_{".rar", ".zip", ".tar", ".gz", ".xz", ".7z", ".pak"};
+const ea::vector<ea::string> wordExtensions_{".doc", ".docx", ".odt"};
+const ea::vector<ea::string> codeExtensions_{".c", ".cpp", ".h", ".hpp", ".hxx", ".py", ".py3", ".js", ".cs"};
+const ea::vector<ea::string> imagesExtensions_{".png", ".jpg", ".jpeg", ".gif", ".ttf", ".dds", ".psd"};
+const ea::vector<ea::string> textExtensions_{".xml", ".json", ".txt", ".yml", ".scene", ".material", ".ui", ".uistyle", ".node", ".particle"};
+const ea::vector<ea::string> audioExtensions_{".waw", ".ogg", ".mp3"};
 
-FileType GetFileType(const String& fileName)
+FileType GetFileType(const ea::string& fileName)
 {
-    auto extension = GetExtension(fileName).ToLower();
-    if (archiveExtensions_.Contains(extension))
+    auto extension = GetExtension(fileName).to_lower();
+    if (archiveExtensions_.contains(extension))
         return FTYPE_ARCHIVE;
-    if (wordExtensions_.Contains(extension))
+    if (wordExtensions_.contains(extension))
         return FTYPE_WORD;
-    if (codeExtensions_.Contains(extension))
+    if (codeExtensions_.contains(extension))
         return FTYPE_CODE;
-    if (imagesExtensions_.Contains(extension))
+    if (imagesExtensions_.contains(extension))
         return FTYPE_IMAGE;
-    if (textExtensions_.Contains(extension))
+    if (textExtensions_.contains(extension))
         return FTYPE_TEXT;
-    if (audioExtensions_.Contains(extension))
+    if (audioExtensions_.contains(extension))
         return FTYPE_AUDIO;
     if (extension == "pdf")
         return FTYPE_PDF;
     return FTYPE_FILE;
 }
 
-String GetFileIcon(const String& fileName)
+ea::string GetFileIcon(const ea::string& fileName)
 {
     switch (GetFileType(fileName))
     {
@@ -86,14 +90,40 @@ String GetFileIcon(const String& fileName)
     }
 }
 
-ContentType GetContentType(const String& resourcePath)
+ContentType GetContentType(Context* context, const ea::string& resourcePath)
 {
-    auto extension = GetExtension(resourcePath).ToLower();
+    ResourceCache* cache = context->GetCache();
+    FileSystem* fs = context->GetFileSystem();
+
+    if (IsAbsolutePath(resourcePath))
+    {
+        if (fs->DirExists(resourcePath))
+            return CTYPE_FOLDER;
+    }
+    else
+    {
+        for (const ea::string& resourceDir : cache->GetResourceDirs())
+        {
+            if (fs->DirExists(resourceDir + resourcePath))
+                return CTYPE_FOLDER;
+        }
+    }
+
+    auto extension = GetExtension(resourcePath).to_lower();
     if (extension == ".xml")
     {
-        auto systemUI = (SystemUI*)ui::GetIO().UserData;
-        SharedPtr<XMLFile> xml(systemUI->GetCache()->GetResource<XMLFile>(resourcePath));
-        if (xml.Null())
+        SharedPtr<XMLFile> xml;
+
+        if (IsAbsolutePath(resourcePath))
+        {
+            xml = SharedPtr<XMLFile>(new XMLFile(context));
+            if (!xml->LoadFile(resourcePath))
+                return CTYPE_UNKNOWN;
+        }
+        else
+            xml = context->GetCache()->GetResource<XMLFile>(resourcePath);
+
+        if (!xml)
             return CTYPE_UNKNOWN;
 
         auto rootElementName = xml->GetRoot().GetName();
@@ -131,9 +161,9 @@ ContentType GetContentType(const String& resourcePath)
         return CTYPE_PARTICLE;
     if (extension == ".node")
         return CTYPE_SCENEOBJECT;
-    if (audioExtensions_.Contains(extension))
+    if (audioExtensions_.contains(extension))
         return CTYPE_SOUND;
-    if (imagesExtensions_.Contains(extension))
+    if (imagesExtensions_.contains(extension))
         return CTYPE_TEXTURE;
 
     return CTYPE_UNKNOWN;

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -166,7 +166,7 @@ bool TextureCube::SetData(CubeMapFace face, unsigned level, int x, int y, int wi
 
 bool TextureCube::SetData(CubeMapFace face, Deserializer& source)
 {
-    SharedPtr<Image> image(new Image(context_));
+    SharedPtr<Image> image(context_->CreateObject<Image>());
     if (!image->Load(source))
         return false;
 

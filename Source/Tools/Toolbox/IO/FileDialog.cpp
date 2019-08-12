@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,10 +27,10 @@
 namespace Urho3D
 {
 
-FileDialogResult OpenDialog(const String& filterList, const String& defaultPath, String& outPath)
+FileDialogResult OpenDialog(const ea::string& filterList, const ea::string& defaultPath, ea::string& outPath)
 {
     nfdchar_t* output = nullptr;
-    auto result = NFD_OpenDialog(filterList.CString(), defaultPath.CString(), &output);
+    auto result = NFD_OpenDialog(filterList.c_str(), defaultPath.c_str(), &output);
     if (output != nullptr)
     {
         outPath = output;
@@ -39,23 +39,23 @@ FileDialogResult OpenDialog(const String& filterList, const String& defaultPath,
     return static_cast<FileDialogResult>(result);
 }
 
-FileDialogResult OpenDialogMultiple(const String& filterList, const String& defaultPath, Vector<String>& outPaths)
+FileDialogResult OpenDialogMultiple(const ea::string& filterList, const ea::string& defaultPath, ea::vector<ea::string>& outPaths)
 {
     nfdpathset_t output{};
-    auto result = NFD_OpenDialogMultiple(filterList.CString(), defaultPath.CString(), &output);
+    auto result = NFD_OpenDialogMultiple(filterList.c_str(), defaultPath.c_str(), &output);
     if (result == NFD_OKAY)
     {
         for (size_t i = 0, end = NFD_PathSet_GetCount(&output); i < end; i++)
-            outPaths.Push(NFD_PathSet_GetPath(&output, i));
+            outPaths.push_back(NFD_PathSet_GetPath(&output, i));
         NFD_PathSet_Free(&output);
     }
     return static_cast<FileDialogResult>(result);
 }
 
-FileDialogResult SaveDialog(const String& filterList, const String& defaultPath, String& outPath)
+FileDialogResult SaveDialog(const ea::string& filterList, const ea::string& defaultPath, ea::string& outPath)
 {
     nfdchar_t* output = nullptr;
-    auto result = NFD_SaveDialog(filterList.CString(), defaultPath.CString(), &output);
+    auto result = NFD_SaveDialog(filterList.c_str(), defaultPath.c_str(), &output);
     if (output != nullptr)
     {
         outPath = output;
@@ -64,10 +64,10 @@ FileDialogResult SaveDialog(const String& filterList, const String& defaultPath,
     return static_cast<FileDialogResult>(result);
 }
 
-FileDialogResult PickFolder(const String& defaultPath, String& outPath)
+FileDialogResult PickFolder(const ea::string& defaultPath, ea::string& outPath)
 {
     nfdchar_t* output = nullptr;
-    auto result = NFD_PickFolder(defaultPath.CString(), &output);
+    auto result = NFD_PickFolder(defaultPath.c_str(), &output);
     if (output != nullptr)
     {
         outPath = output;

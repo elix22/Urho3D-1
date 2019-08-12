@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -60,7 +60,6 @@ static const char* openMode[] =
 #endif
 
 #ifdef __ANDROID__
-const char* APK = "/apk/";
 static const unsigned READ_BUFFER_SIZE = 32768;
 #endif
 static const unsigned SKIP_BUFFER_SIZE = 1024;
@@ -82,7 +81,7 @@ File::File(Context* context) :
 {
 }
 
-File::File(Context* context, const String& fileName, FileMode mode) :
+File::File(Context* context, const ea::string& fileName, FileMode mode) :
     Object(context),
     mode_(FILE_READ),
     handle_(nullptr),
@@ -100,7 +99,7 @@ File::File(Context* context, const String& fileName, FileMode mode) :
     Open(fileName, mode);
 }
 
-File::File(Context* context, PackageFile* package, const String& fileName) :
+File::File(Context* context, PackageFile* package, const ea::string& fileName) :
     Object(context),
     mode_(FILE_READ),
     handle_(nullptr),
@@ -123,12 +122,12 @@ File::~File()
     Close();
 }
 
-bool File::Open(const String& fileName, FileMode mode)
+bool File::Open(const ea::string& fileName, FileMode mode)
 {
     return OpenInternal(fileName, mode);
 }
 
-bool File::Open(PackageFile* package, const String& fileName)
+bool File::Open(PackageFile* package, const ea::string& fileName)
 {
     if (!package)
         return false;
@@ -194,11 +193,11 @@ unsigned File::Read(void* dest, unsigned size)
             {
                 readBufferSize_ = Min(size_ - position_, READ_BUFFER_SIZE);
                 readBufferOffset_ = 0;
-                ReadInternal(readBuffer_.Get(), readBufferSize_);
+                ReadInternal(readBuffer_.get(), readBufferSize_);
             }
 
             unsigned copySize = Min((readBufferSize_ - readBufferOffset_), sizeLeft);
-            memcpy(destPtr, readBuffer_.Get() + readBufferOffset_, copySize);
+            memcpy(destPtr, readBuffer_.get() + readBufferOffset_, copySize);
             destPtr += copySize;
             sizeLeft -= copySize;
             readBufferOffset_ += copySize;
@@ -232,15 +231,15 @@ unsigned File::Read(void* dest, unsigned size)
                 }
 
                 /// \todo Handle errors
-                ReadInternal(inputBuffer_.Get(), packedSize);
-                LZ4_decompress_fast((const char*)inputBuffer_.Get(), (char*)readBuffer_.Get(), unpackedSize);
+                ReadInternal(inputBuffer_.get(), packedSize);
+                LZ4_decompress_fast((const char*)inputBuffer_.get(), (char*)readBuffer_.get(), unpackedSize);
 
                 readBufferSize_ = unpackedSize;
                 readBufferOffset_ = 0;
             }
 
             unsigned copySize = Min((readBufferSize_ - readBufferOffset_), sizeLeft);
-            memcpy(destPtr, readBuffer_.Get() + readBufferOffset_, copySize);
+            memcpy(destPtr, readBuffer_.get() + readBufferOffset_, copySize);
             destPtr += copySize;
             sizeLeft -= copySize;
             readBufferOffset_ += copySize;
@@ -391,8 +390,8 @@ void File::Close()
     }
 #endif
 
-    readBuffer_.Reset();
-    inputBuffer_.Reset();
+    readBuffer_.reset();
+    inputBuffer_.reset();
 
     if (handle_)
     {
@@ -411,7 +410,7 @@ void File::Flush()
         fflush((FILE*)handle_);
 }
 
-void File::SetName(const String& name)
+void File::SetName(const ea::string& name)
 {
     fileName_ = name;
 }
@@ -425,7 +424,7 @@ bool File::IsOpen() const
 #endif
 }
 
-bool File::OpenInternal(const String& fileName, FileMode mode, bool fromPackage)
+bool File::OpenInternal(const ea::string& fileName, FileMode mode, bool fromPackage)
 {
     Close();
 
@@ -436,11 +435,11 @@ bool File::OpenInternal(const String& fileName, FileMode mode, bool fromPackage)
     auto* fileSystem = GetSubsystem<FileSystem>();
     if (fileSystem && !fileSystem->CheckAccess(GetPath(fileName)))
     {
-        URHO3D_LOGERRORF("Access denied to %s", fileName.CString());
+        URHO3D_LOGERRORF("Access denied to %s", fileName.c_str());
         return false;
     }
 
-    if (fileName.Empty())
+    if (fileName.empty())
     {
         URHO3D_LOGERROR("Could not open file with empty name");
         return false;
@@ -458,7 +457,7 @@ bool File::OpenInternal(const String& fileName, FileMode mode, bool fromPackage)
         assetHandle_ = SDL_RWFromFile(URHO3D_ASSET(fileName), "rb");
         if (!assetHandle_)
         {
-            URHO3D_LOGERRORF("Could not open Android asset file %s", fileName.CString());
+            URHO3D_LOGERRORF("Could not open Android asset file %s", fileName.c_str());
             return false;
         }
         else
@@ -478,24 +477,24 @@ bool File::OpenInternal(const String& fileName, FileMode mode, bool fromPackage)
 #endif
 
 #ifdef _WIN32
-    handle_ = _wfopen(GetWideNativePath(fileName).CString(), openMode[mode]);
+    handle_ = _wfopen(GetWideNativePath(fileName).c_str(), openMode[mode]);
 #else
-    handle_ = fopen(GetNativePath(fileName).CString(), openMode[mode]);
+    handle_ = fopen(GetNativePath(fileName).c_str(), openMode[mode]);
 #endif
 
     // If file did not exist in readwrite mode, retry with write-update mode
     if (mode == FILE_READWRITE && !handle_)
     {
 #ifdef _WIN32
-        handle_ = _wfopen(GetWideNativePath(fileName).CString(), openMode[mode + 1]);
+        handle_ = _wfopen(GetWideNativePath(fileName).c_str(), openMode[mode + 1]);
 #else
-        handle_ = fopen(GetNativePath(fileName).CString(), openMode[mode + 1]);
+        handle_ = fopen(GetNativePath(fileName).c_str(), openMode[mode + 1]);
 #endif
     }
 
     if (!handle_)
     {
-        URHO3D_LOGERRORF("Could not open file %s", fileName.CString());
+        URHO3D_LOGERRORF("Could not open file %s", fileName.c_str());
         return false;
     }
 
@@ -506,7 +505,7 @@ bool File::OpenInternal(const String& fileName, FileMode mode, bool fromPackage)
         fseek((FILE*)handle_, 0, SEEK_SET);
         if (size > M_MAX_UNSIGNED)
         {
-            URHO3D_LOGERRORF("Could not open file %s which is larger than 4GB", fileName.CString());
+            URHO3D_LOGERRORF("Could not open file %s which is larger than 4GB", fileName.c_str());
             Close();
             size_ = 0;
             return false;
@@ -550,16 +549,28 @@ void File::SeekInternal(unsigned newPosition)
         fseek((FILE*)handle_, newPosition, SEEK_SET);
 }
 
-void File::ReadText(String& text)
+void File::ReadBinary(ea::vector<unsigned char>& buffer)
 {
-    text.Clear();
+    buffer.clear();
 
     if (!size_)
         return;
 
-    text.Resize(size_);
+    buffer.resize(size_);
 
-    Read((void*)text.CString(), size_);
+    Read(static_cast<void*>(buffer.data()), size_);
+}
+
+void File::ReadText(ea::string& text)
+{
+    text.clear();
+
+    if (!size_)
+        return;
+
+    text.resize(size_);
+
+    Read(static_cast<void*>(&text[0]), size_);
 }
 
 bool File::Copy(File* srcFile)
@@ -571,10 +582,10 @@ bool File::Copy(File* srcFile)
         return false;
 
     unsigned fileSize = srcFile->GetSize();
-    SharedArrayPtr<unsigned char> buffer(new unsigned char[fileSize]);
+    ea::shared_array<unsigned char> buffer(new unsigned char[fileSize]);
 
-    unsigned bytesRead = srcFile->Read(buffer.Get(), fileSize);
-    unsigned bytesWritten = Write(buffer.Get(), fileSize);
+    unsigned bytesRead = srcFile->Read(buffer.get(), fileSize);
+    unsigned bytesWritten = Write(buffer.get(), fileSize);
     return bytesRead == fileSize && bytesWritten == fileSize;
 
 }

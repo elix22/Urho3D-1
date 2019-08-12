@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -52,7 +52,7 @@ bool FontFaceBitmap::Load(const unsigned char* fontData, unsigned fontDataSize, 
 {
     Context* context = font_->GetContext();
 
-    SharedPtr<XMLFile> xmlReader(new XMLFile(context));
+    SharedPtr<XMLFile> xmlReader(context->CreateObject<XMLFile>());
     MemoryBuffer memoryBuffer(fontData, fontDataSize);
     if (!xmlReader->Load(memoryBuffer))
     {
@@ -81,10 +81,10 @@ bool FontFaceBitmap::Load(const unsigned char* fontData, unsigned fontDataSize, 
     XMLElement commonElem = root.GetChild("common");
     rowHeight_ = commonElem.GetInt("lineHeight");
     unsigned pages = commonElem.GetUInt("pages");
-    textures_.Reserve(pages);
+    textures_.reserve(pages);
 
     auto* resourceCache = font_->GetSubsystem<ResourceCache>();
-    String fontPath = GetPath(font_->GetName());
+    ea::string fontPath = GetPath(font_->GetName());
     unsigned totalTextureSize = 0;
 
     XMLElement pageElem = pagesElem.GetChild("page");
@@ -92,16 +92,16 @@ bool FontFaceBitmap::Load(const unsigned char* fontData, unsigned fontDataSize, 
     {
         if (pageElem.IsNull())
         {
-            URHO3D_LOGERROR("Could not find Page element for page: " + String(i));
+            URHO3D_LOGERROR("Could not find Page element for page: " + ea::to_string(i));
             return false;
         }
 
         // Assume the font image is in the same directory as the font description file
-        String textureFile = fontPath + pageElem.GetAttribute("file");
+        ea::string textureFile = fontPath + pageElem.GetAttribute("file");
 
         // Load texture manually to allow controlling the alpha channel mode
         SharedPtr<File> fontFile = resourceCache->GetFile(textureFile);
-        SharedPtr<Image> fontImage(new Image(context));
+        SharedPtr<Image> fontImage(context->CreateObject<Image>());
         if (!fontFile || !fontImage->Load(*fontFile))
         {
             URHO3D_LOGERROR("Failed to load font image file");
@@ -111,11 +111,11 @@ bool FontFaceBitmap::Load(const unsigned char* fontData, unsigned fontDataSize, 
         if (!texture)
             return false;
 
-        textures_.Push(texture);
+        textures_.push_back(texture);
 
         // Add texture to resource cache
         texture->SetName(fontFile->GetName());
-        resourceCache->AddManualResource(texture);
+        resourceCache->AddManualResource(texture.Get());
 
         totalTextureSize += fontImage->GetWidth() * fontImage->GetHeight() * fontImage->GetComponents();
 
@@ -160,7 +160,7 @@ bool FontFaceBitmap::Load(const unsigned char* fontData, unsigned fontDataSize, 
         }
     }
 
-    URHO3D_LOGDEBUGF("Bitmap font face %s has %d glyphs", GetFileName(font_->GetName()).CString(), count);
+    URHO3D_LOGDEBUGF("Bitmap font face %s has %d glyphs", GetFileName(font_->GetName()).c_str(), count);
 
     font_->SetMemoryUse(font_->GetMemoryUse() + totalTextureSize);
     return true;
@@ -189,9 +189,10 @@ bool FontFaceBitmap::Load(FontFace* fontFace, bool usedGlyphs)
     int maxTextureSize = font_->GetSubsystem<UI>()->GetMaxFontTextureSize();
     AreaAllocator allocator(FONT_TEXTURE_MIN_SIZE, FONT_TEXTURE_MIN_SIZE, maxTextureSize, maxTextureSize);
 
-    for (HashMap<unsigned, FontGlyph>::ConstIterator i = fontFace->glyphMapping_.Begin(); i != fontFace->glyphMapping_.End(); ++i)
+    for (auto i = fontFace->glyphMapping_.begin(); i !=
+        fontFace->glyphMapping_.end(); ++i)
     {
-        FontGlyph fontGlyph = i->second_;
+        FontGlyph fontGlyph = i->second;
         if (!fontGlyph.used_)
             continue;
 
@@ -209,21 +210,21 @@ bool FontFaceBitmap::Load(FontFace* fontFace, bool usedGlyphs)
         fontGlyph.y_ = (short)y;
         fontGlyph.page_ = numPages - 1;
 
-        glyphMapping_[i->first_] = fontGlyph;
+        glyphMapping_[i->first] = fontGlyph;
     }
 
     // Assume that format is the same for all textures and that bitmap font type may have more than one component
     unsigned components = ConvertFormatToNumComponents(fontFace->textures_[0]->GetFormat());
 
     // Save the existing textures as image resources
-    Vector<SharedPtr<Image> > oldImages;
-    for (unsigned i = 0; i < fontFace->textures_.Size(); ++i)
-        oldImages.Push(SaveFaceTexture(fontFace->textures_[i]));
+    ea::vector<SharedPtr<Image> > oldImages;
+    for (unsigned i = 0; i < fontFace->textures_.size(); ++i)
+        oldImages.push_back(SaveFaceTexture(fontFace->textures_[i].Get()));
 
-    Vector<SharedPtr<Image> > newImages(numPages);
+    ea::vector<SharedPtr<Image> > newImages(numPages);
     for (unsigned i = 0; i < numPages; ++i)
     {
-        SharedPtr<Image> image(new Image(font_->GetContext()));
+        SharedPtr<Image> image(font_->GetContext()->CreateObject<Image>());
 
         int width = maxTextureSize;
         int height = maxTextureSize;
@@ -239,50 +240,52 @@ bool FontFaceBitmap::Load(FontFace* fontFace, bool usedGlyphs)
         newImages[i] = image;
     }
 
-    for (HashMap<unsigned, FontGlyph>::Iterator i = glyphMapping_.Begin(); i != glyphMapping_.End(); ++i)
+    for (auto i = glyphMapping_.begin(); i != glyphMapping_.end(); ++i)
     {
-        FontGlyph& newGlyph = i->second_;
-        const FontGlyph& oldGlyph = fontFace->glyphMapping_[i->first_];
+        FontGlyph& newGlyph = i->second;
+        const FontGlyph& oldGlyph = fontFace->glyphMapping_[i->first];
         Blit(newImages[newGlyph.page_], newGlyph.x_, newGlyph.y_, newGlyph.width_, newGlyph.height_, oldImages[oldGlyph.page_],
             oldGlyph.x_, oldGlyph.y_, components);
     }
 
-    textures_.Resize(newImages.Size());
-    for (unsigned i = 0; i < newImages.Size(); ++i)
+    textures_.resize(newImages.size());
+    for (unsigned i = 0; i < newImages.size(); ++i)
         textures_[i] = LoadFaceTexture(newImages[i]);
 
-    for (HashMap<unsigned, float>::ConstIterator i = fontFace->kerningMapping_.Begin(); i != fontFace->kerningMapping_.End(); ++i)
+    for (auto i = fontFace->kerningMapping_.begin(); i !=
+        fontFace->kerningMapping_.end(); ++i)
     {
-        unsigned first = (i->first_) >> 16u;
-        unsigned second = (i->first_) & 0xffffu;
-        if (glyphMapping_.Find(first) != glyphMapping_.End() && glyphMapping_.Find(second) != glyphMapping_.End())
-            kerningMapping_[i->first_] = i->second_;
+        unsigned first = (i->first) >> 16u;
+        unsigned second = (i->first) & 0xffffu;
+        if (glyphMapping_.find(first) != glyphMapping_.end() &&
+            glyphMapping_.find(second) != glyphMapping_.end())
+            kerningMapping_[i->first] = i->second;
     }
 
     return true;
 }
 
-bool FontFaceBitmap::Save(Serializer& dest, int pointSize, const String& indentation)
+bool FontFaceBitmap::Save(Serializer& dest, int pointSize, const ea::string& indentation)
 {
     Context* context = font_->GetContext();
 
-    SharedPtr<XMLFile> xml(new XMLFile(context));
+    SharedPtr<XMLFile> xml(context->CreateObject<XMLFile>());
     XMLElement rootElem = xml->CreateRoot("font");
 
     // Information
     XMLElement childElem = rootElem.CreateChild("info");
-    String fileName = GetFileName(font_->GetName());
+    ea::string fileName = GetFileName(font_->GetName());
     childElem.SetAttribute("face", fileName);
-    childElem.SetAttribute("size", String(pointSize));
+    childElem.SetAttribute("size", ea::to_string(pointSize));
 
     // Common
     childElem = rootElem.CreateChild("common");
     childElem.SetInt("lineHeight", rowHeight_);
-    unsigned pages = textures_.Size();
+    unsigned pages = textures_.size();
     childElem.SetUInt("pages", pages);
 
     // Construct the path to store the texture
-    String pathName;
+    ea::string pathName;
     auto* file = dynamic_cast<File*>(&dest);
     if (file)
         // If serialize to file, use the file's path
@@ -297,7 +300,7 @@ bool FontFaceBitmap::Save(Serializer& dest, int pointSize, const String& indenta
     {
         XMLElement pageElem = childElem.CreateChild("page");
         pageElem.SetInt("id", i);
-        String texFileName = fileName + "_" + String(i) + ".png";
+        ea::string texFileName = fileName + "_" + ea::to_string(i) + ".png";
         pageElem.SetAttribute("file", texFileName);
 
         // Save the font face texture to image file
@@ -306,16 +309,16 @@ bool FontFaceBitmap::Save(Serializer& dest, int pointSize, const String& indenta
 
     // Chars and kernings
     XMLElement charsElem = rootElem.CreateChild("chars");
-    unsigned numGlyphs = glyphMapping_.Size();
+    unsigned numGlyphs = glyphMapping_.size();
     charsElem.SetInt("count", numGlyphs);
 
-    for (HashMap<unsigned, FontGlyph>::ConstIterator i = glyphMapping_.Begin(); i != glyphMapping_.End(); ++i)
+    for (auto i = glyphMapping_.begin(); i != glyphMapping_.end(); ++i)
     {
         // Char
         XMLElement charElem = charsElem.CreateChild("char");
-        charElem.SetInt("id", i->first_);
+        charElem.SetInt("id", i->first);
 
-        const FontGlyph& glyph = i->second_;
+        const FontGlyph& glyph = i->second;
         charElem.SetInt("x", glyph.x_);
         charElem.SetInt("y", glyph.y_);
         charElem.SetInt("width", glyph.width_);
@@ -326,15 +329,16 @@ bool FontFaceBitmap::Save(Serializer& dest, int pointSize, const String& indenta
         charElem.SetUInt("page", glyph.page_);
     }
 
-    if (!kerningMapping_.Empty())
+    if (!kerningMapping_.empty())
     {
         XMLElement kerningsElem = rootElem.CreateChild("kernings");
-        for (HashMap<unsigned, float>::ConstIterator i = kerningMapping_.Begin(); i != kerningMapping_.End(); ++i)
+        for (auto i = kerningMapping_.begin(); i !=
+            kerningMapping_.end(); ++i)
         {
             XMLElement kerningElem = kerningsElem.CreateChild("kerning");
-            kerningElem.SetInt("first", i->first_ >> 16u);
-            kerningElem.SetInt("second", i->first_ & 0xffffu);
-            kerningElem.SetInt("amount", i->second_);
+            kerningElem.SetInt("first", i->first >> 16u);
+            kerningElem.SetInt("second", i->first & 0xffffu);
+            kerningElem.SetInt("amount", i->second);
         }
     }
 
@@ -355,7 +359,7 @@ unsigned FontFaceBitmap::ConvertFormatToNumComponents(unsigned format)
 
 SharedPtr<Image> FontFaceBitmap::SaveFaceTexture(Texture2D* texture)
 {
-    SharedPtr<Image> image(new Image(font_->GetContext()));
+    SharedPtr<Image> image(font_->GetContext()->CreateObject<Image>());
     image->SetSize(texture->GetWidth(), texture->GetHeight(), ConvertFormatToNumComponents(texture->GetFormat()));
     if (!texture->GetData(0, image->GetData()))
     {
@@ -365,7 +369,7 @@ SharedPtr<Image> FontFaceBitmap::SaveFaceTexture(Texture2D* texture)
     return image;
 }
 
-bool FontFaceBitmap::SaveFaceTexture(Texture2D* texture, const String& fileName)
+bool FontFaceBitmap::SaveFaceTexture(Texture2D* texture, const ea::string& fileName)
 {
     SharedPtr<Image> image = SaveFaceTexture(texture);
     return image ? image->SavePNG(fileName) : false;

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2018 the Urho3D project.
+# Copyright (c) 2008-2019 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,14 +20,13 @@
 # THE SOFTWARE.
 #
 
-# Set project name
-project (Urho3D-Samples)
+if (NOT URHO3D_SAMPLES)
+    return ()
+endif ()
 
-set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${DEST_SAMPLES_DIR})
-
-set (COMMON_SAMPLE_H_FILES "${CMAKE_CURRENT_SOURCE_DIR}/Sample.h" "${CMAKE_CURRENT_SOURCE_DIR}/Sample.inl")
-set (INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR})
-set (CMAKE_INSTALL_RPATH ".:..")
+if (NOT URHO3D_WIN32_CONSOLE)
+    set (PLATFORM WIN32)
+endif ()
 
 ## Add samples
 file (GLOB_RECURSE DIRS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CMakeLists.txt)
@@ -39,4 +38,76 @@ foreach (DIR ${DIRS})
     endif ()
 endforeach ()
 
-vs_group_subdirectory_targets(${CMAKE_CURRENT_SOURCE_DIR} Samples)
+file (GLOB SAMPLE_MANAGER_SOURCE_CODE *.h *.cpp)
+
+if (ANDROID)
+    add_library(Samples MODULE ${SAMPLE_MANAGER_SOURCE_CODE} ${SOURCE_CODE})
+else ()
+    add_executable(Samples ${PLATFORM} MACOSX_BUNDLE ${SAMPLE_MANAGER_SOURCE_CODE} ${SOURCE_CODE})
+endif ()
+target_link_libraries(Samples PUBLIC Urho3D)
+if (TARGET Utilities2D)
+    target_link_libraries(Samples PUBLIC Utilities2D)
+endif ()
+
+vs_group_subdirectory_targets(${CMAKE_CURRENT_SOURCE_DIR} "Sample Projects")
+
+# Package resources for samples.
+if (WEB OR MOBILE)
+    create_pak("${rbfx_SOURCE_DIR}/bin/Data"               "${CMAKE_BINARY_DIR}/bin/Data.pak")
+    create_pak("${rbfx_SOURCE_DIR}/bin/CoreData"           "${CMAKE_BINARY_DIR}/bin/CoreData.pak")
+    create_pak("${rbfx_SOURCE_DIR}/bin/Autoload/LargeData" "${CMAKE_BINARY_DIR}/bin/Autoload/LargeData.pak")
+endif ()
+
+if (WEB)
+    web_executable(Samples)
+    package_resources_web(
+        FILES        "${CMAKE_BINARY_DIR}/bin/Data.pak"
+                     "${CMAKE_BINARY_DIR}/bin/CoreData.pak"
+                     "${CMAKE_BINARY_DIR}/bin/Autoload/LargeData.pak"
+        RELATIVE_DIR "${CMAKE_BINARY_DIR}/bin"
+        OUTPUT       "Resources.js"
+    )
+    web_link_resources(Samples Resources.js)
+    target_link_libraries(Samples PRIVATE "--shell-file ${CMAKE_SOURCE_DIR}/bin/application.html")
+endif ()
+
+if (XCODE)
+    # Default app bundle icon
+    set(RESOURCE_FILES ${rbfx_SOURCE_DIR}/bin/Data/Textures/UrhoIcon.icns)
+    if (IOS)
+        # Default app icon on the iOS/tvOS home screen
+        list(APPEND RESOURCE_FILES ${rbfx_SOURCE_DIR}/bin/Data/Textures/rbfx-icon.png)
+    endif ()
+    set_source_files_properties (${RESOURCE_FILES} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+    target_sources(Samples PRIVATE ${RESOURCE_FILES})
+
+    if (IOS)
+        set_target_properties(Samples
+            PROPERTIES MACOSX_BUNDLE_BUNDLE_NAME \${PRODUCT_NAME}
+                       MACOSX_BUNDLE_GUI_IDENTIFIER com.github.rbfx.\${PRODUCT_NAME:rfc1034identifier:lower}
+        )
+        if (RESOURCE_PAKS)
+            set_source_files_properties ("${CMAKE_BINARY_DIR}/bin/Data.pak" "${CMAKE_BINARY_DIR}/bin/CoreData.pak"
+                PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+            set_source_files_properties ("${CMAKE_BINARY_DIR}/bin/Autoload/LargeData.pak"
+                PROPERTIES MACOSX_PACKAGE_LOCATION Resources/Autoload)
+            target_sources(Samples PRIVATE "${CMAKE_BINARY_DIR}/bin/Data.pak" "${CMAKE_BINARY_DIR}/bin/CoreData.pak"
+                "${CMAKE_BINARY_DIR}/bin/Autoload/LargeData.pak")
+        else ()
+            set_source_files_properties (
+                "${rbfx_SOURCE_DIR}/bin/Data" "${rbfx_SOURCE_DIR}/bin/CoreData" "${rbfx_SOURCE_DIR}/bin/Autoload"
+                PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+            target_sources(Samples PRIVATE
+                "${rbfx_SOURCE_DIR}/bin/Data" "${rbfx_SOURCE_DIR}/bin/CoreData" "${rbfx_SOURCE_DIR}/bin/Autoload")
+        endif ()
+    endif ()
+endif ()
+
+if (NOT ANDROID)
+    install(TARGETS Samples
+        RUNTIME DESTINATION ${DEST_SAMPLES_DIR}
+        LIBRARY DESTINATION ${DEST_SAMPLES_DIR}
+        BUNDLE DESTINATION  ${DEST_SAMPLES_DIR}
+    )
+endif ()

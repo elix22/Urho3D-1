@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -415,8 +415,11 @@ public:
         return Urho3D::Equals(w_, rhs.w_) && Urho3D::Equals(x_, rhs.x_) && Urho3D::Equals(y_, rhs.y_) && Urho3D::Equals(z_, rhs.z_);
     }
 
-    /// Return whether is NaN.
+    /// Return whether any element is NaN.
     bool IsNaN() const { return Urho3D::IsNaN(w_) || Urho3D::IsNaN(x_) || Urho3D::IsNaN(y_) || Urho3D::IsNaN(z_); }
+
+    /// Return whether any element is Inf.
+    bool IsInf() const { return Urho3D::IsInf(w_) || Urho3D::IsInf(x_) || Urho3D::IsInf(y_) || Urho3D::IsInf(z_); }
 
     /// Return conjugate.
     Quaternion Conjugate() const
@@ -452,7 +455,7 @@ public:
     const float* Data() const { return &w_; }
 
     /// Return as string.
-    String ToString() const;
+    ea::string ToString() const;
 
     /// W coordinate.
     float w_;

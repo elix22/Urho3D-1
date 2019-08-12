@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,13 @@
 
 #include "../Core/Object.h"
 #include "../Core/Timer.h"
+
+namespace CLI
+{
+
+class App;
+
+}
 
 namespace Urho3D
 {
@@ -75,6 +82,9 @@ public:
     /// Dump information of all memory allocations to the log. Supported in MSVC debug mode only.
     void DumpMemory();
 
+    /// Return preference directory name.
+    const ea::string& GetAppPreferencesDir() const { return appPreferencesDir_; }
+
     /// Get timestep of the next frame. Updated by ApplyFrameLimit().
     float GetNextTimeStep() const { return timeStep_; }
 
@@ -113,12 +123,12 @@ public:
     void ApplyFrameLimit();
 
     /// Parse the engine startup parameters map from command line arguments.
-    static VariantMap ParseParameters(const Vector<String>& arguments);
+    static void DefineParameters(CLI::App& commandLine, VariantMap& engineParameters);
     /// Return whether startup parameters contains a specific parameter.
-    static bool HasParameter(const VariantMap& parameters, const String& parameter);
+    static bool HasParameter(const VariantMap& parameters, const ea::string& parameter);
     /// Get an engine startup parameter, with default value if missing.
     static const Variant
-        & GetParameter(const VariantMap& parameters, const String& parameter, const Variant& defaultValue = Variant::EMPTY);
+        & GetParameter(const VariantMap& parameters, const ea::string& parameter, const Variant& defaultValue = Variant::EMPTY);
 
 private:
     /// Handle exit requested event. Auto-exit if enabled.
@@ -126,10 +136,12 @@ private:
     /// Actually perform the exit actions.
     void DoExit();
 
+    /// App preference directory.
+    ea::string appPreferencesDir_;
     /// Frame update timer.
     HiresTimer frameTimer_;
     /// Previous timesteps for smoothing.
-    PODVector<float> lastTimeSteps_;
+    ea::vector<float> lastTimeSteps_;
     /// Next frame timestep in seconds.
     float timeStep_;
     /// How many frames to average for the smoothed timestep.

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -113,10 +113,10 @@ void ParticleEffect2D::RegisterObject(Context* context)
 
 bool ParticleEffect2D::BeginLoad(Deserializer& source)
 {
-    if (GetName().Empty())
+    if (GetName().empty())
         SetName(source.GetName());
 
-    loadSpriteName_.Clear();
+    loadSpriteName_.clear();
 
     XMLFile xmlFile(context_);
     if (!xmlFile.Load(source))
@@ -126,7 +126,7 @@ bool ParticleEffect2D::BeginLoad(Deserializer& source)
     if (!rootElem)
         return false;
 
-    String texture = rootElem.GetChild("texture").GetAttribute("name");
+    ea::string texture = rootElem.GetChild("texture").GetAttribute("name");
     loadSpriteName_ = GetParentPath(GetName()) + texture;
     // If async loading, request the sprite beforehand
     if (GetAsyncLoadState() == ASYNC_LOADING)
@@ -211,14 +211,14 @@ bool ParticleEffect2D::BeginLoad(Deserializer& source)
 bool ParticleEffect2D::EndLoad()
 {
     // Apply the sprite now
-    if (!loadSpriteName_.Empty())
+    if (!loadSpriteName_.empty())
     {
         auto* cache = GetSubsystem<ResourceCache>();
         sprite_ = cache->GetResource<Sprite2D>(loadSpriteName_);
         if (!sprite_)
             URHO3D_LOGERROR("Could not load sprite " + loadSpriteName_ + " for particle effect");
 
-        loadSpriteName_.Clear();
+        loadSpriteName_.clear();
     }
 
     return true;
@@ -232,7 +232,7 @@ bool ParticleEffect2D::Save(Serializer& dest) const
     XMLFile xmlFile(context_);
     XMLElement rootElem = xmlFile.CreateRoot("particleEmitterConfig");
 
-    String fileName = GetFileNameAndExtension(sprite_->GetName());
+    ea::string fileName = GetFileNameAndExtension(sprite_->GetName());
     rootElem.CreateChild("texture").SetAttribute("name", fileName);
 
     WriteVector2(rootElem, "sourcePosition", Vector2::ZERO);
@@ -471,9 +471,9 @@ void ParticleEffect2D::SetRotationEndVariance(float rotationEndVariance)
     rotationEndVariance_ = rotationEndVariance;
 }
 
-SharedPtr<ParticleEffect2D> ParticleEffect2D::Clone(const String& cloneName) const
+SharedPtr<ParticleEffect2D> ParticleEffect2D::Clone(const ea::string& cloneName) const
 {
-    SharedPtr<ParticleEffect2D> ret(new ParticleEffect2D(context_));
+    SharedPtr<ParticleEffect2D> ret(context_->CreateObject<ParticleEffect2D>());
 
     ret->SetName(cloneName);
     ret->sprite_ = sprite_;
@@ -517,41 +517,41 @@ SharedPtr<ParticleEffect2D> ParticleEffect2D::Clone(const String& cloneName) con
     return ret;
 }
 
-int ParticleEffect2D::ReadInt(const XMLElement& element, const String& name) const
+int ParticleEffect2D::ReadInt(const XMLElement& element, const ea::string& name) const
 {
     return element.GetChild(name).GetInt("value");
 }
 
-float ParticleEffect2D::ReadFloat(const XMLElement& element, const String& name) const
+float ParticleEffect2D::ReadFloat(const XMLElement& element, const ea::string& name) const
 {
     return element.GetChild(name).GetFloat("value");
 }
 
-Color ParticleEffect2D::ReadColor(const XMLElement& element, const String& name) const
+Color ParticleEffect2D::ReadColor(const XMLElement& element, const ea::string& name) const
 {
     XMLElement child = element.GetChild(name);
     return Color(child.GetFloat("red"), child.GetFloat("green"), child.GetFloat("blue"), child.GetFloat("alpha"));
 }
 
-Vector2 ParticleEffect2D::ReadVector2(const XMLElement& element, const String& name) const
+Vector2 ParticleEffect2D::ReadVector2(const XMLElement& element, const ea::string& name) const
 {
     XMLElement child = element.GetChild(name);
     return Vector2(child.GetFloat("x"), child.GetFloat("y"));
 }
 
-void ParticleEffect2D::WriteInt(XMLElement& element, const String& name, int value) const
+void ParticleEffect2D::WriteInt(XMLElement& element, const ea::string& name, int value) const
 {
     XMLElement child = element.CreateChild(name);
     child.SetInt("value", value);
 }
 
-void ParticleEffect2D::WriteFloat(XMLElement& element, const String& name, float value) const
+void ParticleEffect2D::WriteFloat(XMLElement& element, const ea::string& name, float value) const
 {
     XMLElement child = element.CreateChild(name);
     child.SetFloat("value", value);
 }
 
-void ParticleEffect2D::WriteColor(XMLElement& element, const String& name, const Color& color) const
+void ParticleEffect2D::WriteColor(XMLElement& element, const ea::string& name, const Color& color) const
 {
     XMLElement child = element.CreateChild(name);
     child.SetFloat("red", color.r_);
@@ -560,7 +560,7 @@ void ParticleEffect2D::WriteColor(XMLElement& element, const String& name, const
     child.SetFloat("alpha", color.a_);
 }
 
-void ParticleEffect2D::WriteVector2(XMLElement& element, const String& name, const Vector2& value) const
+void ParticleEffect2D::WriteVector2(XMLElement& element, const ea::string& name, const Vector2& value) const
 {
     XMLElement child = element.CreateChild(name);
     child.SetFloat("x", value.x_);

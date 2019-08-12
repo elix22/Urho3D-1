@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -62,7 +62,6 @@
 #include "Urho2DPlatformer.h"
 
 
-URHO3D_DEFINE_APPLICATION_MAIN(Urho2DPlatformer)
 
 Urho2DPlatformer::Urho2DPlatformer(Context* context) :
     Sample(context)
@@ -76,7 +75,6 @@ Urho2DPlatformer::Urho2DPlatformer(Context* context) :
 void Urho2DPlatformer::Setup()
 {
     Sample::Setup();
-    engineParameters_[EP_SOUND] = true;
 }
 
 void Urho2DPlatformer::Start()
@@ -200,7 +198,7 @@ void Urho2DPlatformer::HandleCollisionBegin(StringHash eventType, VariantMap& ev
     auto* hitNode = static_cast<Node*>(eventData[PhysicsBeginContact2D::P_NODEA].GetPtr());
     if (hitNode->GetName() == "Imp")
         hitNode = static_cast<Node*>(eventData[PhysicsBeginContact2D::P_NODEB].GetPtr());
-    String nodeName = hitNode->GetName();
+    ea::string nodeName = hitNode->GetName();
     Node* character2DNode = scene_->GetChild("Imp", true);
 
     // Handle ropes and ladders climbing
@@ -235,7 +233,7 @@ void Urho2DPlatformer::HandleCollisionBegin(StringHash eventType, VariantMap& ev
             instructions->SetText("!!! Go to the Exit !!!");
         }
         Text* coinsText = static_cast<Text*>(ui->GetRoot()->GetChild("CoinsText", true));
-        coinsText->SetText(String(character2D_->remainingCoins_)); // Update coins UI counter
+        coinsText->SetText(ea::to_string(character2D_->remainingCoins_)); // Update coins UI counter
         sample2D_->PlaySoundEffect("Powerup.wav");
     }
 
@@ -310,7 +308,7 @@ void Urho2DPlatformer::HandleCollisionEnd(StringHash eventType, VariantMap& even
     auto* hitNode = static_cast<Node*>(eventData[PhysicsEndContact2D::P_NODEA].GetPtr());
     if (hitNode->GetName() == "Imp")
         hitNode = static_cast<Node*>(eventData[PhysicsEndContact2D::P_NODEB].GetPtr());
-    String nodeName = hitNode->GetName();
+    ea::string nodeName = hitNode->GetName();
     Node* character2DNode = scene_->GetChild("Imp", true);
 
     // Handle leaving a rope or ladder
@@ -386,7 +384,7 @@ void Urho2DPlatformer::HandlePostRenderUpdate(StringHash eventType, VariantMap& 
 
 void Urho2DPlatformer::ReloadScene(bool reInit)
 {
-    String filename = sample2D_->demoFilename_;
+    ea::string filename = sample2D_->demoFilename_;
     if (!reInit)
         filename += "InGame";
 
@@ -410,11 +408,11 @@ void Urho2DPlatformer::ReloadScene(bool reInit)
     // Update lifes UI
     auto* ui = GetSubsystem<UI>();
     Text* lifeText = static_cast<Text*>(ui->GetRoot()->GetChild("LifeText", true));
-    lifeText->SetText(String(lifes));
+    lifeText->SetText(ea::to_string(lifes));
 
     // Update coins UI
     Text* coinsText = static_cast<Text*>(ui->GetRoot()->GetChild("CoinsText", true));
-    coinsText->SetText(String(coins));
+    coinsText->SetText(ea::to_string(coins));
 }
 
 void Urho2DPlatformer::HandlePlayButton(StringHash eventType, VariantMap& eventData)

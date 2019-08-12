@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -109,13 +109,13 @@ public:
     /// Load from XML element.
     void Load(const XMLElement& element);
     /// Return has property.
-    bool HasProperty(const String& name) const;
+    bool HasProperty(const ea::string& name) const;
     /// Return property value.
-    const String& GetProperty(const String& name) const;
+    const ea::string& GetProperty(const ea::string& name) const;
 
 protected:
     /// Property name to property value mapping.
-    HashMap<String, String> nameToValueMapping_;
+    ea::unordered_map<ea::string, ea::string> nameToValueMapping_;
 };
 
 /// Tile flipping flags.
@@ -144,9 +144,9 @@ public:
     /// Return sprite.
     Sprite2D* GetSprite() const;
     /// Return has property.
-    bool HasProperty(const String& name) const;
+    bool HasProperty(const ea::string& name) const;
     /// Return property.
-    const String& GetProperty(const String& name) const;
+    const ea::string& GetProperty(const ea::string& name) const;
 
 private:
     friend class TmxTileLayer2D;
@@ -169,10 +169,10 @@ public:
     TileMapObjectType2D GetObjectType() const { return objectType_; }
 
     /// Return name.
-    const String& GetName() const { return name_; }
+    const ea::string& GetName() const { return name_; }
 
     /// Return type.
-    const String& GetType() const { return type_; }
+    const ea::string& GetType() const { return type_; }
 
     /// Return position.
     const Vector2& GetPosition() const { return position_; }
@@ -197,9 +197,9 @@ public:
     /// Return tile sprite.
     Sprite2D* GetTileSprite() const;
     /// Return has property.
-    bool HasProperty(const String& name) const;
+    bool HasProperty(const ea::string& name) const;
     /// Return property value.
-    const String& GetProperty(const String& name) const;
+    const ea::string& GetProperty(const ea::string& name) const;
 
 private:
     friend class TmxObjectGroup2D;
@@ -207,15 +207,15 @@ private:
     /// Object type.
     TileMapObjectType2D objectType_{};
     /// Name.
-    String name_;
+    ea::string name_;
     /// Type.
-    String type_;
+    ea::string type_;
     /// Position.
     Vector2 position_;
     /// Size (for rectangle and ellipse).
     Vector2 size_;
     /// Points(for polygon and polyline).
-    Vector<Vector2> points_;
+    ea::vector<Vector2> points_;
     /// Gid (for tile).
     unsigned gid_{};
     /// Sprite (for tile).

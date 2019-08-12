@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -49,29 +49,29 @@ void CollisionPolygon2D::RegisterObject(Context* context)
 
     URHO3D_ACCESSOR_ATTRIBUTE("Is Enabled", IsEnabled, SetEnabled, bool, true, AM_DEFAULT);
     URHO3D_COPY_BASE_ATTRIBUTES(CollisionShape2D);
-    URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Vertices", GetVerticesAttr, SetVerticesAttr, PODVector<unsigned char>, Variant::emptyBuffer, AM_FILE);
+    URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Vertices", GetVerticesAttr, SetVerticesAttr, ea::vector<unsigned char>, Variant::emptyBuffer, AM_FILE);
 }
 
 void CollisionPolygon2D::SetVertexCount(unsigned count)
 {
-    vertices_.Resize(count);
+    vertices_.resize(count);
 }
 
 void CollisionPolygon2D::SetVertex(unsigned index, const Vector2& vertex)
 {
-    if (index >= vertices_.Size())
+    if (index >= vertices_.size())
         return;
 
     vertices_[index] = vertex;
 
-    if (index == vertices_.Size() - 1)
+    if (index == vertices_.size() - 1)
     {
         MarkNetworkUpdate();
         RecreateFixture();
     }
 }
 
-void CollisionPolygon2D::SetVertices(const PODVector<Vector2>& vertices)
+void CollisionPolygon2D::SetVertices(const ea::vector<Vector2>& vertices)
 {
     vertices_ = vertices;
 
@@ -79,25 +79,25 @@ void CollisionPolygon2D::SetVertices(const PODVector<Vector2>& vertices)
     RecreateFixture();
 }
 
-void CollisionPolygon2D::SetVerticesAttr(const PODVector<unsigned char>& value)
+void CollisionPolygon2D::SetVerticesAttr(const ea::vector<unsigned char>& value)
 {
-    if (value.Empty())
+    if (value.empty())
         return;
 
-    PODVector<Vector2> vertices;
+    ea::vector<Vector2> vertices;
 
     MemoryBuffer buffer(value);
     while (!buffer.IsEof())
-        vertices.Push(buffer.ReadVector2());
+        vertices.push_back(buffer.ReadVector2());
 
     SetVertices(vertices);
 }
 
-PODVector<unsigned char> CollisionPolygon2D::GetVerticesAttr() const
+ea::vector<unsigned char> CollisionPolygon2D::GetVerticesAttr() const
 {
     VectorBuffer ret;
 
-    for (unsigned i = 0; i < vertices_.Size(); ++i)
+    for (unsigned i = 0; i < vertices_.size(); ++i)
         ret.WriteVector2(vertices_[i]);
 
     return ret.GetBuffer();
@@ -112,12 +112,12 @@ void CollisionPolygon2D::RecreateFixture()
 {
     ReleaseFixture();
 
-    if (vertices_.Size() < 3)
+    if (vertices_.size() < 3)
         return;
 
-    PODVector<b2Vec2> b2Vertices;
-    unsigned count = vertices_.Size();
-    b2Vertices.Resize(count);
+    ea::vector<b2Vec2> b2Vertices;
+    unsigned count = vertices_.size();
+    b2Vertices.resize(count);
 
     Vector2 worldScale(cachedWorldScale_.x_, cachedWorldScale_.y_);
     for (unsigned i = 0; i < count; ++i)

@@ -38,7 +38,6 @@
 #include <Urho3D/DebugNew.h>
 
 // Expands to this example's entry-point
-URHO3D_DEFINE_APPLICATION_MAIN(HelloSystemUi)
 
 HelloSystemUi::HelloSystemUi(Context* context) :
     Sample(context)
@@ -74,7 +73,7 @@ void HelloSystemUi::RenderUi(StringHash eventType, VariantMap& eventData)
     ui::SetNextWindowPos(ImVec2(200, 300), ImGuiCond_FirstUseEver);
     if (ui::Begin("Sample SystemUI", 0, ImGuiWindowFlags_NoSavedSettings))
     {
-        if (messageBox_.NotNull())
+        if (messageBox_)
         {
             if (ui::Button("Close message box"))
                 messageBox_ = nullptr;
@@ -109,6 +108,9 @@ void HelloSystemUi::HandleKeyDown(StringHash eventType, VariantMap& eventData)
 
 void HelloSystemUi::CreateScene()
 {
+    ui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_NavEnableKeyboard;
+    ui::GetIO().BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
+
     scene_ = new Scene(context_);
 
     // Create the Octree component to the scene so that drawable objects can be rendered. Use default volume

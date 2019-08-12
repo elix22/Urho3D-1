@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -33,12 +33,11 @@ using namespace ui::litterals;
 namespace ImGui
 {
 
-const unsigned UISTATE_EXPIRATION_MS = 30000;
-
 struct UIStateWrapper
 {
     void Set(void* state, void(*deleter)(void*)=nullptr)
     {
+        lastUse_ = ui::GetCurrentContext()->FrameCount;
         state_ = state;
         deleter_ = deleter;
     }
@@ -51,16 +50,15 @@ struct UIStateWrapper
         deleter_ = nullptr;
     }
 
-    void* Get(bool keepAlive=true)
+    void* Get()
     {
-        if (keepAlive)
-            timer_.Reset();
+        lastUse_ = ui::GetCurrentContext()->FrameCount;
         return state_;
     }
 
     bool IsExpired()
     {
-        return timer_.GetMSec(false) >= UISTATE_EXPIRATION_MS;
+        return (ui::GetCurrentContext()->FrameCount - lastUse_) > 1;
     }
 
 protected:
@@ -68,11 +66,12 @@ protected:
     void* state_ = nullptr;
     /// Function that handles deleting state object when it becomes unused.
     void(*deleter_)(void* state) = nullptr;
-    /// Timer which determines when state expires.
-    Timer timer_;
+    /// Frame when value was last used.
+    int lastUse_ = 0;
 };
 
-HashMap<ImGuiID, UIStateWrapper> uiState_;
+static ea::unordered_map<ImGuiID, UIStateWrapper> uiState_;
+static int uiStateLastGcFrame_ = 0;
 
 void SetUIStateP(void* state, void(*deleter)(void*))
 {
@@ -84,22 +83,20 @@ void* GetUIStateP()
 {
     void* result = nullptr;
     auto id = ui::GetCurrentWindow()->IDStack.back();
-    auto it = uiState_.Find(id);
-    if (it != uiState_.End())
-        result = it->second_.Get();
+    auto it = uiState_.find(id);
+    if (it != uiState_.end())
+        result = it->second.Get();
 
-    // Every 30s check all saved states and remove expired ones.
-    static Timer gcTimer;
-    if (gcTimer.GetMSec(false) > UISTATE_EXPIRATION_MS)
+    int currentFrame = ui::GetCurrentContext()->FrameCount;
+    if (uiStateLastGcFrame_ != currentFrame)
     {
-        gcTimer.Reset();
-
-        for (auto jt = uiState_.Begin(); jt != uiState_.End();)
+        uiStateLastGcFrame_ = currentFrame;
+        for (auto jt = uiState_.begin(); jt != uiState_.end();)
         {
-            if (jt->second_.IsExpired())
+            if (jt->second.IsExpired())
             {
-                jt->second_.Unset();
-                jt = uiState_.Erase(jt);
+                jt->second.Unset();
+                jt = uiState_.erase(jt);
             }
             else
                 ++jt;
@@ -111,11 +108,11 @@ void* GetUIStateP()
 
 void ExpireUIStateP()
 {
-    auto it = uiState_.Find(ui::GetCurrentWindow()->IDStack.back());
-    if (it != uiState_.End())
+    auto it = uiState_.find(ui::GetCurrentWindow()->IDStack.back());
+    if (it != uiState_.end())
     {
-        it->second_.Unset();
-        uiState_.Erase(it);
+        it->second.Unset();
+        uiState_.erase(it);
     }
 }
 
@@ -160,12 +157,13 @@ bool ToolbarButton(const char* label)
 {
     auto& g = *ui::GetCurrentContext();
     float dimension = g.FontBaseSize + g.Style.FramePadding.y * 2.0f;
-    return ui::ButtonEx(label, {dimension, dimension}, ImGuiButtonFlags_PressedOnClick);
+    return ui::ButtonEx(label, {0, dimension}, ImGuiButtonFlags_PressedOnClick);
 }
 
-void SetHelpTooltip(const char* text)
+void SetHelpTooltip(const char* text, Key requireKey)
 {
-    if (ui::IsItemHovered() && ui::IsKeyDown(SDL_SCANCODE_LALT))
+    unsigned scancode = requireKey & (~SDLK_SCANCODE_MASK);
+    if (ui::IsItemHovered() && (requireKey == KEY_UNKNOWN || ui::IsKeyDown(scancode)))
         ui::SetTooltip("%s", text);
 }
 
@@ -229,10 +227,12 @@ enum TransformResizeType
     RESIZE_MOVE = 15,
 };
 
+}
 /// Flag manipuation operators.
-URHO3D_TO_FLAGS_ENUM(TransformResizeType);
-/// Hashing function which enables use of enum type as a HashMap key.
-inline unsigned MakeHash(const TransformResizeType& value) { return value; }
+URHO3D_FLAGSET_EX(ImGui, TransformResizeType, TransformResizeTypeFlags);
+
+namespace ImGui
+{
 
 bool TransformRect(IntRect& inOut, TransformSelectorFlags flags)
 {
@@ -245,9 +245,9 @@ bool TransformRect(Urho3D::IntRect& inOut, Urho3D::IntRect& delta, TransformSele
     struct State
     {
         /// A flag indicating type of resize action currently in progress
-        TransformResizeType resizing_ = RESIZE_NONE;
+        TransformResizeTypeFlags resizing_ = RESIZE_NONE;
         /// A cache of system cursors
-        HashMap<TransformResizeType, SDL_Cursor*> cursors_;
+        ea::unordered_map<TransformResizeTypeFlags, SDL_Cursor*> cursors_;
         /// Default cursor shape
         SDL_Cursor* cursorArrow_;
         /// Flag indicating that this selector set cursor handle
@@ -269,7 +269,7 @@ bool TransformRect(Urho3D::IntRect& inOut, Urho3D::IntRect& delta, TransformSele
         {
             SDL_FreeCursor(cursorArrow_);
             for (const auto& it : cursors_)
-                SDL_FreeCursor(it.second_);
+                SDL_FreeCursor(it.second);
         }
     };
 
@@ -304,7 +304,7 @@ bool TransformRect(Urho3D::IntRect& inOut, Urho3D::IntRect& delta, TransformSele
     ui::ItemSize(ToImGui(inOut));
     if (ui::ItemAdd(ToImGui(extendedRect), id))
     {
-        TransformResizeType resizing = RESIZE_NONE;
+        TransformResizeTypeFlags resizing = RESIZE_NONE;
         if (renderHandle(inOut.Min() + size / 2, handleSize))
             resizing = RESIZE_MOVE;
 
@@ -447,8 +447,66 @@ void OpenTreeNode(ImGuiID id)
     if (!storage->GetInt(id))
     {
         storage->SetInt(id, true);
-        ui::TreePushRawID(id);
+        ui::TreePushOverrideID(id);
     }
+}
+
+void BeginButtonGroup()
+{
+    auto* storage = ui::GetStateStorage();
+    auto* lists = ui::GetWindowDrawList();
+    ImVec2 pos = ui::GetCursorScreenPos();
+    storage->SetFloat(ui::GetID("button-group-x"), pos.x);
+    storage->SetFloat(ui::GetID("button-group-y"), pos.y);
+    lists->ChannelsSplit(2);
+    lists->ChannelsSetCurrent(1);
+}
+
+void EndButtonGroup()
+{
+    auto& style = ui::GetStyle();
+    auto* lists = ui::GetWindowDrawList();
+    auto* storage = ui::GetStateStorage();
+    ImVec2 min(
+        storage->GetFloat(ui::GetID("button-group-x")),
+        storage->GetFloat(ui::GetID("button-group-y"))
+              );
+    lists->ChannelsSetCurrent(0);
+    lists->AddRectFilled(min, ui::GetItemRectMax(), ImColor(style.Colors[ImGuiCol_Button]), style.FrameRounding);
+    lists->ChannelsMerge();
+}
+
+void TextElided(const char* text, float width)
+{
+    float x = ui::GetCursorPosX();
+    if (ui::CalcTextSize(text).x <= width)
+    {
+        ui::TextUnformatted(text);
+        ui::SameLine(0, 0);
+        ui::SetCursorPosX(x + width);
+        ui::NewLine();
+        return;
+    }
+    else
+    {
+        float w = ui::CalcTextSize("...").x;
+        for (const char* c = text; *c; c++)
+        {
+            w += ui::CalcTextSize(c, c + 1).x;
+            if (w >= width)
+            {
+                ui::TextUnformatted(text, c > text ? c - 1 : c);
+                ui::SameLine(0, 0);
+                ui::TextUnformatted("...");
+                ui::SameLine(0, 0);
+                ui::SetCursorPosX(x + width);
+                ui::NewLine();
+                return;
+            }
+        }
+    }
+    ui::SetCursorPosX(x + width);
+    ui::NewLine();
 }
 
 }

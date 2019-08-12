@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -71,7 +71,7 @@ public:
 
 private:
     /// Initialize a wheel and remember its scene node and ID.
-    void InitWheel(const String& name, const Vector3& offset, WeakPtr<Node>& wheelNode, unsigned& wheelNodeID);
+    void InitWheel(const ea::string& name, const Vector3& offset, WeakPtr<Node>& wheelNode, unsigned& wheelNodeID);
     /// Acquire wheel components from wheel scene nodes.
     void GetWheelComponents();
 

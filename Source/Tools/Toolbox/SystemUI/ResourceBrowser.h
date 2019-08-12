@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -48,18 +48,18 @@ enum ResourceBrowserFlag
 };
 URHO3D_FLAGSET(ResourceBrowserFlag, ResourceBrowserFlags);
 
-URHO3D_EVENT(E_RESOURCEBROWSERRENAME, ResourceBrowserRename)
-{
-    URHO3D_PARAM(P_FROM, From);                                     // String
-    URHO3D_PARAM(P_TO, To);                                         // String
-}
-
 URHO3D_EVENT(E_RESOURCEBROWSERDELETE, ResourceBrowserDelete)
 {
     URHO3D_PARAM(P_NAME, Name);                                     // String
 }
 
+URHO3D_EVENT(E_RESOURCEBROWSERSELECT, ResourceBrowserSelect)
+{
+    URHO3D_PARAM(P_NAME, Name);                                     // String
+}
+
 /// Create resource browser ui inside another window.
-URHO3D_TOOLBOX_API ResourceBrowserResult ResourceBrowserWidget(String& path, String& selected, ResourceBrowserFlags flags=RBF_NONE);
+URHO3D_TOOLBOX_API ResourceBrowserResult ResourceBrowserWidget(const ea::string& resourcePath,
+    const ea::string& cacheDir, ea::string& path, ea::string& selected, ResourceBrowserFlags flags);
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +48,6 @@
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(Physics)
 
 Physics::Physics(Context* context) :
     Sample(context),
@@ -255,7 +254,7 @@ void Physics::MoveCamera(float timeStep)
     // directory
     if (input->GetKeyPress(KEY_F5))
     {
-        String filePath = GetSubsystem<FileSystem>()->GetProgramDir();
+        ea::string filePath = GetSubsystem<FileSystem>()->GetProgramDir();
 #if _MSC_VER
         filePath += "../";
 #endif
@@ -265,7 +264,7 @@ void Physics::MoveCamera(float timeStep)
     }
     if (input->GetKeyPress(KEY_F7))
     {
-        String filePath = GetSubsystem<FileSystem>()->GetProgramDir();
+        ea::string filePath = GetSubsystem<FileSystem>()->GetProgramDir();
 #if _MSC_VER
         filePath += "../";
 #endif

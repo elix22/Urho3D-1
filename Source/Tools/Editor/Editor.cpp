@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,10 +19,29 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
+#ifdef WIN32
+#include <windows.h>
+#endif
 
+#include <Urho3D/Engine/EngineDefs.h>
+#include <Urho3D/Engine/EngineEvents.h>
+#include <Urho3D/Core/CoreEvents.h>
+#include <Urho3D/Core/WorkQueue.h>
+#include <Urho3D/Graphics/Graphics.h>
+#include <Urho3D/IO/FileSystem.h>
+#include <Urho3D/IO/Log.h>
+#include <Urho3D/Resource/ResourceCache.h>
+#include <Urho3D/SystemUI/SystemUI.h>
+#include <Urho3D/SystemUI/Console.h>
+#include <Urho3D/LibraryInfo.h>
+#include <Urho3D/Core/CommandLine.h>
+
+#include <ImGui/imgui.h>
+#include <ImGui/imgui_stdlib.h>
 #include <Toolbox/IO/ContentUtilities.h>
 #include <Toolbox/SystemUI/ResourceBrowser.h>
 #include <Toolbox/ToolboxAPI.h>
+#include <Toolbox/SystemUI/Widgets.h>
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
 #include <nativefiledialog/nfd.h>
 
@@ -30,15 +49,24 @@
 #include "EditorEvents.h"
 #include "EditorIconCache.h"
 #include "Tabs/Scene/SceneTab.h"
-#include "Tabs/Scene/SceneSettings.h"
+#include "Tabs/Scene/EditorSceneSettings.h"
 #include "Tabs/UI/UITab.h"
 #include "Tabs/InspectorTab.h"
 #include "Tabs/HierarchyTab.h"
 #include "Tabs/ConsoleTab.h"
 #include "Tabs/ResourceTab.h"
-#include "Assets/AssetConverter.h"
+#include "Tabs/PreviewTab.h"
+#include "Pipeline/Commands/CookScene.h"
+#include "Pipeline/Commands/BuildAssets.h"
+#include "Pipeline/Importers/ModelImporter.h"
+#include "Pipeline/Importers/SceneConverter.h"
+#include "Inspector/MaterialInspector.h"
+#include "Inspector/ModelInspector.h"
+#include "Tabs/ProfilerTab.h"
 
-URHO3D_DEFINE_APPLICATION_MAIN(Editor);
+using namespace ui::litterals;
+
+URHO3D_DEFINE_APPLICATION_MAIN(Urho3D::Editor);
 
 
 namespace Urho3D
@@ -46,9 +74,6 @@ namespace Urho3D
 
 Editor::Editor(Context* context)
     : Application(context)
-#if URHO3D_PLUGINS_NATIVE
-    , pluginsNative_(context)
-#endif
 {
 }
 
@@ -74,7 +99,7 @@ void Editor::Setup()
         else
         {
 #if WIN32
-            if (coreResourcePrefixPath_.Length() <= 3)   // Root path of any drive
+            if (coreResourcePrefixPath_.length() <= 3)   // Root path of any drive
 #else
             if (coreResourcePrefixPath_ == "/")          // Filesystem root
 #endif
@@ -89,19 +114,58 @@ void Editor::Setup()
     engineParameters_[EP_WINDOW_TITLE] = GetTypeName();
     engineParameters_[EP_HEADLESS] = false;
     engineParameters_[EP_FULL_SCREEN] = false;
-    engineParameters_[EP_WINDOW_HEIGHT] = 1080;
-    engineParameters_[EP_WINDOW_WIDTH] = 1920;
     engineParameters_[EP_LOG_LEVEL] = LOG_DEBUG;
     engineParameters_[EP_WINDOW_RESIZABLE] = true;
     engineParameters_[EP_AUTOLOAD_PATHS] = "";
     engineParameters_[EP_RESOURCE_PATHS] = "CoreData;EditorData";
     engineParameters_[EP_RESOURCE_PREFIX_PATHS] = coreResourcePrefixPath_;
+    engineParameters_[EP_WINDOW_MAXIMIZE] = true;
+
+    // Load editor settings
+    {
+        auto* fs = GetFileSystem();
+        ea::string editorSettingsDir = fs->GetAppPreferencesDir("rbfx", "Editor");
+        if (!fs->DirExists(editorSettingsDir))
+            fs->CreateDir(editorSettingsDir);
+
+        ea::string editorSettingsFile = editorSettingsDir + "Editor.json";
+        if (fs->FileExists(editorSettingsFile))
+        {
+            JSONFile file(context_);
+            if (file.LoadFile(editorSettingsFile))
+            {
+                editorSettings_ = file.GetRoot();
+
+                // Load window geometry
+                {
+                    JSONValue& window = editorSettings_["window"];
+                    if (window.IsObject())
+                    {
+                        if (window.Contains("size"))
+                        {
+                            IntVector2 size = window["size"].GetVariantValue(VAR_INTVECTOR2).GetIntVector2();
+                            engineParameters_[EP_WINDOW_WIDTH] = size.x_;
+                            engineParameters_[EP_WINDOW_HEIGHT] = size.y_;
+                        }
+                        if (window.Contains("pos"))
+                        {
+                            IntVector2 pos = window["pos"].GetVariantValue(VAR_INTVECTOR2).GetIntVector2();
+                            engineParameters_[EP_WINDOW_POSITION_X] = pos.x_;
+                            engineParameters_[EP_WINDOW_POSITION_Y] = pos.y_;
+                        }
+                        if (window.Contains("maximized"))
+                            engineParameters_[EP_WINDOW_MAXIMIZE] = window["maximized"].GetVariantValue(VAR_BOOL).GetBool();
+                    }
+                }
+            }
+        }
+    }
+
+    GetLog()->SetLogFormat("[%H:%M:%S] [%l] [%n] : %v");
 
     SetRandomSeed(Time::GetTimeSinceEpoch());
-}
 
-void Editor::Start()
-{
+    // Register factories
     context_->RegisterFactory<EditorIconCache>();
     context_->RegisterFactory<SceneTab>();
     context_->RegisterFactory<UITab>();
@@ -109,23 +173,54 @@ void Editor::Start()
     context_->RegisterFactory<HierarchyTab>();
     context_->RegisterFactory<InspectorTab>();
     context_->RegisterFactory<ResourceTab>();
+    context_->RegisterFactory<PreviewTab>();
+    context_->RegisterFactory<ProfilerTab>();
 
+    RegisterToolboxTypes(context_);
+    EditorSceneSettings::RegisterObject(context_);
+    Inspectable::Material::RegisterObject(context_);
+
+    // Inspectors
+    ModelInspector::RegisterObject(context_);
+    MaterialInspector::RegisterObject(context_);
+
+    // Importers
+    ModelImporter::RegisterObject(context_);
+    SceneConverter::RegisterObject(context_);
+    Asset::RegisterObject(context_);
+
+    // Define custom command line parameters here
+    auto& cmd = GetCommandLineParser();
+    cmd.add_option("project", defaultProjectPath_, "Project to open or create on startup.")->set_custom_option("dir");
+
+    // Subcommands
+    RegisterSubcommand<CookScene>();
+    RegisterSubcommand<BuildAssets>();
+}
+
+void Editor::Start()
+{
+    context_->RegisterSubsystem(this);
+    // Execute specified subcommand and exit.
+    for (SharedPtr<SubCommand>& cmd : subCommands_)
+    {
+        if (GetCommandLineParser().got_subcommand(cmd->GetTypeName().c_str()))
+        {
+            GetLog()->SetLogFormat("%v");
+            ExecuteSubcommand(cmd);
+            engine_->Exit();
+            return;
+        }
+    }
+
+    // Continue with normal editor initialization
+    context_->RegisterSubsystem(new SceneManager(context_));
     context_->RegisterSubsystem(new EditorIconCache(context_));
     GetInput()->SetMouseMode(MM_ABSOLUTE);
     GetInput()->SetMouseVisible(true);
-    RegisterToolboxTypes(context_);
-    context_->RegisterFactory<Editor>();
-    context_->RegisterSubsystem(this);
-    SceneSettings::RegisterObject(context_);
-
-    GetSystemUI()->ApplyStyleDefault(true, 1.0f);
-    GetSystemUI()->AddFont("Fonts/DejaVuSansMono.ttf");
-    GetSystemUI()->AddFont("Fonts/" FONT_ICON_FILE_NAME_FAS, {ICON_MIN_FA, ICON_MAX_FA, 0}, 0, true);
-    ui::GetStyle().WindowRounding = 3;
-    // Disable imgui saving ui settings on it's own. These should be serialized to project file.
-    ui::GetIO().IniFilename = nullptr;
 
     GetCache()->SetAutoReloadResources(true);
+    engine_->SetAutoExit(false);
 
     SubscribeToEvent(E_UPDATE, std::bind(&Editor::OnUpdate, this, _2));
 
@@ -136,209 +231,359 @@ void Editor::Start()
     SubscribeToEvent(E_CONSOLECOMMAND, std::bind(&Editor::OnConsoleCommand, this, _2));
     console->RefreshInterpreters();
 
-    // Prepare editor for loading new project.
-    SubscribeToEvent(E_EDITORPROJECTLOADINGSTART, [&](StringHash, VariantMap&) {
-        tabs_.Clear();
-    });
-
-    // Process arguments
-    const auto& arguments = GetArguments();
-    {
-        unsigned i = 0;
-        for (; i < arguments.Size(); ++i)
+    SubscribeToEvent(E_ENDFRAME, [this](StringHash, VariantMap&) {
+        // Opening a new project must be done at the point when SystemUI is not in use. End of the frame is a good
+        // candidate. This subsystem will be recreated.
+        if (!pendingOpenProject_.empty())
         {
-            if (arguments[i].Length() > 1 && arguments[i][0] == '-')
-            {
-                auto argument = arguments[i].Substring(1).ToLower();
-                const auto& value = i + 1 < arguments.Size() ? arguments[i + 1] : String::EMPTY;
+            CloseProject();
+            // Reset SystemUI so that imgui loads it's config proper.
+            context_->RemoveSubsystem<SystemUI>();
+            context_->RegisterSubsystem(new SystemUI(context_));
+            SetupSystemUI();
 
-                // TODO: Any editor arguments
+            project_ = new Project(context_);
+            context_->RegisterSubsystem(project_);
+            bool loaded = project_->LoadProject(pendingOpenProject_);
+            // SystemUI has to be started after loading project, because project sets custom settings file path. Starting
+            // subsystem reads this file and loads settings.
+            GetSystemUI()->Start();
+            if (loaded)
+            {
+                auto* fs = GetFileSystem();
+                loadDefaultLayout_ = project_->IsNewProject();
+                JSONValue& recents = editorSettings_["recent-projects"];
+                if (!recents.IsArray())
+                    recents.SetType(JSON_ARRAY);
+                // Remove latest project if it was already opened or any projects that no longer exists.
+                for (int i = 0; i < recents.Size();)
+                {
+                    if (recents[i].GetString() == pendingOpenProject_ || !fs->DirExists(recents[i].GetString()))
+                        recents.Erase(i);
+                    else
+                        ++i;
+                }
+                // Latest project goes to front
+                recents.Insert(0, pendingOpenProject_);
+                // Limit recents list size
+                if (recents.Size() > 10)
+                    recents.Resize(10);
             }
             else
-                break;
+                CloseProject();
+            pendingOpenProject_.clear();
         }
+    });
+    SubscribeToEvent(E_EXITREQUESTED, [this](StringHash, VariantMap&) {
+        if (auto* preview = GetTab<PreviewTab>())
+        {
+            if (preview->GetSceneSimulationStatus() == SCENE_SIMULATION_STOPPED)
+                exiting_ = true;
+            else
+                preview->Stop();
+        }
+        else
+            exiting_ = true;
+    });
+    SubscribeToEvent(E_EDITORPROJECTLOADING, std::bind(&Editor::UpdateWindowTitle, this, EMPTY_STRING));
+    if (!defaultProjectPath_.empty())
+    {
+        ui::GetIO().IniFilename = nullptr;  // Avoid creating imgui.ini in some cases
+        pendingOpenProject_ = defaultProjectPath_.c_str();
+    }
+    else
+        SetupSystemUI();
+}
 
-        if (i < arguments.Size())
-            OpenProject(arguments[i]);
+void Editor::ExecuteSubcommand(SubCommand* cmd)
+{
+    if (!defaultProjectPath_.empty())
+    {
+        project_ = new Project(context_);
+        context_->RegisterSubsystem(project_);
+        if (!project_->LoadProject(defaultProjectPath_))
+        {
+            URHO3D_LOGERRORF("Loading project '%s' failed.", pendingOpenProject_.c_str());
+            exitCode_ = EXIT_FAILURE;
+            engine_->Exit();
+            return;
+        }
     }
 
-    // Plugin loading
-#if URHO3D_PLUGINS_NATIVE
-    pluginsNative_.AutoLoadFrom(GetFileSystem()->GetProgramDir());
-#endif
+    cmd->Execute();
 }
 
 void Editor::Stop()
 {
+    // Save editor settings
+    if (!engine_->IsHeadless())
+    {
+        // Save window geometry
+        {
+            JSONValue& window = editorSettings_["window"];
+            window.SetType(JSON_OBJECT);
+            window["size"].SetType(JSON_NULL);
+            window["size"].SetVariantValue(GetGraphics()->GetSize(), context_);
+            window["pos"].SetType(JSON_NULL);
+            window["pos"].SetVariantValue(GetGraphics()->GetWindowPosition(), context_);
+            window["maximized"].SetType(JSON_NULL);
+            window["maximized"].SetVariantValue(GetGraphics()->GetMaximized(), context_);
+        }
+
+        auto* fs = GetFileSystem();
+        ea::string editorSettingsDir = fs->GetAppPreferencesDir("rbfx", "Editor");
+        if (!fs->DirExists(editorSettingsDir))
+            fs->CreateDir(editorSettingsDir);
+
+        JSONFile file(context_);
+        file.GetRoot() = editorSettings_;
+        if (!file.SaveFile(editorSettingsDir + "Editor.json"))
+            URHO3D_LOGERROR("Saving of editor settings failed.");
+    }
+
+    GetWorkQueue()->Complete(0);
+    if (auto* manager = GetSubsystem<SceneManager>())
+        manager->UnloadAll();
     CloseProject();
-    ui::ShutdownDock();
+    context_->RemoveSubsystem<WorkQueue>(); // Prevents deadlock when unloading plugin AppDomain in managed host.
+    context_->RemoveSubsystem<Editor>();
 }
 
 void Editor::OnUpdate(VariantMap& args)
 {
+    ImGuiWindowFlags flags = ImGuiWindowFlags_MenuBar;
+    flags |= ImGuiWindowFlags_NoDocking;
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->Pos);
+    ImGui::SetNextWindowSize(viewport->Size);
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+    flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::Begin("DockSpace", nullptr, flags);
+    ImGui::PopStyleVar();
+
     RenderMenuBar();
 
-    ui::RootDock({0, 20}, ui::GetIO().DisplaySize - ImVec2(0, 20));
-
-    bool renderedWasActive = false;
-    auto tabsCopy = tabs_;
-    for (auto& tab : tabsCopy)
+    bool hasModified = false;
+    if (project_.NotNull())
     {
-        if (tab->RenderWindow())
+        dockspaceId_ = ui::GetID("Root");
+        ui::DockSpace(dockspaceId_);
+
+        auto tabsCopy = tabs_;
+        for (auto& tab : tabsCopy)
         {
-            if (tab->IsRendered())
+            if (tab->RenderWindow())
             {
-                if (activeTab_ != tab)
+                // Only active window may override another active window
+                if (activeTab_ != tab && tab->IsActive())
                 {
-                    // Only active window may override another active window
-                    if (renderedWasActive && tab->IsActive())
+                    activeTab_ = tab;
+                    tab->OnFocused();
+                }
+                hasModified |= tab->IsModified();
+            }
+            else if (!tab->IsUtility())
+                // Content tabs get closed permanently
+                tabs_.erase(tabs_.find(tab));
+        }
+
+        if (!activeTab_.Expired())
+        {
+            activeTab_->OnActiveUpdate();
+        }
+
+        if (loadDefaultLayout_ && project_)
+        {
+            loadDefaultLayout_ = false;
+            LoadDefaultLayout();
+        }
+
+        HandleHotkeys();
+    }
+    else
+    {
+        // Render start page
+        auto& style = ui::GetStyle();
+        auto* lists = ui::GetWindowDrawList();
+        ImRect rect{ui::GetWindowContentRegionMin(), ui::GetWindowContentRegionMax()};
+
+        ImVec2 tileSize{200_dpx, 200_dpy};
+        ui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{10_dpx, 10_dpy});
+
+        ui::SetCursorScreenPos(rect.GetCenter() - ImVec2{tileSize.x * 1.5f + 10_dpx, tileSize.y * 1.5f + 10_dpy});
+
+        ui::BeginGroup();
+
+        // New project tile
+        {
+            if (ui::Button("Open/Create Project", tileSize))
+                OpenOrCreateProject();
+            ui::SameLine();
+        }
+
+        struct State
+        {
+            explicit State(Editor* editor)
+            {
+                const JSONValue& recents = editor->editorSettings_["recent-projects"];
+                snapshots_.resize(recents.Size());
+                for (int i = 0; i < recents.Size(); i++)
+                {
+                    const ea::string& projectPath = recents[i].GetString();
+                    ea::string snapshotFile = AddTrailingSlash(projectPath) + ".snapshot.png";
+                    if (editor->GetFileSystem()->FileExists(snapshotFile))
                     {
-                        activeTab_ = tab;
-                        tab->OnFocused();
-                    }
-                    else if (!renderedWasActive)
-                    {
-                        renderedWasActive = tab->IsActive();
-                        activeTab_ = tab;
-                        tab->OnFocused();
+                        Image img(editor->context_);
+                        if (img.LoadFile(snapshotFile))
+                        {
+                            SharedPtr<Texture2D> texture(editor->context_->CreateObject<Texture2D>());
+                            texture->SetData(&img);
+                            snapshots_[i] = texture;
+                        }
                     }
                 }
             }
-        }
-        else if (!tab->IsUtility())
-            // Content tabs get closed permanently
-            tabs_.Erase(tabs_.Find(tab));
-    }
 
-    if (!activeTab_.Expired())
-    {
-        activeTab_->OnActiveUpdate();
-    }
-}
+            ea::vector<SharedPtr<Texture2D>> snapshots_;
+        };
 
-void Editor::RenderMenuBar()
-{
-    if (ui::BeginMainMenuBar())
-    {
-        if (ui::BeginMenu("File"))
+        auto* state = ui::GetUIState<State>(this);
+        const JSONValue& recents = editorSettings_["recent-projects"];
+
+        int index = 0;
+        for (int row = 0; row < 3; row++)
         {
-            if (project_.NotNull())
+            for (int col = row == 0 ? 1 : 0; col < 3; col++, index++)
             {
-                if (ui::MenuItem("Save Project"))
+                SharedPtr<Texture2D> snapshot;
+                if (state->snapshots_.size() > index)
+                    snapshot = state->snapshots_[index];
+
+                if (recents.Size() <= index)
                 {
-                    if (project_->GetProjectFilePath().Empty())
+                    if (ui::Button("Open/Create Project", tileSize))
+                        OpenOrCreateProject();
+                }
+                else
+                {
+                    const ea::string& projectPath = recents[index].GetString();
+                    if (snapshot.NotNull())
                     {
-                        nfdchar_t* projectDir = nullptr;
-                        if (NFD_PickFolder("", &projectDir) == NFD_OKAY)
-                        {
-                            for (auto& tab : tabs_)
-                                tab->SaveResource();
-                            project_->SaveProject();
-                            NFD_FreePath(projectDir);
-                        }
+                        if (ui::ImageButton(snapshot.Get(), tileSize - style.ItemInnerSpacing * 2))
+                            pendingOpenProject_ = projectPath;
                     }
                     else
                     {
-                        for (auto& tab : tabs_)
-                            tab->SaveResource();
-                        project_->SaveProject();
+                        if (ui::Button(recents[index].GetString().c_str(), tileSize))
+                            pendingOpenProject_ = projectPath;
                     }
+                    if (ui::IsItemHovered())
+                        ui::SetTooltip("%s", projectPath.c_str());
                 }
+                ui::SameLine();
             }
+            ui::NewLine();
+        }
 
-            if (ui::MenuItem("Open/Create Project"))
+        ui::EndGroup();
+        ui::PopStyleVar();
+    }
+
+    ui::End();
+    ImGui::PopStyleVar();
+
+    // Dialog for a warning when application is being closed with unsaved resources.
+    if (exiting_)
+    {
+        if (!GetWorkQueue()->IsCompleted(0))
+        {
+            ui::OpenPopup("Completing Tasks");
+
+            if (ui::BeginPopupModal("Completing Tasks", nullptr, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoResize |
+                                                                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_Popup))
             {
-                nfdchar_t* projectDir = nullptr;
-                if (NFD_PickFolder("", &projectDir) == NFD_OKAY)
-                {
-                    if (OpenProject(projectDir) == nullptr)
-                        URHO3D_LOGERROR("Loading project failed.");
-                    NFD_FreePath(projectDir);
-                }
+                ui::TextUnformatted("Some tasks are in progress and are being completed. Please wait.");
+                static float totalIncomplete = GetWorkQueue()->GetNumIncomplete(0);
+                ui::ProgressBar(100.f / totalIncomplete * Min(totalIncomplete - (float)GetWorkQueue()->GetNumIncomplete(0), totalIncomplete));
+                ui::EndPopup();
             }
+        }
+        else if (hasModified)
+        {
+            ui::OpenPopup("Save All?");
 
-            ui::Separator();
+            if (ui::BeginPopupModal("Save All?", nullptr, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoResize |
+                                                          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_Popup))
+            {
+                ui::TextUnformatted("You have unsaved resources. Save them before exiting?");
 
+                if (ui::Button(ICON_FA_SAVE " Save & Close"))
+                {
+                    for (auto& tab : tabs_)
+                    {
+                        if (tab->IsModified())
+                            tab->SaveResource();
+                    }
+                    ui::CloseCurrentPopup();
+                }
+
+                ui::SameLine();
+
+                if (ui::Button(ICON_FA_EXCLAMATION_TRIANGLE " Close without saving"))
+                {
+                    engine_->Exit();
+                }
+                ui::SetHelpTooltip(ICON_FA_EXCLAMATION_TRIANGLE " All unsaved changes will be lost!", KEY_UNKNOWN);
+
+                ui::SameLine();
+
+                if (ui::Button(ICON_FA_TIMES " Cancel"))
+                {
+                    exiting_ = false;
+                    ui::CloseCurrentPopup();
+                }
+
+                ui::EndPopup();
+            }
+        }
+        else
+        {
+            GetWorkQueue()->Complete(0);
             if (project_.NotNull())
             {
-                if (ui::MenuItem("Close Project"))
-                {
-                    CloseProject();
-                }
+                project_->SaveProject();
+                CloseProject();
             }
-
-            if (ui::MenuItem("Exit"))
-                engine_->Exit();
-
-            ui::EndMenu();
+            engine_->Exit();
         }
-        if (project_.NotNull())
-        {
-            if (ui::BeginMenu("View"))
-            {
-                for (auto& tab : tabs_)
-                {
-                    if (tab->IsUtility())
-                    {
-                        // Tabs that can not be closed permanently
-                        auto open = tab->IsOpen();
-                        if (ui::MenuItem(tab->GetUniqueTitle().CString(), nullptr, &open))
-                            tab->SetOpen(open);
-                    }
-                }
-                ui::EndMenu();
-            }
-        }
-
-        SendEvent(E_EDITORAPPLICATIONMENU);
-
-        ui::EndMainMenuBar();
     }
 }
 
 Tab* Editor::CreateTab(StringHash type)
 {
-    auto tab = DynamicCast<Tab>(context_->CreateObject(type));
-    tabs_.Push(tab);
-    return tab;
+    SharedPtr<Tab> tab(DynamicCast<Tab>(context_->CreateObject(type)));
+    tabs_.push_back(tab);
+    return tab.Get();
 }
 
-StringVector Editor::GetObjectsByCategory(const String& category)
+StringVector Editor::GetObjectsByCategory(const ea::string& category)
 {
     StringVector result;
     const auto& factories = context_->GetObjectFactories();
-    auto it = context_->GetObjectCategories().Find(category);
-    if (it != context_->GetObjectCategories().End())
+    auto it = context_->GetObjectCategories().find(category);
+    if (it != context_->GetObjectCategories().end())
     {
-        for (const StringHash& type : it->second_)
+        for (const StringHash& type : it->second)
         {
-            auto jt = factories.Find(type);
-            if (jt != factories.End())
-                result.Push(jt->second_->GetTypeName());
+            auto jt = factories.find(type);
+            if (jt != factories.end())
+                result.push_back(jt->second->GetTypeName());
         }
     }
     return result;
-}
-
-String Editor::GetResourceAbsolutePath(const String& resourceName, const String& defaultResult, const char* patterns,
-    const String& dialogTitle)
-{
-    String resourcePath = resourceName.Empty() ? defaultResult : resourceName;
-    String fullPath;
-    if (!resourcePath.Empty())
-        fullPath = GetCache()->GetResourceFileName(resourcePath);
-
-    if (fullPath.Empty())
-    {
-        nfdchar_t* savePath = nullptr;
-        if (NFD_SaveDialog(patterns, "", &savePath) == NFD_OKAY)
-        {
-            fullPath = savePath;
-            NFD_FreePath(savePath);
-        }
-    }
-
-    return fullPath;
 }
 
 void Editor::OnConsoleCommand(VariantMap& args)
@@ -348,46 +593,241 @@ void Editor::OnConsoleCommand(VariantMap& args)
         URHO3D_LOGINFOF("Engine revision: %s", GetRevision());
 }
 
-void Editor::LoadDefaultLayout()
+void Editor::CreateDefaultTabs()
 {
-    tabs_.Clear();
-
-    ui::LoadDock(JSONValue::EMPTY);
-
-    // These dock sizes are bullshit. Actually visible sizes do not match these numbers. Instead of spending
-    // time implementing this functionality in ImGuiDock proper values were written down and then tweaked until
-    // they looked right. Insertion order is also important here when specifying dock placement location.
-    auto screenSize = GetGraphics()->GetSize();
-    auto* inspector = new InspectorTab(context_);
-    inspector->Initialize("Inspector", {screenSize.x_ * 0.6f, (float)screenSize.y_}, ui::Slot_Right);
-    auto* hierarchy = new HierarchyTab(context_);
-    hierarchy->Initialize("Hierarchy", {screenSize.x_ * 0.05f, screenSize.y_ * 0.5f}, ui::Slot_Left);
-    auto* resources = new ResourceTab(context_);
-    resources->Initialize("Resources", {screenSize.x_ * 0.05f, screenSize.y_ * 0.15f}, ui::Slot_Bottom, hierarchy->GetUniqueTitle());
-    auto* console = new ConsoleTab(context_);
-    console->Initialize("Console", {screenSize.x_ * 0.6f, screenSize.y_ * 0.4f}, ui::Slot_Left, inspector->GetUniqueTitle());
-
-    tabs_.EmplaceBack(inspector);
-    tabs_.EmplaceBack(hierarchy);
-    tabs_.EmplaceBack(resources);
-    tabs_.EmplaceBack(console);
+    tabs_.clear();
+    tabs_.emplace_back(new InspectorTab(context_));
+    tabs_.emplace_back(new HierarchyTab(context_));
+    tabs_.emplace_back(new ResourceTab(context_));
+    tabs_.emplace_back(new ConsoleTab(context_));
+    tabs_.emplace_back(new PreviewTab(context_));
+    tabs_.emplace_back(new SceneTab(context_));
+    tabs_.emplace_back(new ProfilerTab(context_));
 }
 
-Project* Editor::OpenProject(const String& projectPath)
+void Editor::LoadDefaultLayout()
 {
-    CloseProject();
-    project_ = new Project(context_);
-    context_->RegisterSubsystem(project_);
-    if (!project_->LoadProject(projectPath))
-        CloseProject();
-    return project_.Get();
+    CreateDefaultTabs();
+
+    auto* inspector = GetTab<InspectorTab>();
+    auto* hierarchy = GetTab<HierarchyTab>();
+    auto* resources = GetTab<ResourceTab>();
+    auto* console = GetTab<ConsoleTab>();
+    auto* preview = GetTab<PreviewTab>();
+    auto* scene = GetTab<SceneTab>();
+    auto* profiler = GetTab<ProfilerTab>();
+    profiler->SetOpen(false);
+
+    ImGui::DockBuilderRemoveNode(dockspaceId_);
+    ImGui::DockBuilderAddNode(dockspaceId_, 0);
+    ImGui::DockBuilderSetNodeSize(dockspaceId_, ui::GetMainViewport()->Size);
+
+    ImGuiID dock_main_id = dockspaceId_;
+    ImGuiID dockHierarchy = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.20f, nullptr, &dock_main_id);
+    ImGuiID dockResources = ImGui::DockBuilderSplitNode(dockHierarchy, ImGuiDir_Down, 0.40f, nullptr, &dockHierarchy);
+    ImGuiID dockInspector = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.30f, nullptr, &dock_main_id);
+    ImGuiID dockLog = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.30f, nullptr, &dock_main_id);
+
+    ImGui::DockBuilderDockWindow(hierarchy->GetUniqueTitle().c_str(), dockHierarchy);
+    ImGui::DockBuilderDockWindow(resources->GetUniqueTitle().c_str(), dockResources);
+    ImGui::DockBuilderDockWindow(console->GetUniqueTitle().c_str(), dockLog);
+    ImGui::DockBuilderDockWindow(profiler->GetUniqueTitle().c_str(), dockLog);
+    ImGui::DockBuilderDockWindow(scene->GetUniqueTitle().c_str(), dock_main_id);
+    ImGui::DockBuilderDockWindow(preview->GetUniqueTitle().c_str(), dock_main_id);
+    ImGui::DockBuilderDockWindow(inspector->GetUniqueTitle().c_str(), dockInspector);
+    ImGui::DockBuilderFinish(dockspaceId_);
+
+    scene->Activate();
+}
+
+void Editor::OpenProject(const ea::string& projectPath)
+{
+    pendingOpenProject_ = projectPath;
 }
 
 void Editor::CloseProject()
 {
+    SendEvent(E_EDITORPROJECTCLOSING);
     context_->RemoveSubsystem<Project>();
+    tabs_.clear();
     project_.Reset();
-    tabs_.Clear();
+}
+
+void Editor::HandleHotkeys()
+{
+    if (ui::IsAnyItemActive())
+        return;
+
+    auto* input = GetInput();
+    if (input->GetKeyDown(KEY_CTRL))
+    {
+        if (input->GetKeyPress(KEY_Y) || (input->GetKeyDown(KEY_SHIFT) && input->GetKeyPress(KEY_Z)))
+        {
+            VariantMap args;
+            args[Undo::P_TIME] = M_MAX_UNSIGNED;
+            SendEvent(E_REDO, args);
+            auto it = args.find(Undo::P_MANAGER);
+            if (it != args.end())
+                ((Undo::Manager*)it->second.GetPtr())->Redo();
+        }
+        else if (input->GetKeyPress(KEY_Z))
+        {
+            VariantMap args;
+            args[Undo::P_TIME] = 0;
+            SendEvent(E_UNDO, args);
+            auto it = args.find(Undo::P_MANAGER);
+            if (it != args.end())
+                ((Undo::Manager*)it->second.GetPtr())->Undo();
+        }
+    }
+}
+
+Tab* Editor::GetTabByName(const ea::string& uniqueName)
+{
+    for (auto& tab : tabs_)
+    {
+        if (tab->GetUniqueName() == uniqueName)
+            return tab.Get();
+    }
+    return nullptr;
+}
+
+Tab* Editor::GetTabByResource(const ea::string& resourceName)
+{
+    for (auto& tab : tabs_)
+    {
+        auto resource = DynamicCast<BaseResourceTab>(tab);
+        if (resource && resource->GetResourceName() == resourceName)
+            return resource.Get();
+    }
+    return nullptr;
+}
+
+Tab* Editor::GetTab(StringHash type)
+{
+    for (auto& tab : tabs_)
+    {
+        if (tab->GetType() == type)
+            return tab.Get();
+    }
+    return nullptr;
+}
+
+void Editor::SetupSystemUI()
+{
+    static ImWchar fontAwesomeIconRanges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
+    static ImWchar notoSansRanges[] = {0x20, 0x52f, 0x1ab0, 0x2189, 0x2c60, 0x2e44, 0xa640, 0xab65, 0};
+    static ImWchar notoMonoRanges[] = {0x20, 0x513, 0x1e00, 0x1f4d, 0};
+    GetSystemUI()->ApplyStyleDefault(true, 1.0f);
+    GetSystemUI()->AddFont("Fonts/NotoSans-Regular.ttf", notoSansRanges, 16.f);
+    GetSystemUI()->AddFont("Fonts/" FONT_ICON_FILE_NAME_FAS, fontAwesomeIconRanges, 14.f, true);
+    monoFont_ = GetSystemUI()->AddFont("Fonts/NotoMono-Regular.ttf", notoMonoRanges, 14.f);
+    GetSystemUI()->AddFont("Fonts/" FONT_ICON_FILE_NAME_FAS, fontAwesomeIconRanges, 12.f, true);
+    ui::GetStyle().WindowRounding = 3;
+    // Disable imgui saving ui settings on it's own. These should be serialized to project file.
+    auto& io = ui::GetIO();
+    io.IniFilename = nullptr;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_NavEnableKeyboard;
+    io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
+    io.ConfigWindowsResizeFromEdges = true;
+
+    // TODO: Make configurable.
+    auto& style = ImGui::GetStyle();
+    style.FrameBorderSize = 0;
+    style.WindowBorderSize = 0;
+    ImVec4* colors = ImGui::GetStyle().Colors;
+    colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+    colors[ImGuiCol_TextDisabled]           = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
+    colors[ImGuiCol_WindowBg]               = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
+    colors[ImGuiCol_ChildBg]                = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
+    colors[ImGuiCol_PopupBg]                = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
+    colors[ImGuiCol_Border]                 = ImVec4(0.24f, 0.24f, 0.24f, 1.00f);
+    colors[ImGuiCol_BorderShadow]           = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    colors[ImGuiCol_FrameBg]                = ImVec4(0.26f, 0.26f, 0.26f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.32f, 0.32f, 0.32f, 1.00f);
+    colors[ImGuiCol_FrameBgActive]          = ImVec4(0.37f, 0.37f, 0.37f, 1.00f);
+    colors[ImGuiCol_TitleBg]                = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
+    colors[ImGuiCol_TitleBgActive]          = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
+    colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
+    colors[ImGuiCol_MenuBarBg]              = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
+    colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.02f, 0.02f, 0.02f, 0.00f);
+    colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.41f, 0.41f, 0.41f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.51f, 0.51f, 0.51f, 1.00f);
+    colors[ImGuiCol_CheckMark]              = ImVec4(0.51f, 0.51f, 0.51f, 1.00f);
+    colors[ImGuiCol_SliderGrab]             = ImVec4(0.51f, 0.51f, 0.51f, 1.00f);
+    colors[ImGuiCol_SliderGrabActive]       = ImVec4(0.56f, 0.56f, 0.56f, 1.00f);
+    colors[ImGuiCol_Button]                 = ImVec4(0.27f, 0.27f, 0.27f, 1.00f);
+    colors[ImGuiCol_ButtonHovered]          = ImVec4(0.34f, 0.34f, 0.34f, 1.00f);
+    colors[ImGuiCol_ButtonActive]           = ImVec4(0.38f, 0.38f, 0.38f, 1.00f);
+    colors[ImGuiCol_Header]                 = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
+    colors[ImGuiCol_HeaderHovered]          = ImVec4(0.39f, 0.39f, 0.39f, 1.00f);
+    colors[ImGuiCol_HeaderActive]           = ImVec4(0.44f, 0.44f, 0.44f, 1.00f);
+    colors[ImGuiCol_Separator]              = ImVec4(0.24f, 0.24f, 0.24f, 1.00f);
+    colors[ImGuiCol_SeparatorHovered]       = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
+    colors[ImGuiCol_SeparatorActive]        = ImVec4(0.34f, 0.34f, 0.34f, 1.00f);
+    colors[ImGuiCol_ResizeGrip]             = ImVec4(0.24f, 0.24f, 0.24f, 1.00f);
+    colors[ImGuiCol_ResizeGripHovered]      = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
+    colors[ImGuiCol_ResizeGripActive]       = ImVec4(0.37f, 0.37f, 0.37f, 1.00f);
+    colors[ImGuiCol_Tab]                    = ImVec4(0.40f, 0.40f, 0.40f, 0.86f);
+    colors[ImGuiCol_TabHovered]             = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
+    colors[ImGuiCol_TabActive]              = ImVec4(0.26f, 0.26f, 0.26f, 1.00f);
+    colors[ImGuiCol_TabUnfocused]           = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
+    colors[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.26f, 0.26f, 0.26f, 1.00f);
+    colors[ImGuiCol_DockingPreview]         = ImVec4(0.55f, 0.55f, 0.55f, 1.00f);
+    colors[ImGuiCol_DockingEmptyBg]         = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
+    colors[ImGuiCol_PlotLines]              = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
+    colors[ImGuiCol_PlotLinesHovered]       = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
+    colors[ImGuiCol_PlotHistogram]          = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
+    colors[ImGuiCol_PlotHistogramHovered]   = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);
+    colors[ImGuiCol_TextSelectedBg]         = ImVec4(0.26f, 0.59f, 0.98f, 0.35f);
+    colors[ImGuiCol_DragDropTarget]         = ImVec4(1.00f, 1.00f, 0.00f, 0.90f);
+    colors[ImGuiCol_NavHighlight]           = ImVec4(0.78f, 0.88f, 1.00f, 1.00f);
+    colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
+    colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
+    colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.44f, 0.44f, 0.44f, 0.35f);
+}
+
+void Editor::UpdateWindowTitle(const ea::string& resourcePath)
+{
+    if (GetEngine()->IsHeadless())
+        return;
+
+    auto* project = GetSubsystem<Project>();
+    ea::string title;
+    if (project == nullptr)
+        title = "Editor";
+    else
+    {
+        ea::string projectName = GetFileName(RemoveTrailingSlash(project->GetProjectPath()));
+        title = ToString("Editor | %s", projectName.c_str());
+        if (!resourcePath.empty())
+            title += ToString(" | %s", GetFileName(resourcePath).c_str());
+    }
+
+    GetGraphics()->SetWindowTitle(title);
+}
+
+template<typename T>
+void Editor::RegisterSubcommand()
+{
+    T::RegisterObject(context_);
+    SharedPtr<T> cmd(context_->CreateObject<T>());
+    subCommands_.push_back(DynamicCast<SubCommand>(cmd));
+    if (CLI::App* subCommand = GetCommandLineParser().add_subcommand(T::GetTypeNameStatic().c_str()))
+        cmd->RegisterCommandLine(*subCommand);
+    else
+        URHO3D_LOGERROR("Sub-command '{}' was not registered due to user error.", T::GetTypeNameStatic());
+}
+
+void Editor::OpenOrCreateProject()
+{
+    nfdchar_t* projectDir = nullptr;
+    if (NFD_PickFolder("", &projectDir) == NFD_OKAY)
+    {
+        OpenProject(projectDir);
+        NFD_FreePath(projectDir);
+    }
 }
 
 }

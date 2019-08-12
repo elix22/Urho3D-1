@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -54,7 +54,7 @@ public:
 
 protected:
     /// Return XML patch instructions for screen joystick layout for a specific sample app, if any.
-    String GetScreenJoystickPatchString() const override { return
+    ea::string GetScreenJoystickPatchString() const override { return
         "<patch>"
         "    <add sel=\"/element\">"
         "        <element type=\"Button\">"
@@ -158,7 +158,7 @@ private:
     void HandlePostRenderUpdate(StringHash eventType, VariantMap& eventData);
 
     /// Last calculated path.
-    PODVector<Vector3> currentPath_;
+    ea::vector<Vector3> currentPath_;
     /// Path end position.
     Vector3 endPos_;
     /// Jack scene node.
@@ -170,7 +170,7 @@ private:
     /// Streaming distance.
     int streamingDistance_;
     /// Tile data.
-    HashMap<IntVector2, PODVector<unsigned char> > tileData_;
+    ea::unordered_map<IntVector2, ea::vector<unsigned char> > tileData_;
     /// Added tiles.
-    HashSet<IntVector2> addedTiles_;
+    ea::hash_set<IntVector2> addedTiles_;
 };

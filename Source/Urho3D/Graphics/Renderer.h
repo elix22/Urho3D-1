@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/HashSet.h"
+#include <EASTL/unique_ptr.h>
+
 #include "../Core/Mutex.h"
 #include "../Graphics/Batch.h"
 #include "../Graphics/Drawable.h"
@@ -251,7 +252,7 @@ public:
     void ApplyShadowMapFilter(View* view, Texture2D* shadowMap, float blurScale);
 
     /// Return number of backbuffer viewports.
-    unsigned GetNumViewports() const { return viewports_.Size(); }
+    unsigned GetNumViewports() const { return viewports_.size(); }
 
     /// Return backbuffer viewport by index.
     Viewport* GetViewport(unsigned index) const;
@@ -338,7 +339,7 @@ public:
     float GetMobileNormalOffsetMul() const { return mobileNormalOffsetMul_; }
 
     /// Return number of views rendered.
-    unsigned GetNumViews() const { return views_.Size(); }
+    unsigned GetNumViews() const { return views_.size(); }
 
     /// Return number of primitives rendered.
     unsigned GetNumPrimitives() const { return numPrimitives_; }
@@ -413,7 +414,7 @@ public:
     void SetBatchShaders(Batch& batch, Technique* tech, bool allowShadows, const BatchQueue& queue);
     /// Choose shaders for a deferred light volume batch.
     void SetLightVolumeBatchShaders
-        (Batch& batch, Camera* camera, const String& vsName, const String& psName, const String& vsDefines, const String& psDefines);
+        (Batch& batch, Camera* camera, const ea::string& vsName, const ea::string& psName, const ea::string& vsDefines, const ea::string& psDefines);
     /// Set cull mode while taking possible projection flipping into account.
     void SetCullMode(CullMode mode, Camera* camera);
     /// Ensure sufficient size of the instancing vertex buffer. Return true if successful.
@@ -434,7 +435,7 @@ private:
     /// Reload shaders.
     void LoadShaders();
     /// Reload shaders for a material pass. The related batch queue is provided in case it has extra shader compilation defines.
-    void LoadPassShaders(Pass* pass, Vector<SharedPtr<ShaderVariation> >& vertexShaders, Vector<SharedPtr<ShaderVariation> >& pixelShaders, const BatchQueue& queue);
+    void LoadPassShaders(Pass* pass, ea::vector<SharedPtr<ShaderVariation> >& vertexShaders, ea::vector<SharedPtr<ShaderVariation> >& pixelShaders, const BatchQueue& queue);
     /// Release shaders used in materials.
     void ReleaseMaterialShaders();
     /// Reload textures.
@@ -460,7 +461,7 @@ private:
     /// Remove all occlusion and screen buffers.
     void ResetBuffers();
     /// Find variations for shadow shaders
-    String GetShadowVariations() const;
+    ea::string GetShadowVariations() const;
     /// Handle screen mode event.
     void HandleScreenMode(StringHash eventType, VariantMap& eventData);
     /// Handle render update event.
@@ -495,41 +496,41 @@ private:
     /// Indirection cube map for shadowed pointlights.
     SharedPtr<TextureCube> indirectionCubeMap_;
     /// Reusable scene nodes with shadow camera components.
-    Vector<SharedPtr<Node> > shadowCameraNodes_;
+    ea::vector<SharedPtr<Node> > shadowCameraNodes_;
     /// Reusable occlusion buffers.
-    Vector<SharedPtr<OcclusionBuffer> > occlusionBuffers_;
+    ea::vector<SharedPtr<OcclusionBuffer> > occlusionBuffers_;
     /// Shadow maps by resolution.
-    HashMap<int, Vector<SharedPtr<Texture2D> > > shadowMaps_;
+    ea::unordered_map<int, ea::vector<SharedPtr<Texture2D> > > shadowMaps_;
     /// Shadow map dummy color buffers by resolution.
-    HashMap<int, SharedPtr<Texture2D> > colorShadowMaps_;
+    ea::unordered_map<int, SharedPtr<Texture2D> > colorShadowMaps_;
     /// Shadow map allocations by resolution.
-    HashMap<int, PODVector<Light*> > shadowMapAllocations_;
+    ea::unordered_map<int, ea::vector<Light*> > shadowMapAllocations_;
     /// Instance of shadow map filter
     Object* shadowMapFilterInstance_{};
     /// Function pointer of shadow map filter
     ShadowMapFilter shadowMapFilter_{};
     /// Screen buffers by resolution and format.
-    HashMap<unsigned long long, Vector<SharedPtr<Texture> > > screenBuffers_;
+    ea::unordered_map<unsigned long long, ea::vector<SharedPtr<Texture> > > screenBuffers_;
     /// Current screen buffer allocations by resolution and format.
-    HashMap<unsigned long long, unsigned> screenBufferAllocations_;
+    ea::unordered_map<unsigned long long, unsigned> screenBufferAllocations_;
     /// Cache for light scissor queries.
-    HashMap<Pair<Light*, Camera*>, Rect> lightScissorCache_;
+    ea::unordered_map<ea::pair<Light*, Camera*>, Rect> lightScissorCache_;
     /// Backbuffer viewports.
-    Vector<SharedPtr<Viewport> > viewports_;
+    ea::vector<SharedPtr<Viewport> > viewports_;
     /// Render surface viewports queued for update.
-    Vector<Pair<WeakPtr<RenderSurface>, WeakPtr<Viewport> > > queuedViewports_;
+    ea::vector<ea::pair<WeakPtr<RenderSurface>, WeakPtr<Viewport> > > queuedViewports_;
     /// Views that have been processed this frame.
-    Vector<WeakPtr<View> > views_;
+    ea::vector<WeakPtr<View> > views_;
     /// Prepared views by culling camera.
-    HashMap<Camera*, WeakPtr<View> > preparedViews_;
+    ea::unordered_map<Camera*, WeakPtr<View> > preparedViews_;
     /// Octrees that have been updated during the frame.
-    HashSet<Octree*> updatedOctrees_;
+    ea::hash_set<Octree*> updatedOctrees_;
     /// Techniques for which missing shader error has been displayed.
-    HashSet<Technique*> shaderErrorDisplayed_;
+    ea::hash_set<Technique*> shaderErrorDisplayed_;
     /// Mutex for shadow camera allocation.
     Mutex rendererMutex_;
     /// Current variation names for deferred light volume shaders.
-    Vector<String> deferredLightPSVariations_;
+    ea::vector<ea::string> deferredLightPSVariations_;
     /// Frame info for rendering.
     FrameInfo frame_;
     /// Texture anisotropy level.

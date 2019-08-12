@@ -1,6 +1,6 @@
 //
 
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,8 @@
 //
 
 #include "../Precompiled.h"
+
+#include <EASTL/sort.h>
 
 #include "../Core/Context.h"
 #include "../Graphics/Camera.h"
@@ -85,10 +87,6 @@ Drawable::Drawable(Context* context, DrawableFlags drawableFlags) :
     maxLights_(0),
     firstLight_(nullptr)
 {
-    if (drawableFlags == DRAWABLE_UNDEFINED)
-    {
-        URHO3D_LOGERROR("Drawable with undefined drawableFlags");
-    }
 }
 
 Drawable::~Drawable()
@@ -115,7 +113,7 @@ void Drawable::OnSetEnabled()
         RemoveFromOctree();
 }
 
-void Drawable::ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryResult>& results)
+void Drawable::ProcessRayQuery(const RayOctreeQuery& query, ea::vector<RayQueryResult>& results)
 {
     float distance = query.ray_.HitDistance(GetWorldBoundingBox());
     if (distance < query.maxDistance_)
@@ -127,7 +125,7 @@ void Drawable::ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryRe
         result.drawable_ = this;
         result.node_ = GetNode();
         result.subObject_ = M_MAX_UNSIGNED;
-        results.Push(result);
+        results.push_back(result);
     }
 }
 
@@ -137,7 +135,7 @@ void Drawable::UpdateBatches(const FrameInfo& frame)
     const Matrix3x4& worldTransform = node_->GetWorldTransform();
     distance_ = frame.camera_->GetDistance(worldBoundingBox.Center());
 
-    for (unsigned i = 0; i < batches_.Size(); ++i)
+    for (unsigned i = 0; i < batches_.size(); ++i)
     {
         batches_[i].distance_ = distance_;
         batches_[i].worldTransform_ = &worldTransform;
@@ -153,7 +151,7 @@ void Drawable::UpdateBatches(const FrameInfo& frame)
 Geometry* Drawable::GetLodGeometry(unsigned batchIndex, unsigned level)
 {
     // By default return the visible batch geometry
-    if (batchIndex < batches_.Size())
+    if (batchIndex < batches_.size())
         return batches_[batchIndex].geometry_;
     else
         return nullptr;
@@ -266,18 +264,19 @@ bool Drawable::IsInView() const
     // Note: in headless mode there is no renderer subsystem and no view frustum tests are performed, so return
     // always false in that case
     auto* renderer = GetSubsystem<Renderer>();
-    return renderer && viewFrameNumber_ == renderer->GetFrameInfo().frameNumber_ && !viewCameras_.Empty();
+    return renderer && viewFrameNumber_ == renderer->GetFrameInfo().frameNumber_ && !viewCameras_.empty();
 }
 
 bool Drawable::IsInView(Camera* camera) const
 {
     auto* renderer = GetSubsystem<Renderer>();
-    return renderer && viewFrameNumber_ == renderer->GetFrameInfo().frameNumber_ && (!camera || viewCameras_.Contains(camera));
+    return renderer && viewFrameNumber_ == renderer->GetFrameInfo().frameNumber_ && (!camera ||
+        viewCameras_.contains(camera));
 }
 
 bool Drawable::IsInView(const FrameInfo& frame, bool anyCamera) const
 {
-    return viewFrameNumber_ == frame.frameNumber_ && (anyCamera || viewCameras_.Contains(frame.camera_));
+    return viewFrameNumber_ == frame.frameNumber_ && (anyCamera || viewCameras_.contains(frame.camera_));
 }
 
 void Drawable::SetZone(Zone* zone, bool temporary)
@@ -298,16 +297,16 @@ void Drawable::MarkInView(const FrameInfo& frame)
     if (frame.frameNumber_ != viewFrameNumber_)
     {
         viewFrameNumber_ = frame.frameNumber_;
-        viewCameras_.Resize(1);
+        viewCameras_.resize(1);
         viewCameras_[0] = frame.camera_;
     }
     else
-        viewCameras_.Push(frame.camera_);
+        viewCameras_.push_back(frame.camera_);
 
     basePassFlags_ = 0;
     firstLight_ = nullptr;
-    lights_.Clear();
-    vertexLights_.Clear();
+    lights_.clear();
+    vertexLights_.clear();
 }
 
 void Drawable::MarkInView(unsigned frameNumber)
@@ -315,46 +314,46 @@ void Drawable::MarkInView(unsigned frameNumber)
     if (frameNumber != viewFrameNumber_)
     {
         viewFrameNumber_ = frameNumber;
-        viewCameras_.Clear();
+        viewCameras_.clear();
     }
 }
 
 void Drawable::LimitLights()
 {
     // Maximum lights value 0 means unlimited
-    if (!maxLights_ || lights_.Size() <= maxLights_)
+    if (!maxLights_ || lights_.size() <= maxLights_)
         return;
 
     // If more lights than allowed, move to vertex lights and cut the list
     const BoundingBox& box = GetWorldBoundingBox();
-    for (unsigned i = 0; i < lights_.Size(); ++i)
+    for (unsigned i = 0; i < lights_.size(); ++i)
         lights_[i]->SetIntensitySortValue(box);
 
-    Sort(lights_.Begin(), lights_.End(), CompareDrawables);
-    vertexLights_.Insert(vertexLights_.End(), lights_.Begin() + maxLights_, lights_.End());
-    lights_.Resize(maxLights_);
+    ea::quick_sort(lights_.begin(), lights_.end(), CompareDrawables);
+    vertexLights_.insert(vertexLights_.end(), lights_.begin() + maxLights_, lights_.end());
+    lights_.resize(maxLights_);
 }
 
 void Drawable::LimitVertexLights(bool removeConvertedLights)
 {
     if (removeConvertedLights)
     {
-        for (unsigned i = vertexLights_.Size() - 1; i < vertexLights_.Size(); --i)
+        for (unsigned i = vertexLights_.size() - 1; i < vertexLights_.size(); --i)
         {
             if (!vertexLights_[i]->GetPerVertex())
-                vertexLights_.Erase(i);
+                vertexLights_.erase_at(i);
         }
     }
 
-    if (vertexLights_.Size() <= MAX_VERTEX_LIGHTS)
+    if (vertexLights_.size() <= MAX_VERTEX_LIGHTS)
         return;
 
     const BoundingBox& box = GetWorldBoundingBox();
-    for (unsigned i = 0; i < vertexLights_.Size(); ++i)
+    for (unsigned i = 0; i < vertexLights_.size(); ++i)
         vertexLights_[i]->SetIntensitySortValue(box);
 
-    Sort(vertexLights_.Begin(), vertexLights_.End(), CompareDrawables);
-    vertexLights_.Resize(MAX_VERTEX_LIGHTS);
+    ea::quick_sort(vertexLights_.begin(), vertexLights_.end(), CompareDrawables);
+    vertexLights_.resize(MAX_VERTEX_LIGHTS);
 }
 
 void Drawable::OnNodeSet(Node* node)
@@ -419,7 +418,7 @@ void Drawable::RemoveFromOctree()
     }
 }
 
-bool WriteDrawablesToOBJ(PODVector<Drawable*> drawables, File* outputFile, bool asZUp, bool asRightHanded, bool writeLightmapUV)
+bool WriteDrawablesToOBJ(ea::vector<Drawable*> drawables, File* outputFile, bool asZUp, bool asRightHanded, bool writeLightmapUV)
 {
     // Must track indices independently to deal with potential mismatching of drawables vertex attributes (ie. one with UV, another without, then another with)
     unsigned currentPositionIndex = 1;
@@ -430,7 +429,7 @@ bool WriteDrawablesToOBJ(PODVector<Drawable*> drawables, File* outputFile, bool 
     // Write the common "I came from X" comment
     outputFile->WriteLine("# OBJ file exported from Urho3D");
 
-    for (unsigned i = 0; i < drawables.Size(); ++i)
+    for (unsigned i = 0; i < drawables.size(); ++i)
     {
         Drawable* drawable = drawables[i];
 
@@ -444,15 +443,16 @@ bool WriteDrawablesToOBJ(PODVector<Drawable*> drawables, File* outputFile, bool 
         Matrix3 normalMat = Matrix3(n.m00_, n.m01_, n.m02_, n.m10_, n.m11_, n.m12_, n.m20_, n.m21_, n.m22_);
         normalMat = normalMat.Transpose();
 
-        const Vector<SourceBatch>& batches = drawable->GetBatches();
-        for (unsigned geoIndex = 0; geoIndex < batches.Size(); ++geoIndex)
+        const ea::vector<SourceBatch>& batches = drawable->GetBatches();
+        for (unsigned geoIndex = 0; geoIndex < batches.size(); ++geoIndex)
         {
             Geometry* geo = drawable->GetLodGeometry(geoIndex, 0);
             if (geo == nullptr)
                 continue;
             if (geo->GetPrimitiveType() != TRIANGLE_LIST)
             {
-                URHO3D_LOGERRORF("%s (%u) %s (%u) Geometry %u contains an unsupported geometry type %u", node->GetName().Length() > 0 ? node->GetName().CString() : "Node", node->GetID(), drawable->GetTypeName().CString(), drawable->GetID(), geoIndex, (unsigned)geo->GetPrimitiveType());
+                URHO3D_LOGERRORF("%s (%u) %s (%u) Geometry %u contains an unsupported geometry type %u",
+                    node->GetName().length() > 0 ? node->GetName().c_str() : "Node", node->GetID(), drawable->GetTypeName().c_str(), drawable->GetID(), geoIndex, (unsigned)geo->GetPrimitiveType());
                 continue;
             }
 
@@ -462,7 +462,7 @@ bool WriteDrawablesToOBJ(PODVector<Drawable*> drawables, File* outputFile, bool 
             const unsigned char* vertexData;
             const unsigned char* indexData;
             unsigned elementSize, indexSize;
-            const PODVector<VertexElement>* elements;
+            const ea::vector<VertexElement>* elements;
             geo->GetRawData(vertexData, elementSize, indexData, indexSize, elements);
             if (!vertexData || !elements)
                 continue;
@@ -470,7 +470,8 @@ bool WriteDrawablesToOBJ(PODVector<Drawable*> drawables, File* outputFile, bool 
             bool hasPosition = VertexBuffer::HasElement(*elements, TYPE_VECTOR3, SEM_POSITION);
             if (!hasPosition)
             {
-                URHO3D_LOGERRORF("%s (%u) %s (%u) Geometry %u contains does not have Vector3 type positions in vertex data", node->GetName().Length() > 0 ? node->GetName().CString() : "Node", node->GetID(), drawable->GetTypeName().CString(), drawable->GetID(), geoIndex);
+                URHO3D_LOGERRORF("%s (%u) %s (%u) Geometry %u contains does not have Vector3 type positions in vertex data",
+                    node->GetName().length() > 0 ? node->GetName().c_str() : "Node", node->GetID(), drawable->GetTypeName().c_str(), drawable->GetID(), geoIndex);
                 continue;
             }
 
@@ -487,7 +488,9 @@ bool WriteDrawablesToOBJ(PODVector<Drawable*> drawables, File* outputFile, bool 
 
                 // Name NodeID DrawableType DrawableID GeometryIndex ("Geo" is included for clarity as StaticModel_32_2 could easily be misinterpreted or even quickly misread as 322)
                 // Generated object name example: Node_5_StaticModel_32_Geo_0 ... or ... Bob_5_StaticModel_32_Geo_0
-                outputFile->WriteLine(String("o ").AppendWithFormat("%s_%u_%s_%u_Geo_%u", node->GetName().Length() > 0 ? node->GetName().CString() : "Node", node->GetID(), drawable->GetTypeName().CString(), drawable->GetID(), geoIndex));
+                outputFile->WriteLine(ea::string("o ").append_sprintf("%s_%u_%s_%u_Geo_%u",
+                    node->GetName().length() > 0 ? node->GetName().c_str() : "Node", node->GetID(),
+                    drawable->GetTypeName().c_str(), drawable->GetID(), geoIndex));
 
                 // Write vertex position
                 unsigned positionOffset = VertexBuffer::GetElementOffset(*elements, TYPE_VECTOR3, SEM_POSITION);
@@ -505,7 +508,7 @@ bool WriteDrawablesToOBJ(PODVector<Drawable*> drawables, File* outputFile, bool 
                         vertexPosition.y_ = vertexPosition.z_;
                         vertexPosition.z_ = yVal;
                     }
-                    outputFile->WriteLine("v " + String(vertexPosition));
+                    outputFile->WriteLine("v " + vertexPosition.ToString());
                 }
 
                 if (hasNormals)
@@ -526,7 +529,7 @@ bool WriteDrawablesToOBJ(PODVector<Drawable*> drawables, File* outputFile, bool 
                             vertexNormal.z_ = yVal;
                         }
 
-                        outputFile->WriteLine("vn " + String(vertexNormal));
+                        outputFile->WriteLine("vn " + vertexNormal.ToString());
                     }
                 }
 
@@ -539,12 +542,12 @@ bool WriteDrawablesToOBJ(PODVector<Drawable*> drawables, File* outputFile, bool 
                     for (unsigned j = 0; j < vertexCount; ++j)
                     {
                         Vector2 uvCoords = *((const Vector2*)(&vertexData[(vertexStart + j) * elementSize + texCoordOffset]));
-                        outputFile->WriteLine("vt " + String(uvCoords));
+                        outputFile->WriteLine("vt " + uvCoords.ToString());
                     }
                 }
 
                 // If we don't have UV but have normals then must write a double-slash to indicate the absence of UV coords, otherwise use a single slash
-                const String slashCharacter = hasNormals ? "//" : "/";
+                const ea::string slashCharacter = hasNormals ? "//" : "/";
 
                 // Amount by which to offset indices in the OBJ vs their values in the Urho3D geometry, basically the lowest index value
                 // Compensates for the above vertex writing which doesn't write ALL vertices, just the used ones
@@ -580,40 +583,28 @@ bool WriteDrawablesToOBJ(PODVector<Drawable*> drawables, File* outputFile, bool 
                         longIndices[2] = indices[2] - indexOffset;
                     }
 
-                    String output = "f ";
+                    ea::string output = "f ";
                     if (hasNormals)
                     {
-                        output.AppendWithFormat("%l/%l/%l %l/%l/%l %l/%l/%l",
-                            currentPositionIndex + longIndices[0],
-                            currentUVIndex + longIndices[0],
-                            currentNormalIndex + longIndices[0],
-                            currentPositionIndex + longIndices[1],
-                            currentUVIndex + longIndices[1],
-                            currentNormalIndex + longIndices[1],
-                            currentPositionIndex + longIndices[2],
-                            currentUVIndex + longIndices[2],
-                            currentNormalIndex + longIndices[2]);
+                        output.append_sprintf("%l/%l/%l %l/%l/%l %l/%l/%l", currentPositionIndex + longIndices[0],
+                            currentUVIndex + longIndices[0], currentNormalIndex + longIndices[0],
+                            currentPositionIndex + longIndices[1], currentUVIndex + longIndices[1],
+                            currentNormalIndex + longIndices[1], currentPositionIndex + longIndices[2],
+                            currentUVIndex + longIndices[2], currentNormalIndex + longIndices[2]);
                     }
                     else if (hasNormals || hasUV)
                     {
                         unsigned secondTraitIndex = hasNormals ? currentNormalIndex : currentUVIndex;
-                        output.AppendWithFormat("%l%s%l %l%s%l %l%s%l",
-                            currentPositionIndex + longIndices[0],
-                            slashCharacter.CString(),
-                            secondTraitIndex + longIndices[0],
-                            currentPositionIndex + longIndices[1],
-                            slashCharacter.CString(),
-                            secondTraitIndex + longIndices[1],
-                            currentPositionIndex + longIndices[2],
-                            slashCharacter.CString(),
-                            secondTraitIndex + longIndices[2]);
+                        output.append_sprintf("%l%s%l %l%s%l %l%s%l", currentPositionIndex + longIndices[0],
+                            slashCharacter.c_str(), secondTraitIndex + longIndices[0],
+                            currentPositionIndex + longIndices[1], slashCharacter.c_str(),
+                            secondTraitIndex + longIndices[1], currentPositionIndex + longIndices[2],
+                            slashCharacter.c_str(), secondTraitIndex + longIndices[2]);
                     }
                     else
                     {
-                        output.AppendWithFormat("%l %l %l",
-                            currentPositionIndex + longIndices[0],
-                            currentPositionIndex + longIndices[1],
-                            currentPositionIndex + longIndices[2]);
+                        output.append_sprintf("%l %l %l", currentPositionIndex + longIndices[0],
+                            currentPositionIndex + longIndices[1], currentPositionIndex + longIndices[2]);
                     }
                     outputFile->WriteLine(output);
                 }

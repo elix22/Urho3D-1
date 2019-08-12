@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -150,7 +150,7 @@ int Texture::GetLevelDepth(unsigned level) const
 unsigned Texture::GetDataSize(int width, int height) const
 {
     if (IsCompressed())
-        return GetRowDataSize(width) * ((height + 3) >> 2u);
+        return GetRowDataSize(width) * ((height + 3u) >> 2u);
     else
         return GetRowDataSize(width) * height;
 }
@@ -182,16 +182,16 @@ void Texture::SetParameters(const XMLElement& element)
     LoadMetadataFromXML(element);
     for (XMLElement paramElem = element.GetChild(); paramElem; paramElem = paramElem.GetNext())
     {
-        String name = paramElem.GetName();
+        ea::string name = paramElem.GetName();
 
         if (name == "address")
         {
-            String coord = paramElem.GetAttributeLower("coord");
-            if (coord.Length() >= 1)
+            ea::string coord = paramElem.GetAttributeLower("coord");
+            if (coord.length() >= 1)
             {
                 auto coordIndex = (TextureCoordinate)(coord[0] - 'u');
-                String mode = paramElem.GetAttributeLower("mode");
-                SetAddressMode(coordIndex, (TextureAddressMode)GetStringListIndex(mode.CString(), addressModeNames, ADDRESS_WRAP));
+                ea::string mode = paramElem.GetAttributeLower("mode");
+                SetAddressMode(coordIndex, (TextureAddressMode)GetStringListIndex(mode.c_str(), addressModeNames, ADDRESS_WRAP));
             }
         }
 
@@ -200,8 +200,8 @@ void Texture::SetParameters(const XMLElement& element)
 
         if (name == "filter")
         {
-            String mode = paramElem.GetAttributeLower("mode");
-            SetFilterMode((TextureFilterMode)GetStringListIndex(mode.CString(), filterModeNames, FILTER_DEFAULT));
+            ea::string mode = paramElem.GetAttributeLower("mode");
+            SetFilterMode((TextureFilterMode)GetStringListIndex(mode.c_str(), filterModeNames, FILTER_DEFAULT));
             if (paramElem.HasAttribute("anisotropy"))
                 SetAnisotropy(paramElem.GetUInt("anisotropy"));
         }

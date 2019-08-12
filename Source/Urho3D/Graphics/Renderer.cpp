@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,7 @@
 #include "../Precompiled.h"
 
 #include "../Core/CoreEvents.h"
+#include "../Core/Context.h"
 #include "../Core/Profiler.h"
 #include "../Graphics/Camera.h"
 #include "../Graphics/DebugRenderer.h"
@@ -254,20 +255,20 @@ static const unsigned MAX_BUFFER_AGE = 1000;
 
 static const int MAX_EXTRA_INSTANCING_BUFFER_ELEMENTS = 4;
 
-inline PODVector<VertexElement> CreateInstancingBufferElements(unsigned numExtraElements)
+inline ea::vector<VertexElement> CreateInstancingBufferElements(unsigned numExtraElements)
 {
     static const unsigned NUM_INSTANCEMATRIX_ELEMENTS = 3;
     static const unsigned FIRST_UNUSED_TEXCOORD = 4;
 
-    PODVector<VertexElement> elements;
+    ea::vector<VertexElement> elements;
     for (unsigned i = 0; i < NUM_INSTANCEMATRIX_ELEMENTS + numExtraElements; ++i)
-        elements.Push(VertexElement(TYPE_VECTOR4, SEM_TEXCOORD, FIRST_UNUSED_TEXCOORD + i, true));
+        elements.push_back(VertexElement(TYPE_VECTOR4, SEM_TEXCOORD, FIRST_UNUSED_TEXCOORD + i, true));
     return elements;
 }
 
 Renderer::Renderer(Context* context) :
     Object(context),
-    defaultZone_(new Zone(context))
+    defaultZone_(context->CreateObject<Zone>())
 {
     SubscribeToEvent(E_SCREENMODE, URHO3D_HANDLER(Renderer, HandleScreenMode));
 
@@ -279,13 +280,13 @@ Renderer::~Renderer() = default;
 
 void Renderer::SetNumViewports(unsigned num)
 {
-    viewports_.Resize(num);
+    viewports_.resize(num);
 }
 
 void Renderer::SetViewport(unsigned index, Viewport* viewport)
 {
-    if (index >= viewports_.Size())
-        viewports_.Resize(index + 1);
+    if (index >= viewports_.size())
+        viewports_.resize(index + 1);
 
     viewports_[index] = viewport;
 }
@@ -449,10 +450,11 @@ void Renderer::SetMaxShadowMaps(int shadowMaps)
         return;
 
     maxShadowMaps_ = shadowMaps;
-    for (HashMap<int, Vector<SharedPtr<Texture2D> > >::Iterator i = shadowMaps_.Begin(); i != shadowMaps_.End(); ++i)
+    for (auto i = shadowMaps_.begin(); i !=
+        shadowMaps_.end(); ++i)
     {
-        if ((int)i->second_.Size() > maxShadowMaps_)
-            i->second_.Resize((unsigned)maxShadowMaps_);
+        if ((int) i->second.size() > maxShadowMaps_)
+            i->second.resize((unsigned) maxShadowMaps_);
     }
 }
 
@@ -491,7 +493,7 @@ void Renderer::SetMaxOccluderTriangles(int triangles)
 void Renderer::SetOcclusionBufferSize(int size)
 {
     occlusionBufferSize_ = Max(size, 1);
-    occlusionBuffers_.Clear();
+    occlusionBuffers_.clear();
 }
 
 void Renderer::SetMobileShadowBiasMul(float mul)
@@ -519,7 +521,7 @@ void Renderer::SetThreadedOcclusion(bool enable)
     if (enable != threadedOcclusion_)
     {
         threadedOcclusion_ = enable;
-        occlusionBuffers_.Clear();
+        occlusionBuffers_.clear();
     }
 }
 
@@ -536,12 +538,12 @@ void Renderer::ApplyShadowMapFilter(View* view, Texture2D* shadowMap, float blur
 
 Viewport* Renderer::GetViewport(unsigned index) const
 {
-    return index < viewports_.Size() ? viewports_[index] : nullptr;
+    return index < viewports_.size() ? viewports_[index] : nullptr;
 }
 
 Viewport* Renderer::GetViewportForScene(Scene* scene, unsigned index) const
 {
-    for (unsigned i = 0; i < viewports_.Size(); ++i)
+    for (unsigned i = 0; i < viewports_.size(); ++i)
     {
         Viewport* viewport = viewports_[i];
         if (viewport && viewport->GetScene() == scene)
@@ -573,7 +575,7 @@ Technique* Renderer::GetDefaultTechnique() const
 unsigned Renderer::GetNumGeometries(bool allViews) const
 {
     unsigned numGeometries = 0;
-    unsigned lastView = allViews ? views_.Size() : 1;
+    unsigned lastView = allViews ? views_.size() : 1;
 
     for (unsigned i = 0; i < lastView; ++i)
     {
@@ -582,7 +584,7 @@ unsigned Renderer::GetNumGeometries(bool allViews) const
         if (!view)
             continue;
 
-        numGeometries += view->GetGeometries().Size();
+        numGeometries += view->GetGeometries().size();
     }
 
     return numGeometries;
@@ -591,7 +593,7 @@ unsigned Renderer::GetNumGeometries(bool allViews) const
 unsigned Renderer::GetNumLights(bool allViews) const
 {
     unsigned numLights = 0;
-    unsigned lastView = allViews ? views_.Size() : 1;
+    unsigned lastView = allViews ? views_.size() : 1;
 
     for (unsigned i = 0; i < lastView; ++i)
     {
@@ -599,7 +601,7 @@ unsigned Renderer::GetNumLights(bool allViews) const
         if (!view)
             continue;
 
-        numLights += view->GetLights().Size();
+        numLights += view->GetLights().size();
     }
 
     return numLights;
@@ -608,7 +610,7 @@ unsigned Renderer::GetNumLights(bool allViews) const
 unsigned Renderer::GetNumShadowMaps(bool allViews) const
 {
     unsigned numShadowMaps = 0;
-    unsigned lastView = allViews ? views_.Size() : 1;
+    unsigned lastView = allViews ? views_.size() : 1;
 
     for (unsigned i = 0; i < lastView; ++i)
     {
@@ -616,8 +618,8 @@ unsigned Renderer::GetNumShadowMaps(bool allViews) const
         if (!view)
             continue;
 
-        const Vector<LightBatchQueue>& lightQueues = view->GetLightQueues();
-        for (Vector<LightBatchQueue>::ConstIterator i = lightQueues.Begin(); i != lightQueues.End(); ++i)
+        const ea::vector<LightBatchQueue>& lightQueues = view->GetLightQueues();
+        for (auto i = lightQueues.begin(); i != lightQueues.end(); ++i)
         {
             if (i->shadowMap_)
                 ++numShadowMaps;
@@ -630,7 +632,7 @@ unsigned Renderer::GetNumShadowMaps(bool allViews) const
 unsigned Renderer::GetNumOccluders(bool allViews) const
 {
     unsigned numOccluders = 0;
-    unsigned lastView = allViews ? views_.Size() : 1;
+    unsigned lastView = allViews ? views_.size() : 1;
 
     for (unsigned i = 0; i < lastView; ++i)
     {
@@ -648,8 +650,8 @@ void Renderer::Update(float timeStep)
 {
     URHO3D_PROFILE("UpdateViews");
 
-    views_.Clear();
-    preparedViews_.Clear();
+    views_.clear();
+    preparedViews_.clear();
 
     // If device lost, do not perform update. This is because any dynamic vertex/index buffer updates happen already here,
     // and if the device is lost, the updates queue up, causing memory use to rise constantly
@@ -662,7 +664,7 @@ void Renderer::Update(float timeStep)
     frame_.camera_ = nullptr;
     numShadowCameras_ = 0;
     numOcclusionBuffers_ = 0;
-    updatedOctrees_.Clear();
+    updatedOctrees_.clear();
 
     // Reload shaders now if needed
     if (shadersDirty_)
@@ -670,11 +672,11 @@ void Renderer::Update(float timeStep)
 
     // Queue update of the main viewports. Use reverse order, as rendering order is also reverse
     // to render auxiliary views before dependent main views
-    for (unsigned i = viewports_.Size() - 1; i < viewports_.Size(); --i)
+    for (unsigned i = viewports_.size() - 1; i < viewports_.size(); --i)
         QueueViewport(nullptr, viewports_[i]);
 
     // Update main viewports. This may queue further views
-    unsigned numMainViewports = queuedViewports_.Size();
+    unsigned numMainViewports = queuedViewports_.size();
     for (unsigned i = 0; i < numMainViewports; ++i)
         UpdateQueuedViewport(i);
 
@@ -682,10 +684,10 @@ void Renderer::Update(float timeStep)
     SendEvent(E_RENDERSURFACEUPDATE);
 
     // Update viewports that were added as result of the event above
-    for (unsigned i = numMainViewports; i < queuedViewports_.Size(); ++i)
+    for (unsigned i = numMainViewports; i < queuedViewports_.size(); ++i)
         UpdateQueuedViewport(i);
 
-    queuedViewports_.Clear();
+    queuedViewports_.clear();
     resetViews_ = false;
 }
 
@@ -705,8 +707,11 @@ void Renderer::Render()
 
     // If no views that render to the backbuffer, clear the screen so that e.g. the UI is not rendered on top of previous frame
     bool hasBackbufferViews = false;
-    for (unsigned i = 0; i < views_.Size(); ++i)
+    for (unsigned i = 0; i < views_.size(); ++i)
     {
+        if (!views_[i])
+            continue;
+
         if (!views_[i]->GetRenderTarget())
         {
             hasBackbufferViews = true;
@@ -725,7 +730,7 @@ void Renderer::Render()
     }
 
     // Render views from last to first. Each main (backbuffer) view is rendered after the auxiliary views it depends on
-    for (unsigned i = views_.Size() - 1; i < views_.Size(); --i)
+    for (unsigned i = views_.size() - 1; i < views_.size(); --i)
     {
         if (!views_[i])
             continue;
@@ -751,10 +756,10 @@ void Renderer::DrawDebugGeometry(bool depthTest)
     URHO3D_PROFILE("RendererDrawDebug");
 
     /// \todo Because debug geometry is per-scene, if two cameras show views of the same area, occlusion is not shown correctly
-    HashSet<Drawable*> processedGeometries;
-    HashSet<Light*> processedLights;
+    ea::hash_set<Drawable*> processedGeometries;
+    ea::hash_set<Light*> processedLights;
 
-    for (unsigned i = 0; i < views_.Size(); ++i)
+    for (unsigned i = 0; i < views_.size(); ++i)
     {
         View* view = views_[i];
         if (!view || !view->GetDrawDebug())
@@ -767,23 +772,23 @@ void Renderer::DrawDebugGeometry(bool depthTest)
             continue;
 
         // Process geometries / lights only once
-        const PODVector<Drawable*>& geometries = view->GetGeometries();
-        const PODVector<Light*>& lights = view->GetLights();
+        const ea::vector<Drawable*>& geometries = view->GetGeometries();
+        const ea::vector<Light*>& lights = view->GetLights();
 
-        for (unsigned i = 0; i < geometries.Size(); ++i)
+        for (unsigned i = 0; i < geometries.size(); ++i)
         {
-            if (!processedGeometries.Contains(geometries[i]))
+            if (!processedGeometries.contains(geometries[i]))
             {
                 geometries[i]->DrawDebugGeometry(debug, depthTest);
-                processedGeometries.Insert(geometries[i]);
+                processedGeometries.insert(geometries[i]);
             }
         }
-        for (unsigned i = 0; i < lights.Size(); ++i)
+        for (unsigned i = 0; i < lights.size(); ++i)
         {
-            if (!processedLights.Contains(lights[i]))
+            if (!processedLights.contains(lights[i]))
             {
                 lights[i]->DrawDebugGeometry(debug, depthTest);
-                processedLights.Insert(lights[i]);
+                processedLights.insert(lights[i]);
             }
         }
     }
@@ -804,12 +809,12 @@ void Renderer::QueueViewport(RenderSurface* renderTarget, Viewport* viewport)
 {
     if (viewport)
     {
-        Pair<WeakPtr<RenderSurface>, WeakPtr<Viewport> > newView =
-            MakePair(WeakPtr<RenderSurface>(renderTarget), WeakPtr<Viewport>(viewport));
+        ea::pair<WeakPtr<RenderSurface>, WeakPtr<Viewport> > newView =
+            ea::make_pair(WeakPtr<RenderSurface>(renderTarget), WeakPtr<Viewport>(viewport));
 
         // Prevent double add of the same rendertarget/viewport combination
-        if (!queuedViewports_.Contains(newView))
-            queuedViewports_.Push(newView);
+        if (!queuedViewports_.contains(newView))
+            queuedViewports_.push_back(newView);
     }
 }
 
@@ -890,7 +895,7 @@ Texture2D* Renderer::GetShadowMap(Light* light, Camera* camera, unsigned viewWid
     }
 
     int searchKey = width << 16u | height;
-    if (shadowMaps_.Contains(searchKey))
+    if (shadowMaps_.contains(searchKey))
     {
         // If shadow maps are reused, always return the first
         if (reuseShadowMaps_)
@@ -898,10 +903,10 @@ Texture2D* Renderer::GetShadowMap(Light* light, Camera* camera, unsigned viewWid
         else
         {
             // If not reused, check allocation count and return existing shadow map if possible
-            unsigned allocated = shadowMapAllocations_[searchKey].Size();
-            if (allocated < shadowMaps_[searchKey].Size())
+            unsigned allocated = shadowMapAllocations_[searchKey].size();
+            if (allocated < shadowMaps_[searchKey].size())
             {
-                shadowMapAllocations_[searchKey].Push(light);
+                shadowMapAllocations_[searchKey].push_back(light);
                 return shadowMaps_[searchKey][allocated];
             }
             else if ((int)allocated >= maxShadowMaps_)
@@ -937,7 +942,7 @@ Texture2D* Renderer::GetShadowMap(Light* light, Camera* camera, unsigned viewWid
     if (!shadowMapFormat)
         return nullptr;
 
-    SharedPtr<Texture2D> newShadowMap(new Texture2D(context_));
+    SharedPtr<Texture2D> newShadowMap(context_->CreateObject<Texture2D>());
     int retries = 3;
     unsigned dummyColorFormat = graphics_->GetDummyColorFormat();
 
@@ -969,9 +974,9 @@ Texture2D* Renderer::GetShadowMap(Light* light, Camera* camera, unsigned viewWid
             if (shadowMapUsage == TEXTURE_DEPTHSTENCIL && dummyColorFormat)
             {
                 // If no dummy color rendertarget for this size exists yet, create one now
-                if (!colorShadowMaps_.Contains(searchKey))
+                if (!colorShadowMaps_.contains(searchKey))
                 {
-                    colorShadowMaps_[searchKey] = new Texture2D(context_);
+                    colorShadowMaps_[searchKey] = context_->CreateObject<Texture2D>();
                     colorShadowMaps_[searchKey]->SetNumLevels(1);
                     colorShadowMaps_[searchKey]->SetSize(width, height, dummyColorFormat, TEXTURE_RENDERTARGET);
                 }
@@ -986,9 +991,9 @@ Texture2D* Renderer::GetShadowMap(Light* light, Camera* camera, unsigned viewWid
     if (!retries)
         newShadowMap.Reset();
 
-    shadowMaps_[searchKey].Push(newShadowMap);
+    shadowMaps_[searchKey].push_back(newShadowMap);
     if (!reuseShadowMaps_)
-        shadowMapAllocations_[searchKey].Push(light);
+        shadowMapAllocations_[searchKey].push_back(light);
 
     return newShadowMap;
 }
@@ -1025,7 +1030,7 @@ Texture* Renderer::GetScreenBuffer(int width, int height, unsigned format, int m
         searchKey += (unsigned long long)persistentKey << 32u;
 
     // If new size or format, initialize the allocation stats
-    if (screenBuffers_.Find(searchKey) == screenBuffers_.End())
+    if (screenBuffers_.find(searchKey) == screenBuffers_.end())
         screenBufferAllocations_[searchKey] = 0;
 
     // Reuse depth-stencil buffers whenever the size matches, instead of allocating new
@@ -1034,13 +1039,13 @@ Texture* Renderer::GetScreenBuffer(int width, int height, unsigned format, int m
     if (!depthStencil || persistentKey)
         ++screenBufferAllocations_[searchKey];
 
-    if (allocations >= screenBuffers_[searchKey].Size())
+    if (allocations >= screenBuffers_[searchKey].size())
     {
         SharedPtr<Texture> newBuffer;
 
         if (!cubemap)
         {
-            SharedPtr<Texture2D> newTex2D(new Texture2D(context_));
+            SharedPtr<Texture2D> newTex2D(context_->CreateObject<Texture2D>());
             /// \todo Mipmaps disabled for now. Allow to request mipmapped buffer?
             newTex2D->SetNumLevels(1);
             newTex2D->SetSize(width, height, format, depthStencil ? TEXTURE_DEPTHSTENCIL : TEXTURE_RENDERTARGET, multiSample, autoResolve);
@@ -1063,7 +1068,7 @@ Texture* Renderer::GetScreenBuffer(int width, int height, unsigned format, int m
         }
         else
         {
-            SharedPtr<TextureCube> newTexCube(new TextureCube(context_));
+            SharedPtr<TextureCube> newTexCube(context_->CreateObject<TextureCube>());
             newTexCube->SetNumLevels(1);
             newTexCube->SetSize(width, format, TEXTURE_RENDERTARGET, multiSample);
 
@@ -1073,9 +1078,9 @@ Texture* Renderer::GetScreenBuffer(int width, int height, unsigned format, int m
         newBuffer->SetSRGB(srgb);
         newBuffer->SetFilterMode(filtered ? FILTER_BILINEAR : FILTER_NEAREST);
         newBuffer->ResetUseTimer();
-        screenBuffers_[searchKey].Push(newBuffer);
+        screenBuffers_[searchKey].push_back(newBuffer);
 
-        URHO3D_LOGTRACE("Allocated new screen buffer size " + String(width) + "x" + String(height) + " format " + String(format));
+        URHO3D_LOGTRACE("Allocated new screen buffer size " + ea::to_string(width) + "x" + ea::to_string(height) + " format " + ea::to_string(format));
         return newBuffer;
     }
     else
@@ -1102,11 +1107,11 @@ RenderSurface* Renderer::GetDepthStencil(int width, int height, int multiSample,
 
 OcclusionBuffer* Renderer::GetOcclusionBuffer(Camera* camera)
 {
-    assert(numOcclusionBuffers_ <= occlusionBuffers_.Size());
-    if (numOcclusionBuffers_ == occlusionBuffers_.Size())
+    assert(numOcclusionBuffers_ <= occlusionBuffers_.size());
+    if (numOcclusionBuffers_ == occlusionBuffers_.size())
     {
-        SharedPtr<OcclusionBuffer> newBuffer(new OcclusionBuffer(context_));
-        occlusionBuffers_.Push(newBuffer);
+        SharedPtr<OcclusionBuffer> newBuffer(context_->CreateObject<OcclusionBuffer>());
+        occlusionBuffers_.push_back(newBuffer);
     }
 
     int width = occlusionBufferSize_;
@@ -1124,12 +1129,12 @@ Camera* Renderer::GetShadowCamera()
 {
     MutexLock lock(rendererMutex_);
 
-    assert(numShadowCameras_ <= shadowCameraNodes_.Size());
-    if (numShadowCameras_ == shadowCameraNodes_.Size())
+    assert(numShadowCameras_ <= shadowCameraNodes_.size());
+    if (numShadowCameras_ == shadowCameraNodes_.size())
     {
-        SharedPtr<Node> newNode(new Node(context_));
+        SharedPtr<Node> newNode(context_->CreateObject<Node>());
         newNode->CreateComponent<Camera>();
-        shadowCameraNodes_.Push(newNode);
+        shadowCameraNodes_.push_back(newNode);
     }
 
     auto* camera = shadowCameraNodes_[numShadowCameras_++]->GetComponent<Camera>();
@@ -1147,8 +1152,8 @@ void Renderer::StorePreparedView(View* view, Camera* camera)
 
 View* Renderer::GetPreparedView(Camera* camera)
 {
-    HashMap<Camera*, WeakPtr<View> >::Iterator i = preparedViews_.Find(camera);
-    return i != preparedViews_.End() ? i->second_ : nullptr;
+    auto i = preparedViews_.find(camera);
+    return i != preparedViews_.end() ? i->second.Get() : nullptr;
 }
 
 View* Renderer::GetActualView(View* view)
@@ -1167,15 +1172,15 @@ void Renderer::SetBatchShaders(Batch& batch, Technique* tech, bool allowShadows,
     if (pass->GetShadersLoadedFrameNumber() != shadersChangedFrameNumber_)
         pass->ReleaseShaders();
 
-    Vector<SharedPtr<ShaderVariation> >& vertexShaders = queue.hasExtraDefines_ ? pass->GetVertexShaders(queue.vsExtraDefinesHash_) : pass->GetVertexShaders();
-    Vector<SharedPtr<ShaderVariation> >& pixelShaders = queue.hasExtraDefines_ ? pass->GetPixelShaders(queue.psExtraDefinesHash_) : pass->GetPixelShaders();
+    ea::vector<SharedPtr<ShaderVariation> >& vertexShaders = queue.hasExtraDefines_ ? pass->GetVertexShaders(queue.vsExtraDefinesHash_) : pass->GetVertexShaders();
+    ea::vector<SharedPtr<ShaderVariation> >& pixelShaders = queue.hasExtraDefines_ ? pass->GetPixelShaders(queue.psExtraDefinesHash_) : pass->GetPixelShaders();
 
     // Load shaders now if necessary
-    if (!vertexShaders.Size() || !pixelShaders.Size())
+    if (!vertexShaders.size() || !pixelShaders.size())
         LoadPassShaders(pass, vertexShaders, pixelShaders, queue);
 
     // Make sure shaders are loaded now
-    if (vertexShaders.Size() && pixelShaders.Size())
+    if (vertexShaders.size() && pixelShaders.size())
     {
         bool heightFog = batch.zone_ && batch.zone_->GetHeightFog();
 
@@ -1248,7 +1253,7 @@ void Renderer::SetBatchShaders(Batch& batch, Technique* tech, bool allowShadows,
             {
                 unsigned numVertexLights = 0;
                 if (batch.lightQueue_)
-                    numVertexLights = batch.lightQueue_->vertexLights_.Size();
+                    numVertexLights = batch.lightQueue_->vertexLights_.size();
 
                 unsigned vsi = batch.geometryType_ * MAX_VERTEXLIGHT_VS_VARIATIONS + numVertexLights;
                 batch.vertexShader_ = vertexShaders[vsi];
@@ -1266,18 +1271,18 @@ void Renderer::SetBatchShaders(Batch& batch, Technique* tech, bool allowShadows,
     // Log error if shaders could not be assigned, but only once per technique
     if (!batch.vertexShader_ || !batch.pixelShader_)
     {
-        if (!shaderErrorDisplayed_.Contains(tech))
+        if (!shaderErrorDisplayed_.contains(tech))
         {
-            shaderErrorDisplayed_.Insert(tech);
+            shaderErrorDisplayed_.insert(tech);
             URHO3D_LOGERROR("Technique " + tech->GetName() + " has missing shaders");
         }
     }
 }
 
-void Renderer::SetLightVolumeBatchShaders(Batch& batch, Camera* camera, const String& vsName, const String& psName, const String& vsDefines,
-    const String& psDefines)
+void Renderer::SetLightVolumeBatchShaders(Batch& batch, Camera* camera, const ea::string& vsName, const ea::string& psName, const ea::string& vsDefines,
+    const ea::string& psDefines)
 {
-    assert(deferredLightPSVariations_.Size());
+    assert(deferredLightPSVariations_.size());
 
     unsigned vsi = DLVS_NONE;
     unsigned psi = DLPS_NONE;
@@ -1318,12 +1323,12 @@ void Renderer::SetLightVolumeBatchShaders(Batch& batch, Camera* camera, const St
         psi += DLPS_ORTHO;
     }
 
-    if (vsDefines.Length())
+    if (vsDefines.length())
         batch.vertexShader_ = graphics_->GetShader(VS, vsName, deferredLightVSVariations[vsi] + vsDefines);
     else
         batch.vertexShader_ = graphics_->GetShader(VS, vsName, deferredLightVSVariations[vsi]);
 
-    if (psDefines.Length())
+    if (psDefines.length())
         batch.pixelShader_ = graphics_->GetShader(PS, psName, deferredLightPSVariations_[psi] + psDefines);
     else
         batch.pixelShader_ = graphics_->GetShader(PS, psName, deferredLightPSVariations_[psi]);
@@ -1356,16 +1361,16 @@ bool Renderer::ResizeInstancingBuffer(unsigned numInstances)
     while (newSize < numInstances)
         newSize <<= 1;
 
-    const PODVector<VertexElement> instancingBufferElements = CreateInstancingBufferElements(numExtraInstancingBufferElements_);
+    const ea::vector<VertexElement> instancingBufferElements = CreateInstancingBufferElements(numExtraInstancingBufferElements_);
     if (!instancingBuffer_->SetSize(newSize, instancingBufferElements, true))
     {
-        URHO3D_LOGERROR("Failed to resize instancing buffer to " + String(newSize));
+        URHO3D_LOGERROR("Failed to resize instancing buffer to " + ea::to_string(newSize));
         // If failed, try to restore the old size
         instancingBuffer_->SetSize(oldSize, instancingBufferElements, true);
         return false;
     }
 
-    URHO3D_LOGDEBUG("Resized instancing buffer to " + String(newSize));
+    URHO3D_LOGDEBUG("Resized instancing buffer to " + ea::to_string(newSize));
     return true;
 }
 
@@ -1450,11 +1455,11 @@ void Renderer::OptimizeLightByStencil(Light* light, Camera* camera)
 
 const Rect& Renderer::GetLightScissor(Light* light, Camera* camera)
 {
-    Pair<Light*, Camera*> combination(light, camera);
+    ea::pair<Light*, Camera*> combination(light, camera);
 
-    HashMap<Pair<Light*, Camera*>, Rect>::Iterator i = lightScissorCache_.Find(combination);
-    if (i != lightScissorCache_.End())
-        return i->second_;
+    auto i = lightScissorCache_.find(combination);
+    if (i != lightScissorCache_.end())
+        return i->second;
 
     const Matrix3x4& view = camera->GetView();
     const Matrix4& projection = camera->GetProjection();
@@ -1474,11 +1479,11 @@ const Rect& Renderer::GetLightScissor(Light* light, Camera* camera)
 
 void Renderer::UpdateQueuedViewport(unsigned index)
 {
-    WeakPtr<RenderSurface>& renderTarget = queuedViewports_[index].first_;
-    WeakPtr<Viewport>& viewport = queuedViewports_[index].second_;
+    WeakPtr<RenderSurface>& renderTarget = queuedViewports_[index].first;
+    WeakPtr<Viewport>& viewport = queuedViewports_[index].second;
 
     // Null pointer means backbuffer view. Differentiate between that and an expired rendersurface
-    if ((renderTarget.NotNull() && renderTarget.Expired()) || viewport.Expired())
+    if ((renderTarget && renderTarget.Expired()) || viewport.Expired())
         return;
 
     // (Re)allocate the view structure if necessary
@@ -1491,7 +1496,7 @@ void Renderer::UpdateQueuedViewport(unsigned index)
     if (!view->Define(renderTarget, viewport))
         return;
 
-    views_.Push(WeakPtr<View>(view));
+    views_.push_back(WeakPtr<View>(view));
 
     const IntRect& viewRect = viewport->GetRect();
     Scene* scene = viewport->GetScene();
@@ -1502,14 +1507,14 @@ void Renderer::UpdateQueuedViewport(unsigned index)
 
     // Update octree (perform early update for drawables which need that, and reinsert moved drawables.)
     // However, if the same scene is viewed from multiple cameras, update the octree only once
-    if (!updatedOctrees_.Contains(octree))
+    if (!updatedOctrees_.contains(octree))
     {
         frame_.camera_ = viewport->GetCamera();
         frame_.viewSize_ = viewRect.Size();
         if (frame_.viewSize_ == IntVector2::ZERO)
             frame_.viewSize_ = IntVector2(graphics_->GetWidth(), graphics_->GetHeight());
         octree->Update(frame_);
-        updatedOctrees_.Insert(octree);
+        updatedOctrees_.insert(octree);
 
         // Set also the view for the debug renderer already here, so that it can use culling
         /// \todo May result in incorrect debug geometry culling if the same scene is drawn from multiple viewports
@@ -1526,53 +1531,55 @@ void Renderer::UpdateQueuedViewport(unsigned index)
 void Renderer::PrepareViewRender()
 {
     ResetScreenBufferAllocations();
-    lightScissorCache_.Clear();
+    lightScissorCache_.clear();
     lightStencilValue_ = 1;
 }
 
 void Renderer::RemoveUnusedBuffers()
 {
-    for (unsigned i = occlusionBuffers_.Size() - 1; i < occlusionBuffers_.Size(); --i)
+    for (unsigned i = occlusionBuffers_.size() - 1; i < occlusionBuffers_.size(); --i)
     {
         if (occlusionBuffers_[i]->GetUseTimer() > MAX_BUFFER_AGE)
         {
             URHO3D_LOGDEBUG("Removed unused occlusion buffer");
-            occlusionBuffers_.Erase(i);
+            occlusionBuffers_.erase_at(i);
         }
     }
 
-    for (HashMap<unsigned long long, Vector<SharedPtr<Texture> > >::Iterator i = screenBuffers_.Begin(); i != screenBuffers_.End();)
+    for (auto i = screenBuffers_.begin(); i !=
+        screenBuffers_.end();)
     {
-        HashMap<unsigned long long, Vector<SharedPtr<Texture> > >::Iterator current = i++;
-        Vector<SharedPtr<Texture> >& buffers = current->second_;
-        for (unsigned j = buffers.Size() - 1; j < buffers.Size(); --j)
+        auto current = i++;
+        ea::vector<SharedPtr<Texture> >& buffers = current->second;
+        for (unsigned j = buffers.size() - 1; j < buffers.size(); --j)
         {
             Texture* buffer = buffers[j];
             if (buffer->GetUseTimer() > MAX_BUFFER_AGE)
             {
-                URHO3D_LOGTRACE("Removed unused screen buffer size " + String(buffer->GetWidth()) + "x" + String(buffer->GetHeight()) +
-                         " format " + String(buffer->GetFormat()));
-                buffers.Erase(j);
+                URHO3D_LOGTRACE("Removed unused screen buffer size " + ea::to_string(buffer->GetWidth()) + "x" + ea::to_string(buffer->GetHeight()) +
+                         " format " + ea::to_string(buffer->GetFormat()));
+                buffers.erase_at(j);
             }
         }
-        if (buffers.Empty())
+        if (buffers.empty())
         {
-            screenBufferAllocations_.Erase(current->first_);
-            screenBuffers_.Erase(current);
+            screenBufferAllocations_.erase(current->first);
+            screenBuffers_.erase(current);
         }
     }
 }
 
 void Renderer::ResetShadowMapAllocations()
 {
-    for (HashMap<int, PODVector<Light*> >::Iterator i = shadowMapAllocations_.Begin(); i != shadowMapAllocations_.End(); ++i)
-        i->second_.Clear();
+    for (auto i = shadowMapAllocations_.begin(); i != shadowMapAllocations_.end(); ++i)
+        i->second.clear();
 }
 
 void Renderer::ResetScreenBufferAllocations()
 {
-    for (HashMap<unsigned long long, unsigned>::Iterator i = screenBufferAllocations_.Begin(); i != screenBufferAllocations_.End(); ++i)
-        i->second_ = 0;
+    for (auto i = screenBufferAllocations_.begin(); i !=
+        screenBufferAllocations_.end(); ++i)
+        i->second = 0;
 }
 
 void Renderer::Initialize()
@@ -1594,7 +1601,7 @@ void Renderer::Initialize()
 
     defaultLightRamp_ = cache->GetResource<Texture2D>("Textures/Ramp.png");
     defaultLightSpot_ = cache->GetResource<Texture2D>("Textures/Spot.png");
-    defaultMaterial_ = new Material(context_);
+    defaultMaterial_ = context_->CreateObject<Material>();
 
     defaultRenderPath_ = new RenderPath();
     defaultRenderPath_->Load(cache->GetResource<XMLFile>("RenderPaths/Forward.xml"));
@@ -1602,7 +1609,7 @@ void Renderer::Initialize()
     CreateGeometries();
     CreateInstancingBuffer();
 
-    viewports_.Resize(1);
+    viewports_.resize(1);
     ResetShadowMaps();
     ResetBuffers();
 
@@ -1622,7 +1629,7 @@ void Renderer::LoadShaders()
     shadersChangedFrameNumber_ = GetSubsystem<Time>()->GetFrameNumber();
 
     // Construct new names for deferred light volume pixel shaders based on rendering options
-    deferredLightPSVariations_.Resize(MAX_DEFERRED_LIGHT_PS_VARIATIONS);
+    deferredLightPSVariations_.resize(MAX_DEFERRED_LIGHT_PS_VARIATIONS);
 
     for (unsigned i = 0; i < MAX_DEFERRED_LIGHT_PS_VARIATIONS; ++i)
     {
@@ -1636,30 +1643,30 @@ void Renderer::LoadShaders()
     shadersDirty_ = false;
 }
 
-void Renderer::LoadPassShaders(Pass* pass, Vector<SharedPtr<ShaderVariation> >& vertexShaders, Vector<SharedPtr<ShaderVariation> >& pixelShaders, const BatchQueue& queue)
+void Renderer::LoadPassShaders(Pass* pass, ea::vector<SharedPtr<ShaderVariation> >& vertexShaders, ea::vector<SharedPtr<ShaderVariation> >& pixelShaders, const BatchQueue& queue)
 {
     URHO3D_PROFILE("LoadPassShaders");
 
     // Forget all the old shaders
-    vertexShaders.Clear();
-    pixelShaders.Clear();
+    vertexShaders.clear();
+    pixelShaders.clear();
 
-    String vsDefines = pass->GetEffectiveVertexShaderDefines();
-    String psDefines = pass->GetEffectivePixelShaderDefines();
+    ea::string vsDefines = pass->GetEffectiveVertexShaderDefines();
+    ea::string psDefines = pass->GetEffectivePixelShaderDefines();
 
     // Make sure to end defines with space to allow appending engine's defines
-    if (vsDefines.Length() && !vsDefines.EndsWith(" "))
+    if (vsDefines.length() && !vsDefines.ends_with(" "))
         vsDefines += ' ';
-    if (psDefines.Length() && !psDefines.EndsWith(" "))
+    if (psDefines.length() && !psDefines.ends_with(" "))
         psDefines += ' ';
 
     // Append defines from batch queue (renderpath command) if needed
-    if (queue.vsExtraDefines_.Length())
+    if (queue.vsExtraDefines_.length())
     {
         vsDefines += queue.vsExtraDefines_;
         vsDefines += ' ';
     }
-    if (queue.psExtraDefines_.Length())
+    if (queue.psExtraDefines_.length())
     {
         psDefines += queue.psExtraDefines_;
         psDefines += ' ';
@@ -1676,8 +1683,8 @@ void Renderer::LoadPassShaders(Pass* pass, Vector<SharedPtr<ShaderVariation> >& 
     if (pass->GetLightingMode() == LIGHTING_PERPIXEL)
     {
         // Load forward pixel lit variations
-        vertexShaders.Resize(MAX_GEOMETRYTYPES * MAX_LIGHT_VS_VARIATIONS);
-        pixelShaders.Resize(MAX_LIGHT_PS_VARIATIONS * 2);
+        vertexShaders.resize(MAX_GEOMETRYTYPES * MAX_LIGHT_VS_VARIATIONS);
+        pixelShaders.resize(MAX_LIGHT_PS_VARIATIONS * 2);
 
         for (unsigned j = 0; j < MAX_GEOMETRYTYPES * MAX_LIGHT_VS_VARIATIONS; ++j)
         {
@@ -1708,7 +1715,7 @@ void Renderer::LoadPassShaders(Pass* pass, Vector<SharedPtr<ShaderVariation> >& 
         // Load vertex light variations
         if (pass->GetLightingMode() == LIGHTING_PERVERTEX)
         {
-            vertexShaders.Resize(MAX_GEOMETRYTYPES * MAX_VERTEXLIGHT_VS_VARIATIONS);
+            vertexShaders.resize(MAX_GEOMETRYTYPES * MAX_VERTEXLIGHT_VS_VARIATIONS);
             for (unsigned j = 0; j < MAX_GEOMETRYTYPES * MAX_VERTEXLIGHT_VS_VARIATIONS; ++j)
             {
                 unsigned g = j / MAX_VERTEXLIGHT_VS_VARIATIONS;
@@ -1719,7 +1726,7 @@ void Renderer::LoadPassShaders(Pass* pass, Vector<SharedPtr<ShaderVariation> >& 
         }
         else
         {
-            vertexShaders.Resize(MAX_GEOMETRYTYPES);
+            vertexShaders.resize(MAX_GEOMETRYTYPES);
             for (unsigned j = 0; j < MAX_GEOMETRYTYPES; ++j)
             {
                 vertexShaders[j] = graphics_->GetShader(VS, pass->GetVertexShader(),
@@ -1727,7 +1734,7 @@ void Renderer::LoadPassShaders(Pass* pass, Vector<SharedPtr<ShaderVariation> >& 
             }
         }
 
-        pixelShaders.Resize(2);
+        pixelShaders.resize(2);
         for (unsigned j = 0; j < 2; ++j)
         {
             pixelShaders[j] =
@@ -1741,71 +1748,71 @@ void Renderer::LoadPassShaders(Pass* pass, Vector<SharedPtr<ShaderVariation> >& 
 void Renderer::ReleaseMaterialShaders()
 {
     auto* cache = GetSubsystem<ResourceCache>();
-    PODVector<Material*> materials;
+    ea::vector<Material*> materials;
 
     cache->GetResources<Material>(materials);
 
-    for (unsigned i = 0; i < materials.Size(); ++i)
+    for (unsigned i = 0; i < materials.size(); ++i)
         materials[i]->ReleaseShaders();
 }
 
 void Renderer::ReloadTextures()
 {
     auto* cache = GetSubsystem<ResourceCache>();
-    PODVector<Resource*> textures;
+    ea::vector<Resource*> textures;
 
     cache->GetResources(textures, Texture2D::GetTypeStatic());
-    for (unsigned i = 0; i < textures.Size(); ++i)
+    for (unsigned i = 0; i < textures.size(); ++i)
         cache->ReloadResource(textures[i]);
 
     cache->GetResources(textures, TextureCube::GetTypeStatic());
-    for (unsigned i = 0; i < textures.Size(); ++i)
+    for (unsigned i = 0; i < textures.size(); ++i)
         cache->ReloadResource(textures[i]);
 }
 
 void Renderer::CreateGeometries()
 {
-    SharedPtr<VertexBuffer> dlvb(new VertexBuffer(context_));
+    SharedPtr<VertexBuffer> dlvb(context_->CreateObject<VertexBuffer>());
     dlvb->SetShadowed(true);
     dlvb->SetSize(4, MASK_POSITION);
     dlvb->SetData(dirLightVertexData);
 
-    SharedPtr<IndexBuffer> dlib(new IndexBuffer(context_));
+    SharedPtr<IndexBuffer> dlib(context_->CreateObject<IndexBuffer>());
     dlib->SetShadowed(true);
     dlib->SetSize(6, false);
     dlib->SetData(dirLightIndexData);
 
-    dirLightGeometry_ = new Geometry(context_);
+    dirLightGeometry_ = context_->CreateObject<Geometry>();
     dirLightGeometry_->SetVertexBuffer(0, dlvb);
     dirLightGeometry_->SetIndexBuffer(dlib);
     dirLightGeometry_->SetDrawRange(TRIANGLE_LIST, 0, dlib->GetIndexCount());
 
-    SharedPtr<VertexBuffer> slvb(new VertexBuffer(context_));
+    SharedPtr<VertexBuffer> slvb(context_->CreateObject<VertexBuffer>());
     slvb->SetShadowed(true);
     slvb->SetSize(8, MASK_POSITION);
     slvb->SetData(spotLightVertexData);
 
-    SharedPtr<IndexBuffer> slib(new IndexBuffer(context_));
+    SharedPtr<IndexBuffer> slib(context_->CreateObject<IndexBuffer>());
     slib->SetShadowed(true);
     slib->SetSize(36, false);
     slib->SetData(spotLightIndexData);
 
-    spotLightGeometry_ = new Geometry(context_);
+    spotLightGeometry_ = context_->CreateObject<Geometry>();
     spotLightGeometry_->SetVertexBuffer(0, slvb);
     spotLightGeometry_->SetIndexBuffer(slib);
     spotLightGeometry_->SetDrawRange(TRIANGLE_LIST, 0, slib->GetIndexCount());
 
-    SharedPtr<VertexBuffer> plvb(new VertexBuffer(context_));
+    SharedPtr<VertexBuffer> plvb(context_->CreateObject<VertexBuffer>());
     plvb->SetShadowed(true);
     plvb->SetSize(24, MASK_POSITION);
     plvb->SetData(pointLightVertexData);
 
-    SharedPtr<IndexBuffer> plib(new IndexBuffer(context_));
+    SharedPtr<IndexBuffer> plib(context_->CreateObject<IndexBuffer>());
     plib->SetShadowed(true);
     plib->SetSize(132, false);
     plib->SetData(pointLightIndexData);
 
-    pointLightGeometry_ = new Geometry(context_);
+    pointLightGeometry_ = context_->CreateObject<Geometry>();
     pointLightGeometry_->SetVertexBuffer(0, plvb);
     pointLightGeometry_->SetIndexBuffer(plib);
     pointLightGeometry_->SetDrawRange(TRIANGLE_LIST, 0, plib->GetIndexCount());
@@ -1813,12 +1820,12 @@ void Renderer::CreateGeometries()
 #if !defined(URHO3D_OPENGL) || !defined(GL_ES_VERSION_2_0)
     if (graphics_->GetShadowMapFormat())
     {
-        faceSelectCubeMap_ = new TextureCube(context_);
+        faceSelectCubeMap_ = context_->CreateObject<TextureCube>();
         faceSelectCubeMap_->SetNumLevels(1);
         faceSelectCubeMap_->SetSize(1, graphics_->GetRGBAFormat());
         faceSelectCubeMap_->SetFilterMode(FILTER_NEAREST);
 
-        indirectionCubeMap_ = new TextureCube(context_);
+        indirectionCubeMap_ = context_->CreateObject<TextureCube>();
         indirectionCubeMap_->SetNumLevels(1);
         indirectionCubeMap_->SetSize(256, graphics_->GetRGBAFormat());
         indirectionCubeMap_->SetFilterMode(FILTER_BILINEAR);
@@ -1886,8 +1893,8 @@ void Renderer::CreateInstancingBuffer()
         return;
     }
 
-    instancingBuffer_ = new VertexBuffer(context_);
-    const PODVector<VertexElement> instancingBufferElements = CreateInstancingBufferElements(numExtraInstancingBufferElements_);
+    instancingBuffer_ = context_->CreateObject<VertexBuffer>();
+    const ea::vector<VertexElement> instancingBufferElements = CreateInstancingBufferElements(numExtraInstancingBufferElements_);
     if (!instancingBuffer_->SetSize(INSTANCING_BUFFER_DEFAULT_SIZE, instancingBufferElements, true))
     {
         instancingBuffer_.Reset();
@@ -1897,19 +1904,19 @@ void Renderer::CreateInstancingBuffer()
 
 void Renderer::ResetShadowMaps()
 {
-    shadowMaps_.Clear();
-    shadowMapAllocations_.Clear();
-    colorShadowMaps_.Clear();
+    shadowMaps_.clear();
+    shadowMapAllocations_.clear();
+    colorShadowMaps_.clear();
 }
 
 void Renderer::ResetBuffers()
 {
-    occlusionBuffers_.Clear();
-    screenBuffers_.Clear();
-    screenBufferAllocations_.Clear();
+    occlusionBuffers_.clear();
+    screenBuffers_.clear();
+    screenBufferAllocations_.clear();
 }
 
-String Renderer::GetShadowVariations() const
+ea::string Renderer::GetShadowVariations() const
 {
     switch (shadowQuality_)
     {
@@ -1941,7 +1948,7 @@ String Renderer::GetShadowVariations() const
             return "VSM_SHADOW ";
     }
     return "";
-};
+}
 
 void Renderer::HandleScreenMode(StringHash eventType, VariantMap& eventData)
 {

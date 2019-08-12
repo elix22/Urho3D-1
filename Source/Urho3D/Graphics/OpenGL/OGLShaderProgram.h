@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../../Container/HashMap.h"
+#include <EASTL/unordered_map.h>
+
 #include "../../Container/RefCounted.h"
 #include "../../Graphics/GPUObject.h"
 #include "../../Graphics/GraphicsDefs.h"
@@ -65,10 +66,10 @@ public:
     const ShaderParameter* GetParameter(StringHash param) const;
 
     /// Return linker output.
-    const String& GetLinkerOutput() const { return linkerOutput_; }
+    const ea::string& GetLinkerOutput() const { return linkerOutput_; }
 
     /// Return semantic to vertex attributes location mappings used by the shader.
-    const HashMap<Pair<unsigned char, unsigned char>, unsigned>& GetVertexAttributes() const { return vertexAttributes_; }
+    const ea::unordered_map<ea::pair<unsigned char, unsigned char>, unsigned>& GetVertexAttributes() const { return vertexAttributes_; }
 
     /// Return attribute location use bitmask.
     unsigned GetUsedVertexAttributes() const { return usedVertexAttributes_; }
@@ -92,11 +93,11 @@ private:
     /// Pixel shader.
     WeakPtr<ShaderVariation> pixelShader_;
     /// Shader parameters.
-    HashMap<StringHash, ShaderParameter> shaderParameters_;
+    ea::unordered_map<StringHash, ShaderParameter> shaderParameters_;
     /// Texture unit use.
     bool useTextureUnits_[MAX_TEXTURE_UNITS]{};
     /// Vertex attributes.
-    HashMap<Pair<unsigned char, unsigned char>, unsigned> vertexAttributes_;
+    ea::unordered_map<ea::pair<unsigned char, unsigned char>, unsigned> vertexAttributes_;
     /// Used vertex attribute location bitmask.
     unsigned usedVertexAttributes_{};
     /// Constant buffers by binding index.
@@ -104,7 +105,7 @@ private:
     /// Remembered shader parameter sources for individual uniform mode.
     const void* parameterSources_[MAX_SHADER_PARAMETER_GROUPS]{};
     /// Shader link error string.
-    String linkerOutput_;
+    ea::string linkerOutput_;
     /// Shader parameter source framenumber.
     unsigned frameNumber_{};
 

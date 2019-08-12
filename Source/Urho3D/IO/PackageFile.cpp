@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -39,7 +39,7 @@ PackageFile::PackageFile(Context* context) :
 {
 }
 
-PackageFile::PackageFile(Context* context, const String& fileName, unsigned startOffset) :
+PackageFile::PackageFile(Context* context, const ea::string& fileName, unsigned startOffset) :
     Object(context),
     totalSize_(0),
     totalDataSize_(0),
@@ -51,7 +51,7 @@ PackageFile::PackageFile(Context* context, const String& fileName, unsigned star
 
 PackageFile::~PackageFile() = default;
 
-bool PackageFile::Open(const String& fileName, unsigned startOffset)
+bool PackageFile::Open(const ea::string& fileName, unsigned startOffset)
 {
     SharedPtr<File> file(new File(context_, fileName));
     if (!file->IsOpen())
@@ -59,7 +59,7 @@ bool PackageFile::Open(const String& fileName, unsigned startOffset)
 
     // Check ID, then read the directory
     file->Seek(startOffset);
-    String id = file->ReadFileID();
+    ea::string id = file->ReadFileID();
     if (id != "UPAK" && id != "ULZ4")
     {
         // If start offset has not been explicitly specified, also try to read package size from the end of file
@@ -94,7 +94,7 @@ bool PackageFile::Open(const String& fileName, unsigned startOffset)
 
     for (unsigned i = 0; i < numFiles; ++i)
     {
-        String entryName = file->ReadString();
+        ea::string entryName = file->ReadString();
         PackageEntry newEntry{};
         newEntry.offset_ = file->ReadUInt() + startOffset;
         totalDataSize_ += (newEntry.size_ = file->ReadUInt());
@@ -111,17 +111,17 @@ bool PackageFile::Open(const String& fileName, unsigned startOffset)
     return true;
 }
 
-bool PackageFile::Exists(const String& fileName) const
+bool PackageFile::Exists(const ea::string& fileName) const
 {
-    bool found = entries_.Find(fileName) != entries_.End();
+    bool found = entries_.find(fileName) != entries_.end();
 
 #ifdef _WIN32
     // On Windows perform a fallback case-insensitive search
     if (!found)
     {
-        for (HashMap<String, PackageEntry>::ConstIterator i = entries_.Begin(); i != entries_.End(); ++i)
+        for (auto i = entries_.begin(); i != entries_.end(); ++i)
         {
-            if (!i->first_.Compare(fileName, false))
+            if (!i->first.comparei(fileName))
             {
                 found = true;
                 break;
@@ -133,20 +133,20 @@ bool PackageFile::Exists(const String& fileName) const
     return found;
 }
 
-const PackageEntry* PackageFile::GetEntry(const String& fileName) const
+const PackageEntry* PackageFile::GetEntry(const ea::string& fileName) const
 {
-    HashMap<String, PackageEntry>::ConstIterator i = entries_.Find(fileName);
-    if (i != entries_.End())
-        return &i->second_;
+    auto i = entries_.find(fileName);
+    if (i != entries_.end())
+        return &i->second;
 
 #ifdef _WIN32
     // On Windows perform a fallback case-insensitive search
     else
     {
-        for (HashMap<String, PackageEntry>::ConstIterator j = entries_.Begin(); j != entries_.End(); ++j)
+        for (auto j = entries_.begin(); j != entries_.end(); ++j)
         {
-            if (!j->first_.Compare(fileName, false))
-                return &j->second_;
+            if (!j->first.comparei(fileName))
+                return &j->second;
         }
     }
 #endif
@@ -154,14 +154,14 @@ const PackageEntry* PackageFile::GetEntry(const String& fileName) const
     return nullptr;
 }
 
-void PackageFile::Scan(Vector<String>& result, const String& pathName, const String& filter, bool recursive) const
+void PackageFile::Scan(ea::vector<ea::string>& result, const ea::string& pathName, const ea::string& filter, bool recursive) const
 {
-    result.Clear();
+    result.clear();
 
-    String sanitizedPath = GetSanitizedPath(pathName);
-    String filterExtension = filter.Substring(filter.FindLast('.'));
-    if (filterExtension.Contains('*'))
-        filterExtension.Clear();
+    ea::string sanitizedPath = GetSanitizedPath(pathName);
+    ea::string filterExtension = filter.substr(filter.find_last_of('.'));
+    if (filterExtension.contains('*'))
+        filterExtension.clear();
 
     bool caseSensitive = true;
 #ifdef _WIN32
@@ -170,19 +170,19 @@ void PackageFile::Scan(Vector<String>& result, const String& pathName, const Str
 #endif
 
     const StringVector& entryNames = GetEntryNames();
-    for (StringVector::ConstIterator i = entryNames.Begin(); i != entryNames.End(); ++i)
+    for (auto i = entryNames.begin(); i != entryNames.end(); ++i)
     {
-        String entryName = GetSanitizedPath(*i);
-        if ((filterExtension.Empty() || entryName.EndsWith(filterExtension, caseSensitive)) &&
-            entryName.StartsWith(sanitizedPath, caseSensitive))
+        ea::string entryName = GetSanitizedPath(*i);
+        if ((filterExtension.empty() || entryName.ends_with(filterExtension, caseSensitive)) &&
+            entryName.starts_with(sanitizedPath, caseSensitive))
         {
-            String fileName = entryName.Substring(sanitizedPath.Length());
-            if (fileName.StartsWith("\\") || fileName.StartsWith("/"))
-                fileName = fileName.Substring(1, fileName.Length() - 1);
-            if (!recursive && (fileName.Contains("\\") || fileName.Contains("/")))
+            ea::string fileName = entryName.substr(sanitizedPath.length());
+            if (fileName.starts_with("\\") || fileName.starts_with("/"))
+                fileName = fileName.substr(1, fileName.length() - 1);
+            if (!recursive && (fileName.contains("\\") || fileName.contains("/")))
                 continue;
 
-            result.Push(fileName);
+            result.push_back(fileName);
         }
     }
 }

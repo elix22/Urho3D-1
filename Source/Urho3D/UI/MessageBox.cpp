@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -36,7 +36,7 @@
 namespace Urho3D
 {
 
-MessageBox::MessageBox(Context* context, const String& messageString, const String& titleString, XMLFile* layoutFile,
+MessageBox::MessageBox(Context* context, const ea::string& messageString, const ea::string& titleString, XMLFile* layoutFile,
     XMLFile* styleFile) :
     Object(context),
     window_(nullptr),
@@ -65,10 +65,10 @@ MessageBox::MessageBox(Context* context, const String& messageString, const Stri
 
     // Set the title and message strings if they are given
     titleText_ = window_->GetChildDynamicCast<Text>("TitleText", true);
-    if (titleText_ && !titleString.Empty())
+    if (titleText_ && !titleString.empty())
         titleText_->SetText(titleString);
     messageText_ = window_->GetChildDynamicCast<Text>("MessageText", true);
-    if (messageText_ && !messageString.Empty())
+    if (messageText_ && !messageString.empty())
         messageText_->SetText(messageString);
 
     // Center window after the message is set
@@ -111,26 +111,26 @@ void MessageBox::RegisterObject(Context* context)
     context->RegisterFactory<MessageBox>();
 }
 
-void MessageBox::SetTitle(const String& text)
+void MessageBox::SetTitle(const ea::string& text)
 {
     if (titleText_)
         titleText_->SetText(text);
 }
 
-void MessageBox::SetMessage(const String& text)
+void MessageBox::SetMessage(const ea::string& text)
 {
     if (messageText_)
         messageText_->SetText(text);
 }
 
-const String& MessageBox::GetTitle() const
+const ea::string& MessageBox::GetTitle() const
 {
-    return titleText_ ? titleText_->GetText() : String::EMPTY;
+    return titleText_ ? titleText_->GetText() : EMPTY_STRING;
 }
 
-const String& MessageBox::GetMessage() const
+const ea::string& MessageBox::GetMessage() const
 {
-    return messageText_ ? messageText_->GetText() : String::EMPTY;
+    return messageText_ ? messageText_->GetText() : EMPTY_STRING;
 }
 
 void MessageBox::HandleMessageAcknowledged(StringHash eventType, VariantMap& eventData)

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -102,21 +102,21 @@ public:
     static void RegisterObject(Context* context);
 
     /// Return UI rendering batches.
-    void GetBatches(PODVector<UIBatch>& batches, PODVector<float>& vertexData, const IntRect& currentScissor) override;
+    void GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, const IntRect& currentScissor) override;
 
     /// Define a shape.
-    void DefineShape(const String& shape, Image* image, const IntRect& imageRect, const IntVector2& hotSpot);
+    void DefineShape(const ea::string& shape, Image* image, const IntRect& imageRect, const IntVector2& hotSpot);
     /// Define a shape.
     void DefineShape(CursorShape shape, Image* image, const IntRect& imageRect, const IntVector2& hotSpot);
     /// Set current shape.
-    void SetShape(const String& shape);
+    void SetShape(const ea::string& shape);
     /// Set current shape.
     void SetShape(CursorShape shape);
     /// Set whether to use system default shapes. Is only possible when the OS mouse cursor has been set visible from the Input subsystem.
     void SetUseSystemShapes(bool enable);
 
     /// Get current shape.
-    const String& GetShape() const { return shape_; }
+    const ea::string& GetShape() const { return shape_; }
 
     /// Return whether is using system default shapes.
     bool GetUseSystemShapes() const { return useSystemShapes_; }
@@ -133,9 +133,9 @@ protected:
     void HandleMouseVisibleChanged(StringHash eventType, VariantMap& eventData);
 
     /// Current shape definition.
-    String shape_;
+    ea::string shape_;
     /// Shape definitions.
-    HashMap<String, CursorShapeInfo> shapeInfos_;
+    ea::unordered_map<ea::string, CursorShapeInfo> shapeInfos_;
     /// Use system default shapes flag.
     bool useSystemShapes_;
     /// OS cursor shape needs update flag.

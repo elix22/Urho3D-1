@@ -25,7 +25,7 @@
 
 file (GLOB_RECURSE SOURCE_FILES *.cpp *.h)
 add_library (ImGui STATIC ${SOURCE_FILES})
-target_link_libraries(ImGui STB FreeType)
+target_link_libraries(ImGui PUBLIC STB FreeType EASTL)
 target_compile_definitions(ImGui PUBLIC -DIMGUI_DISABLE_OBSOLETE_FUNCTIONS=1
     PRIVATE -DIMGUI_DISABLE_STB_RECT_PACK_IMPLEMENTATION -DIMGUI_DISABLE_STB_TRUETYPE_IMPLEMENTATION=1
     PUBLIC  -DIMGUI_DEFINE_MATH_OPERATORS=1 -DUSE_IMGUI_API=1)
@@ -36,13 +36,11 @@ target_include_directories(ImGui
 )
 
 if (BUILD_SHARED_LIBS)
-    target_compile_definitions(ImGui PRIVATE -DIMGUI_EXPORTS PUBLIC -DIMGUI_IMPORTS)
+    target_compile_definitions(ImGui PRIVATE -DIMGUI_EXPORTS)
 endif ()
 
 install (DIRECTORY include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.h)
 
-if (URHO3D_CSHARP)
-    csharp_bind_target(TARGET ImGui)
-    target_link_libraries(ImGuiCSharp Urho3D)
-    add_dependencies(ImGuiNet Urho3DCSharp)
+if (NOT URHO3D_MERGE_STATIC_LIBS)
+    install(TARGETS ImGui EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
 endif ()

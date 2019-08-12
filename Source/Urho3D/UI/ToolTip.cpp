@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -75,7 +75,7 @@ void ToolTip::Update(float timeStep)
             parentHovered_ = true;
             displayAt_.Reset();
         }
-        else if (displayAt_.GetMSec(false) >= (unsigned)(effectiveDelay * 1000.0f) && parent_ == target_)
+        else if (displayAt_.GetMSec(false) >= (unsigned)(effectiveDelay * 1000.0f) && parent_ == target_.Get())
         {
             originalPosition_ = GetPosition();
             IntVector2 screenPosition = GetScreenPosition();
@@ -91,7 +91,7 @@ void ToolTip::Update(float timeStep)
     {
         if (IsVisible() && parent_ == root)
         {
-            SetParent(target_);
+            SetParent(target_.Get());
             SetPosition(originalPosition_);
             SetVisible(false);
         }

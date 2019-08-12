@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,6 @@
 
 #include "../Precompiled.h"
 
-#include "../Container/ArrayPtr.h"
 #include "../Core/Context.h"
 #include "../Core/CoreEvents.h"
 #include "../Core/Thread.h"
@@ -59,11 +58,15 @@
 #include <unistd.h>
 #include <utime.h>
 #include <sys/wait.h>
+#include <fcntl.h>
+#include <spawn.h>
 #define MAX_PATH 256
 #endif
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !IOS
 #include <mach-o/dyld.h>
+#include <crt_externs.h>
+#define environ (*_NSGetEnviron())
 #endif
 
 extern "C"
@@ -83,7 +86,9 @@ const char* SDL_IOS_GetDocumentsDir();
 namespace Urho3D
 {
 
-int DoSystemCommand(const String& commandLine, bool redirectToLog, Context* context)
+ea::string specifiedExecutableFile;
+
+int DoSystemCommand(const ea::string& commandLine, bool redirectToLog, Context* context)
 {
 #if defined(TVOS) || defined(IOS)
     return -1;
@@ -91,16 +96,16 @@ int DoSystemCommand(const String& commandLine, bool redirectToLog, Context* cont
 #if !defined(__EMSCRIPTEN__) && !defined(MINI_URHO)
     if (!redirectToLog)
 #endif
-        return system(commandLine.CString());
+        return system(commandLine.c_str());
 
 #if !defined(__EMSCRIPTEN__) && !defined(MINI_URHO)
     // Get a platform-agnostic temporary file name for stderr redirection
-    String stderrFilename;
-    String adjustedCommandLine(commandLine);
+    ea::string stderrFilename;
+    ea::string adjustedCommandLine(commandLine);
     char* prefPath = SDL_GetPrefPath("urho3d", "temp");
     if (prefPath)
     {
-        stderrFilename = String(prefPath) + "command-stderr";
+        stderrFilename = ea::string(prefPath) + "command-stderr";
         adjustedCommandLine += " 2>" + stderrFilename;
         SDL_free(prefPath);
     }
@@ -111,28 +116,33 @@ int DoSystemCommand(const String& commandLine, bool redirectToLog, Context* cont
 #endif
 
     // Use popen/pclose to capture the stdout and stderr of the command
-    FILE* file = popen(adjustedCommandLine.CString(), "r");
+    FILE* file = popen(adjustedCommandLine.c_str(), "r");
     if (!file)
         return -1;
 
     // Capture the standard output stream
-    char buffer[128];
+    char buffer[0x2000];
     while (!feof(file))
     {
         if (fgets(buffer, sizeof(buffer), file))
-            URHO3D_LOGRAW(String(buffer));
+        {
+            ea::string text(buffer);
+            const char array[] = { ' ', '\t', '\r', '\n', 0 };
+            text.erase(text.find_last_not_of(array) + 1);
+            URHO3D_LOGINFO(text);
+        }
     }
     int exitCode = pclose(file);
 
     // Capture the standard error stream
-    if (!stderrFilename.Empty())
+    if (!stderrFilename.empty())
     {
         SharedPtr<File> errFile(new File(context, stderrFilename, FILE_READ));
         while (!errFile->IsEof())
         {
             unsigned numRead = errFile->Read(buffer, sizeof(buffer));
             if (numRead)
-                Log::WriteRaw(String(buffer, numRead), true);
+                URHO3D_LOGERROR(ea::string(buffer, numRead));
         }
     }
 
@@ -141,56 +151,150 @@ int DoSystemCommand(const String& commandLine, bool redirectToLog, Context* cont
 #endif
 }
 
-int DoSystemRun(const String& fileName, const Vector<String>& arguments)
+enum SystemRunFlag
 {
-#ifdef TVOS
+    SR_DEFAULT,
+    SR_WAIT_FOR_EXIT,
+    SR_READ_OUTPUT = 1 << 1 | SR_WAIT_FOR_EXIT,
+};
+URHO3D_FLAGSET(SystemRunFlag, SystemRunFlags);
+
+int DoSystemRun(const ea::string& fileName, const ea::vector<ea::string>& arguments, SystemRunFlags flags, ea::string& output)
+{
+#if defined(TVOS) || defined(IOS) || (defined(__ANDROID__) && __ANDROID_API__ < 28)
     return -1;
 #else
-    String fixedFileName = GetNativePath(fileName);
+    ea::string fixedFileName = GetNativePath(fileName);
 
 #ifdef _WIN32
     // Add .exe extension if no extension defined
-    if (GetExtension(fixedFileName).Empty())
+    if (GetExtension(fixedFileName).empty())
         fixedFileName += ".exe";
 
-    String commandLine = "\"" + fixedFileName + "\"";
-    for (unsigned i = 0; i < arguments.Size(); ++i)
-        commandLine += " " + arguments[i];
+    ea::string commandLine = "\"" + fixedFileName + "\"";
+    for (unsigned i = 0; i < arguments.size(); ++i)
+        commandLine += " \"" + arguments[i] + "\"";
 
-    STARTUPINFOW startupInfo;
-    PROCESS_INFORMATION processInfo;
-    memset(&startupInfo, 0, sizeof startupInfo);
-    memset(&processInfo, 0, sizeof processInfo);
+    STARTUPINFOW startupInfo{};
+    PROCESS_INFORMATION processInfo{};
+    startupInfo.cb = sizeof(startupInfo);
 
-    WString commandLineW(commandLine);
-    if (!CreateProcessW(nullptr, (wchar_t*)commandLineW.CString(), nullptr, nullptr, 0, CREATE_NO_WINDOW, nullptr, nullptr, &startupInfo, &processInfo))
+    ea::wstring commandLineW = MultiByteToWide(commandLine);
+    DWORD processFlags = 0;
+    if (flags & SR_WAIT_FOR_EXIT)
+        // If we are waiting for process result we are likely reading stdout, in that case we probably do not want to see a console window.
+        processFlags = CREATE_NO_WINDOW;
+
+    HANDLE pipeRead = 0, pipeWrite = 0;
+    if (flags & SR_READ_OUTPUT)
+    {
+        SECURITY_ATTRIBUTES attr;
+        attr.nLength = sizeof(SECURITY_ATTRIBUTES);
+        attr.bInheritHandle = FALSE;
+        attr.lpSecurityDescriptor = NULL;
+        if (!CreatePipe(&pipeRead, &pipeWrite, &attr, 0))
+            return -1;
+
+        if (!SetHandleInformation(pipeRead, HANDLE_FLAG_INHERIT, 0))
+            return -1;
+
+        if (!SetHandleInformation(pipeWrite, HANDLE_FLAG_INHERIT, 1))
+            return -1;
+
+        DWORD mode = PIPE_NOWAIT;
+        if (!SetNamedPipeHandleState(pipeRead, &mode, nullptr, nullptr))
+            return -1;
+
+        startupInfo.hStdOutput = pipeWrite;
+        startupInfo.hStdError = pipeWrite;
+        startupInfo.dwFlags |= STARTF_USESTDHANDLES;
+    }
+
+    if (!CreateProcessW(nullptr, (wchar_t*)commandLineW.c_str(), nullptr, nullptr, TRUE, processFlags, nullptr, nullptr, &startupInfo, &processInfo))
         return -1;
 
-    WaitForSingleObject(processInfo.hProcess, INFINITE);
-    DWORD exitCode;
-    GetExitCodeProcess(processInfo.hProcess, &exitCode);
+    DWORD exitCode = 0;
+    if (flags & SR_WAIT_FOR_EXIT)
+    {
+        WaitForSingleObject(processInfo.hProcess, INFINITE);
+        GetExitCodeProcess(processInfo.hProcess, &exitCode);
+    }
+
+    if (flags & SR_READ_OUTPUT)
+    {
+        char buf[1024];
+        for (;;)
+        {
+            DWORD bytesRead = 0;
+            if (!ReadFile(pipeRead, buf, sizeof(buf), &bytesRead, nullptr) || !bytesRead)
+                break;
+            auto err = GetLastError();
+
+            unsigned start = output.length();
+            output.resize(start + bytesRead);
+            memcpy(&output[start], buf, bytesRead);
+        }
+
+        CloseHandle(pipeWrite);
+        CloseHandle(pipeRead);
+    }
 
     CloseHandle(processInfo.hProcess);
     CloseHandle(processInfo.hThread);
 
     return exitCode;
 #else
-    pid_t pid = fork();
-    if (!pid)
-    {
-        PODVector<const char*> argPtrs;
-        argPtrs.Push(fixedFileName.CString());
-        for (unsigned i = 0; i < arguments.Size(); ++i)
-            argPtrs.Push(arguments[i].CString());
-        argPtrs.Push(nullptr);
 
-        execvp(argPtrs[0], (char**)&argPtrs[0]);
-        return -1; // Return -1 if we could not spawn the process
-    }
-    else if (pid > 0)
+    int desc[2];
+    if (flags & SR_READ_OUTPUT)
     {
-        int exitCode;
-        wait(&exitCode);
+        if (pipe(desc) == -1)
+            return -1;
+        fcntl(desc[0], F_SETFL, O_NONBLOCK);
+        fcntl(desc[1], F_SETFL, O_NONBLOCK);
+    }
+
+    ea::vector<const char*> argPtrs;
+    argPtrs.push_back(fixedFileName.c_str());
+    for (unsigned i = 0; i < arguments.size(); ++i)
+        argPtrs.push_back(arguments[i].c_str());
+    argPtrs.push_back(nullptr);
+
+    pid_t pid = 0;
+    posix_spawn_file_actions_t actions{};
+    posix_spawn_file_actions_init(&actions);
+    if (flags & SR_READ_OUTPUT)
+    {
+        posix_spawn_file_actions_addclose(&actions, STDOUT_FILENO);
+        posix_spawn_file_actions_adddup2(&actions, desc[1], STDOUT_FILENO);
+        posix_spawn_file_actions_addclose(&actions, STDERR_FILENO);
+        posix_spawn_file_actions_adddup2(&actions, desc[1], STDERR_FILENO);
+    }
+    posix_spawnp(&pid, fixedFileName.c_str(), &actions, 0, (char**)&argPtrs[0], environ);
+    posix_spawn_file_actions_destroy(&actions);
+
+    if (pid > 0)
+    {
+        int exitCode = 0;
+        if (flags & SR_WAIT_FOR_EXIT)
+            waitpid(pid, &exitCode, 0);
+
+        if (flags & SR_READ_OUTPUT)
+        {
+            char buf[1024];
+            for (;;)
+            {
+                ssize_t bytesRead = read(desc[0], buf, sizeof(buf));
+                if (bytesRead <= 0)
+                    break;
+
+                unsigned start = output.length();
+                output.resize(start + bytesRead);
+                memcpy(&output[start], buf, bytesRead);
+            }
+            close(desc[0]);
+            close(desc[1]);
+        }
         return exitCode;
     }
     else
@@ -236,7 +340,7 @@ class AsyncSystemCommand : public AsyncExecRequest
 {
 public:
     /// Construct and run.
-    AsyncSystemCommand(unsigned requestID, const String& commandLine) :
+    AsyncSystemCommand(unsigned requestID, const ea::string& commandLine) :
         AsyncExecRequest(requestID),
         commandLine_(commandLine)
     {
@@ -252,7 +356,7 @@ public:
 
 private:
     /// Command line.
-    String commandLine_;
+    ea::string commandLine_;
 };
 
 /// Async system run operation.
@@ -260,7 +364,7 @@ class AsyncSystemRun : public AsyncExecRequest
 {
 public:
     /// Construct and run.
-    AsyncSystemRun(unsigned requestID, const String& fileName, const Vector<String>& arguments) :
+    AsyncSystemRun(unsigned requestID, const ea::string& fileName, const ea::vector<ea::string>& arguments) :
         AsyncExecRequest(requestID),
         fileName_(fileName),
         arguments_(arguments)
@@ -271,15 +375,16 @@ public:
     /// The function to run in the thread.
     void ThreadFunction() override
     {
-        exitCode_ = DoSystemRun(fileName_, arguments_);
+        ea::string output;
+        exitCode_ = DoSystemRun(fileName_, arguments_, SR_WAIT_FOR_EXIT, output);
         completed_ = true;
     }
 
 private:
     /// File to run.
-    String fileName_;
+    ea::string fileName_;
     /// Command line split in arguments.
-    const Vector<String>& arguments_;
+    const ea::vector<ea::string>& arguments_;
 };
 
 FileSystem::FileSystem(Context* context) :
@@ -291,16 +396,16 @@ FileSystem::FileSystem(Context* context) :
 FileSystem::~FileSystem()
 {
     // If any async exec items pending, delete them
-    if (asyncExecQueue_.Size())
+    if (asyncExecQueue_.size())
     {
-        for (List<AsyncExecRequest*>::Iterator i = asyncExecQueue_.Begin(); i != asyncExecQueue_.End(); ++i)
+        for (auto i = asyncExecQueue_.begin(); i != asyncExecQueue_.end(); ++i)
             delete(*i);
 
-        asyncExecQueue_.Clear();
+        asyncExecQueue_.clear();
     }
 }
 
-bool FileSystem::SetCurrentDir(const String& pathName)
+bool FileSystem::SetCurrentDir(const ea::string& pathName)
 {
     if (!CheckAccess(pathName))
     {
@@ -308,13 +413,13 @@ bool FileSystem::SetCurrentDir(const String& pathName)
         return false;
     }
 #ifdef _WIN32
-    if (SetCurrentDirectoryW(GetWideNativePath(pathName).CString()) == FALSE)
+    if (SetCurrentDirectoryW(GetWideNativePath(pathName).c_str()) == FALSE)
     {
         URHO3D_LOGERROR("Failed to change directory to " + pathName);
         return false;
     }
 #else
-    if (chdir(GetNativePath(pathName).CString()) != 0)
+    if (chdir(GetNativePath(pathName).c_str()) != 0)
     {
         URHO3D_LOGERROR("Failed to change directory to " + pathName);
         return false;
@@ -324,7 +429,7 @@ bool FileSystem::SetCurrentDir(const String& pathName)
     return true;
 }
 
-bool FileSystem::CreateDir(const String& pathName)
+bool FileSystem::CreateDir(const ea::string& pathName)
 {
     if (!CheckAccess(pathName))
     {
@@ -333,18 +438,18 @@ bool FileSystem::CreateDir(const String& pathName)
     }
 
     // Create each of the parents if necessary
-    String parentPath = GetParentPath(pathName);
-    if (parentPath.Length() > 1 && !DirExists(parentPath))
+    ea::string parentPath = GetParentPath(pathName);
+    if (parentPath.length() > 1 && !DirExists(parentPath))
     {
         if (!CreateDir(parentPath))
             return false;
     }
 
 #ifdef _WIN32
-    bool success = (CreateDirectoryW(GetWideNativePath(RemoveTrailingSlash(pathName)).CString(), nullptr) == TRUE) ||
+    bool success = (CreateDirectoryW(GetWideNativePath(RemoveTrailingSlash(pathName)).c_str(), nullptr) == TRUE) ||
         (GetLastError() == ERROR_ALREADY_EXISTS);
 #else
-    bool success = mkdir(GetNativePath(RemoveTrailingSlash(pathName)).CString(), S_IRWXU) == 0 || errno == EEXIST;
+    bool success = mkdir(GetNativePath(RemoveTrailingSlash(pathName)).c_str(), S_IRWXU) == 0 || errno == EEXIST;
 #endif
 
     if (success)
@@ -367,9 +472,9 @@ void FileSystem::SetExecuteConsoleCommands(bool enable)
         UnsubscribeFromEvent(E_CONSOLECOMMAND);
 }
 
-int FileSystem::SystemCommand(const String& commandLine, bool redirectStdOutToLog)
+int FileSystem::SystemCommand(const ea::string& commandLine, bool redirectStdOutToLog)
 {
-    if (allowedPaths_.Empty())
+    if (allowedPaths_.empty())
         return DoSystemCommand(commandLine, redirectStdOutToLog, context_);
     else
     {
@@ -378,10 +483,10 @@ int FileSystem::SystemCommand(const String& commandLine, bool redirectStdOutToLo
     }
 }
 
-int FileSystem::SystemRun(const String& fileName, const Vector<String>& arguments)
+int FileSystem::SystemRun(const ea::string& fileName, const ea::vector<ea::string>& arguments, ea::string& output)
 {
-    if (allowedPaths_.Empty())
-        return DoSystemRun(fileName, arguments);
+    if (allowedPaths_.empty())
+        return DoSystemRun(fileName, arguments, SR_READ_OUTPUT, output);
     else
     {
         URHO3D_LOGERROR("Executing an external command is not allowed");
@@ -389,14 +494,32 @@ int FileSystem::SystemRun(const String& fileName, const Vector<String>& argument
     }
 }
 
-unsigned FileSystem::SystemCommandAsync(const String& commandLine)
+int FileSystem::SystemRun(const ea::string& fileName, const ea::vector<ea::string>& arguments)
+{
+    ea::string output;
+    return SystemRun(fileName, arguments, output);
+}
+
+int FileSystem::SystemSpawn(const ea::string& fileName, const ea::vector<ea::string>& arguments)
+{
+    ea::string output;
+    if (allowedPaths_.empty())
+        return DoSystemRun(fileName, arguments, SR_DEFAULT, output);
+    else
+    {
+        URHO3D_LOGERROR("Executing an external command is not allowed");
+        return -1;
+    }
+}
+
+unsigned FileSystem::SystemCommandAsync(const ea::string& commandLine)
 {
 #ifdef URHO3D_THREADING
-    if (allowedPaths_.Empty())
+    if (allowedPaths_.empty())
     {
         unsigned requestID = nextAsyncExecID_;
         auto* cmd = new AsyncSystemCommand(nextAsyncExecID_, commandLine);
-        asyncExecQueue_.Push(cmd);
+        asyncExecQueue_.push_back(cmd);
         return requestID;
     }
     else
@@ -410,14 +533,14 @@ unsigned FileSystem::SystemCommandAsync(const String& commandLine)
 #endif
 }
 
-unsigned FileSystem::SystemRunAsync(const String& fileName, const Vector<String>& arguments)
+unsigned FileSystem::SystemRunAsync(const ea::string& fileName, const ea::vector<ea::string>& arguments)
 {
 #ifdef URHO3D_THREADING
-    if (allowedPaths_.Empty())
+    if (allowedPaths_.empty())
     {
         unsigned requestID = nextAsyncExecID_;
         auto* cmd = new AsyncSystemRun(nextAsyncExecID_, fileName, arguments);
-        asyncExecQueue_.Push(cmd);
+        asyncExecQueue_.push_back(cmd);
         return requestID;
     }
     else
@@ -431,12 +554,12 @@ unsigned FileSystem::SystemRunAsync(const String& fileName, const Vector<String>
 #endif
 }
 
-bool FileSystem::SystemOpen(const String& fileName, const String& mode)
+bool FileSystem::SystemOpen(const ea::string& fileName, const ea::string& mode)
 {
-    if (allowedPaths_.Empty())
+    if (allowedPaths_.empty())
     {
         // allow opening of http and file urls
-        if (!fileName.StartsWith("http://") && !fileName.StartsWith("https://") && !fileName.StartsWith("file://"))
+        if (!fileName.starts_with("http://") && !fileName.starts_with("https://") && !fileName.starts_with("file://"))
         {
             if (!FileExists(fileName) && !DirExists(fileName))
             {
@@ -446,11 +569,11 @@ bool FileSystem::SystemOpen(const String& fileName, const String& mode)
         }
 
 #ifdef _WIN32
-        bool success = (size_t)ShellExecuteW(nullptr, !mode.Empty() ? WString(mode).CString() : nullptr,
-            GetWideNativePath(fileName).CString(), nullptr, nullptr, SW_SHOW) > 32;
+        bool success = (size_t)ShellExecuteW(nullptr, !mode.empty() ? MultiByteToWide(mode).c_str() : nullptr,
+            GetWideNativePath(fileName).c_str(), nullptr, nullptr, SW_SHOW) > 32;
 #else
-        Vector<String> arguments;
-        arguments.Push(fileName);
+        ea::vector<ea::string> arguments;
+        arguments.push_back(fileName);
         bool success = SystemRun(
 #if defined(__APPLE__)
             "/usr/bin/open",
@@ -470,7 +593,7 @@ bool FileSystem::SystemOpen(const String& fileName, const String& mode)
     }
 }
 
-bool FileSystem::Copy(const String& srcFileName, const String& destFileName)
+bool FileSystem::Copy(const ea::string& srcFileName, const ea::string& destFileName)
 {
     if (!CheckAccess(GetPath(srcFileName)))
     {
@@ -491,14 +614,14 @@ bool FileSystem::Copy(const String& srcFileName, const String& destFileName)
         return false;
 
     unsigned fileSize = srcFile->GetSize();
-    SharedArrayPtr<unsigned char> buffer(new unsigned char[fileSize]);
+    ea::shared_array<unsigned char> buffer(new unsigned char[fileSize]);
 
-    unsigned bytesRead = srcFile->Read(buffer.Get(), fileSize);
-    unsigned bytesWritten = destFile->Write(buffer.Get(), fileSize);
+    unsigned bytesRead = srcFile->Read(buffer.get(), fileSize);
+    unsigned bytesWritten = destFile->Write(buffer.get(), fileSize);
     return bytesRead == fileSize && bytesWritten == fileSize;
 }
 
-bool FileSystem::Rename(const String& srcFileName, const String& destFileName)
+bool FileSystem::Rename(const ea::string& srcFileName, const ea::string& destFileName)
 {
     if (!CheckAccess(GetPath(srcFileName)))
     {
@@ -512,13 +635,13 @@ bool FileSystem::Rename(const String& srcFileName, const String& destFileName)
     }
 
 #ifdef _WIN32
-    return MoveFileW(GetWideNativePath(srcFileName).CString(), GetWideNativePath(destFileName).CString()) != 0;
+    return MoveFileW(GetWideNativePath(srcFileName).c_str(), GetWideNativePath(destFileName).c_str()) != 0;
 #else
-    return rename(GetNativePath(srcFileName).CString(), GetNativePath(destFileName).CString()) == 0;
+    return rename(GetNativePath(srcFileName).c_str(), GetNativePath(destFileName).c_str()) == 0;
 #endif
 }
 
-bool FileSystem::Delete(const String& fileName)
+bool FileSystem::Delete(const ea::string& fileName)
 {
     if (!CheckAccess(GetPath(fileName)))
     {
@@ -527,43 +650,43 @@ bool FileSystem::Delete(const String& fileName)
     }
 
 #ifdef _WIN32
-    return DeleteFileW(GetWideNativePath(fileName).CString()) != 0;
+    return DeleteFileW(GetWideNativePath(fileName).c_str()) != 0;
 #else
-    return remove(GetNativePath(fileName).CString()) == 0;
+    return remove(GetNativePath(fileName).c_str()) == 0;
 #endif
 }
 
-String FileSystem::GetCurrentDir() const
+ea::string FileSystem::GetCurrentDir() const
 {
 #ifdef _WIN32
     wchar_t path[MAX_PATH];
     path[0] = 0;
     GetCurrentDirectoryW(MAX_PATH, path);
-    return AddTrailingSlash(String(path));
+    return AddTrailingSlash(WideToMultiByte(path));
 #else
     char path[MAX_PATH];
     path[0] = 0;
     getcwd(path, MAX_PATH);
-    return AddTrailingSlash(String(path));
+    return AddTrailingSlash(ea::string(path));
 #endif
 }
 
-bool FileSystem::CheckAccess(const String& pathName) const
+bool FileSystem::CheckAccess(const ea::string& pathName) const
 {
-    String fixedPath = AddTrailingSlash(pathName);
+    ea::string fixedPath = AddTrailingSlash(pathName);
 
     // If no allowed directories defined, succeed always
-    if (allowedPaths_.Empty())
+    if (allowedPaths_.empty())
         return true;
 
     // If there is any attempt to go to a parent directory, disallow
-    if (fixedPath.Contains(".."))
+    if (fixedPath.contains(".."))
         return false;
 
     // Check if the path is a partial match of any of the allowed directories
-    for (HashSet<String>::ConstIterator i = allowedPaths_.Begin(); i != allowedPaths_.End(); ++i)
+    for (auto i = allowedPaths_.begin(); i != allowedPaths_.end(); ++i)
     {
-        if (fixedPath.Find(*i) == 0)
+        if (fixedPath.find(*i) == 0)
             return true;
     }
 
@@ -571,27 +694,27 @@ bool FileSystem::CheckAccess(const String& pathName) const
     return false;
 }
 
-unsigned FileSystem::GetLastModifiedTime(const String& fileName) const
+unsigned FileSystem::GetLastModifiedTime(const ea::string& fileName) const
 {
-    if (fileName.Empty() || !CheckAccess(fileName))
+    if (fileName.empty() || !CheckAccess(fileName))
         return 0;
 
 #ifdef _WIN32
     struct _stat st;
-    if (!_stat(fileName.CString(), &st))
+    if (!_stat(fileName.c_str(), &st))
         return (unsigned)st.st_mtime;
     else
         return 0;
 #else
     struct stat st{};
-    if (!stat(fileName.CString(), &st))
+    if (!stat(fileName.c_str(), &st))
         return (unsigned)st.st_mtime;
     else
         return 0;
 #endif
 }
 
-bool FileSystem::FileExists(const String& fileName) const
+bool FileSystem::FileExists(const ea::string& fileName) const
 {
     if (!CheckAccess(GetPath(fileName)))
         return false;
@@ -610,22 +733,22 @@ bool FileSystem::FileExists(const String& fileName) const
     }
 #endif
 
-    String fixedName = GetNativePath(RemoveTrailingSlash(fileName));
+    ea::string fixedName = GetNativePath(RemoveTrailingSlash(fileName));
 
 #ifdef _WIN32
-    DWORD attributes = GetFileAttributesW(WString(fixedName).CString());
+    DWORD attributes = GetFileAttributesW(MultiByteToWide(fixedName).c_str());
     if (attributes == INVALID_FILE_ATTRIBUTES || attributes & FILE_ATTRIBUTE_DIRECTORY)
         return false;
 #else
     struct stat st{};
-    if (stat(fixedName.CString(), &st) || st.st_mode & S_IFDIR)
+    if (stat(fixedName.c_str(), &st) || st.st_mode & S_IFDIR)
         return false;
 #endif
 
     return true;
 }
 
-bool FileSystem::DirExists(const String& pathName) const
+bool FileSystem::DirExists(const ea::string& pathName) const
 {
     if (!CheckAccess(pathName))
         return false;
@@ -636,25 +759,25 @@ bool FileSystem::DirExists(const String& pathName) const
         return true;
 #endif
 
-    String fixedName = GetNativePath(RemoveTrailingSlash(pathName));
+    ea::string fixedName = GetNativePath(RemoveTrailingSlash(pathName));
 
 #ifdef __ANDROID__
     if (URHO3D_IS_ASSET(fixedName))
     {
         // Split the pathname into two components: the longest parent directory path and the last name component
-        String assetPath(URHO3D_ASSET((fixedName + "/")));
-        String parentPath;
-        unsigned pos = assetPath.FindLast('/', assetPath.Length() - 2);
-        if (pos != String::NPOS)
+        ea::string assetPath(URHO3D_ASSET((fixedName + "/")));
+        ea::string parentPath;
+        unsigned pos = assetPath.find_last_of('/', assetPath.length() - 2);
+        if (pos != ea::string::npos)
         {
-            parentPath = assetPath.Substring(0, pos);
-            assetPath = assetPath.Substring(pos + 1);
+            parentPath = assetPath.substr(0, pos);
+            assetPath = assetPath.substr(pos + 1);
         }
-        assetPath.Resize(assetPath.Length() - 1);
+        assetPath.resize(assetPath.length() - 1);
 
         bool exist = false;
         int count;
-        char** list = SDL_Android_GetFileList(parentPath.CString(), &count);
+        char** list = SDL_Android_GetFileList(parentPath.c_str(), &count);
         for (int i = 0; i < count; ++i)
         {
             exist = assetPath == list[i];
@@ -667,30 +790,30 @@ bool FileSystem::DirExists(const String& pathName) const
 #endif
 
 #ifdef _WIN32
-    DWORD attributes = GetFileAttributesW(WString(fixedName).CString());
+    DWORD attributes = GetFileAttributesW(MultiByteToWide(fixedName).c_str());
     if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY))
         return false;
 #else
     struct stat st{};
-    if (stat(fixedName.CString(), &st) || !(st.st_mode & S_IFDIR))
+    if (stat(fixedName.c_str(), &st) || !(st.st_mode & S_IFDIR))
         return false;
 #endif
 
     return true;
 }
 
-void FileSystem::ScanDir(Vector<String>& result, const String& pathName, const String& filter, unsigned flags, bool recursive) const
+void FileSystem::ScanDir(ea::vector<ea::string>& result, const ea::string& pathName, const ea::string& filter, unsigned flags, bool recursive) const
 {
-    result.Clear();
+    result.clear();
 
     if (CheckAccess(pathName))
     {
-        String initialPath = AddTrailingSlash(pathName);
+        ea::string initialPath = AddTrailingSlash(pathName);
         ScanDirInternal(result, initialPath, initialPath, filter, flags, recursive);
     }
 }
 
-String FileSystem::GetProgramDir() const
+ea::string FileSystem::GetProgramDir() const
 {
 #if defined(__ANDROID__)
     // This is an internal directory specifier pointing to the assets in the .apk
@@ -698,30 +821,47 @@ String FileSystem::GetProgramDir() const
     return APK;
 #elif defined(IOS) || defined(TVOS)
     return AddTrailingSlash(SDL_IOS_GetResourceDir());
-#elif defined(_WIN32)
+#elif DESKTOP
+    return GetPath(GetProgramFileName());
+#else
+    return GetCurrentDir();
+#endif
+}
+#if DESKTOP
+ea::string FileSystem::GetProgramFileName() const
+{
+    if (!specifiedExecutableFile.empty())
+        return specifiedExecutableFile;
+
+    return GetInterpreterFileName();
+}
+
+ea::string FileSystem::GetInterpreterFileName() const
+{
+#if defined(_WIN32)
     wchar_t exeName[MAX_PATH];
     exeName[0] = 0;
     GetModuleFileNameW(nullptr, exeName, MAX_PATH);
-    return GetPath(String(exeName));
+    return WideToMultiByte(exeName);
 #elif defined(__APPLE__)
     char exeName[MAX_PATH];
     memset(exeName, 0, MAX_PATH);
     unsigned size = MAX_PATH;
     _NSGetExecutablePath(exeName, &size);
-    return GetPath(String(exeName));
+    return ea::string(exeName);
 #elif defined(__linux__)
     char exeName[MAX_PATH];
     memset(exeName, 0, MAX_PATH);
     pid_t pid = getpid();
-    String link = "/proc/" + String(pid) + "/exe";
-    readlink(link.CString(), exeName, MAX_PATH);
-    return GetPath(String(exeName));
+    ea::string link(ea::string::CtorSprintf{}, "/proc/%d/exe", pid);
+    readlink(link.c_str(), exeName, MAX_PATH);
+    return ea::string(exeName);
 #else
-    return GetCurrentDir();
+    return ea::string();
 #endif
 }
-
-String FileSystem::GetUserDocumentsDir() const
+#endif
+ea::string FileSystem::GetUserDocumentsDir() const
 {
 #if defined(__ANDROID__)
     return AddTrailingSlash(SDL_Android_GetFilesDir());
@@ -731,23 +871,23 @@ String FileSystem::GetUserDocumentsDir() const
     wchar_t pathName[MAX_PATH];
     pathName[0] = 0;
     SHGetSpecialFolderPathW(nullptr, pathName, CSIDL_PERSONAL, 0);
-    return AddTrailingSlash(String(pathName));
+    return AddTrailingSlash(WideToMultiByte(pathName));
 #else
     char pathName[MAX_PATH];
     pathName[0] = 0;
     strcpy(pathName, getenv("HOME"));
-    return AddTrailingSlash(String(pathName));
+    return AddTrailingSlash(ea::string(pathName));
 #endif
 }
 
-String FileSystem::GetAppPreferencesDir(const String& org, const String& app) const
+ea::string FileSystem::GetAppPreferencesDir(const ea::string& org, const ea::string& app) const
 {
-    String dir;
+    ea::string dir;
 #ifndef MINI_URHO
-    char* prefPath = SDL_GetPrefPath(org.CString(), app.CString());
+    char* prefPath = SDL_GetPrefPath(org.c_str(), app.c_str());
     if (prefPath)
     {
-        dir = GetInternalPath(String(prefPath));
+        dir = GetInternalPath(ea::string(prefPath));
         SDL_free(prefPath);
     }
     else
@@ -757,79 +897,82 @@ String FileSystem::GetAppPreferencesDir(const String& org, const String& app) co
     return dir;
 }
 
-void FileSystem::RegisterPath(const String& pathName)
+void FileSystem::RegisterPath(const ea::string& pathName)
 {
-    if (pathName.Empty())
+    if (pathName.empty())
         return;
 
-    allowedPaths_.Insert(AddTrailingSlash(pathName));
+    allowedPaths_.insert(AddTrailingSlash(pathName));
 }
 
-bool FileSystem::SetLastModifiedTime(const String& fileName, unsigned newTime)
+bool FileSystem::SetLastModifiedTime(const ea::string& fileName, unsigned newTime)
 {
-    if (fileName.Empty() || !CheckAccess(fileName))
+    if (fileName.empty() || !CheckAccess(fileName))
         return false;
 
 #ifdef _WIN32
     struct _stat oldTime;
     struct _utimbuf newTimes;
-    if (_stat(fileName.CString(), &oldTime) != 0)
+    if (_stat(fileName.c_str(), &oldTime) != 0)
         return false;
     newTimes.actime = oldTime.st_atime;
     newTimes.modtime = newTime;
-    return _utime(fileName.CString(), &newTimes) == 0;
+    return _utime(fileName.c_str(), &newTimes) == 0;
 #else
     struct stat oldTime{};
     struct utimbuf newTimes{};
-    if (stat(fileName.CString(), &oldTime) != 0)
+    if (stat(fileName.c_str(), &oldTime) != 0)
         return false;
     newTimes.actime = oldTime.st_atime;
     newTimes.modtime = newTime;
-    return utime(fileName.CString(), &newTimes) == 0;
+    return utime(fileName.c_str(), &newTimes) == 0;
 #endif
 }
 
-void FileSystem::ScanDirInternal(Vector<String>& result, String path, const String& startPath,
-    const String& filter, unsigned flags, bool recursive) const
+void FileSystem::ScanDirInternal(ea::vector<ea::string>& result, ea::string path, const ea::string& startPath,
+    const ea::string& filter, unsigned flags, bool recursive) const
 {
     path = AddTrailingSlash(path);
-    String deltaPath;
-    if (path.Length() > startPath.Length())
-        deltaPath = path.Substring(startPath.Length());
+    ea::string deltaPath;
+    if (path.length() > startPath.length())
+        deltaPath = path.substr(startPath.length());
 
-    String filterExtension = filter.Substring(filter.FindLast('.'));
-    if (filterExtension.Contains('*'))
-        filterExtension.Clear();
+    ea::string filterExtension;
+    unsigned dotPos = filter.find_last_of('.');
+    if (dotPos != ea::string::npos)
+        filterExtension = filter.substr(dotPos);
+    if (filterExtension.contains('*'))
+        filterExtension.clear();
 
 #ifdef __ANDROID__
     if (URHO3D_IS_ASSET(path))
     {
-        String assetPath(URHO3D_ASSET(path));
-        assetPath.Resize(assetPath.Length() - 1);       // AssetManager.list() does not like trailing slash
+        ea::string assetPath(URHO3D_ASSET(path));
+        assetPath.resize(assetPath.length() - 1);       // AssetManager.list() does not like trailing slash
         int count;
-        char** list = SDL_Android_GetFileList(assetPath.CString(), &count);
+        char** list = SDL_Android_GetFileList(assetPath.c_str(), &count);
         for (int i = 0; i < count; ++i)
         {
-            String fileName(list[i]);
-            if (!(flags & SCAN_HIDDEN) && fileName.StartsWith("."))
+            ea::string fileName(list[i]);
+            if (!(flags & SCAN_HIDDEN) && fileName.starts_with("."))
                 continue;
 
 #ifdef ASSET_DIR_INDICATOR
             // Patch the directory name back after retrieving the directory flag
-            bool isDirectory = fileName.EndsWith(ASSET_DIR_INDICATOR);
+            bool isDirectory = fileName.ends_with(ASSET_DIR_INDICATOR);
             if (isDirectory)
             {
-                fileName.Resize(fileName.Length() - sizeof(ASSET_DIR_INDICATOR) / sizeof(char) + 1);
+                fileName.resize(fileName.length() - sizeof(ASSET_DIR_INDICATOR) / sizeof(char) + 1);
                 if (flags & SCAN_DIRS)
-                    result.Push(deltaPath + fileName);
+                    result.push_back(deltaPath + fileName);
                 if (recursive)
                     ScanDirInternal(result, path + fileName, startPath, filter, flags, recursive);
             }
             else if (flags & SCAN_FILES)
 #endif
             {
-                if (filterExtension.Empty() || fileName.EndsWith(filterExtension))
-                    result.Push(deltaPath + fileName);
+                if (filterExtension.empty() || fileName.ends_with(filterExtension))
+                    result.push_back(deltaPath + fileName);
             }
         }
         SDL_Android_FreeFileList(&list, &count);
@@ -838,27 +981,27 @@ void FileSystem::ScanDirInternal(Vector<String>& result, String path, const Stri
 #endif
 #ifdef _WIN32
     WIN32_FIND_DATAW info;
-    HANDLE handle = FindFirstFileW(WString(path + "*").CString(), &info);
+    HANDLE handle = FindFirstFileW(MultiByteToWide((path + "*")).c_str(), &info);
     if (handle != INVALID_HANDLE_VALUE)
     {
         do
         {
-            String fileName(info.cFileName);
-            if (!fileName.Empty())
+            ea::string fileName = WideToMultiByte(info.cFileName);
+            if (!fileName.empty())
             {
                 if (info.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN && !(flags & SCAN_HIDDEN))
                     continue;
                 if (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
                 {
                     if (flags & SCAN_DIRS)
-                        result.Push(deltaPath + fileName);
+                        result.emplace_back(deltaPath + fileName);
                     if (recursive && fileName != "." && fileName != "..")
                         ScanDirInternal(result, path + fileName, startPath, filter, flags, recursive);
                 }
                 else if (flags & SCAN_FILES)
                 {
-                    if (filterExtension.Empty() || fileName.EndsWith(filterExtension))
-                        result.Push(deltaPath + fileName);
+                    if (filterExtension.empty() || fileName.ends_with(filterExtension))
+                        result.emplace_back(deltaPath + fileName);
                 }
             }
         }
@@ -870,30 +1013,30 @@ void FileSystem::ScanDirInternal(Vector<String>& result, String path, const Stri
     DIR* dir;
     struct dirent* de;
     struct stat st{};
-    dir = opendir(GetNativePath(path).CString());
+    dir = opendir(GetNativePath(path).c_str());
     if (dir)
     {
         while ((de = readdir(dir)))
         {
             /// \todo Filename may be unnormalized Unicode on Mac OS X. Re-normalize as necessary
-            String fileName(de->d_name);
+            ea::string fileName(de->d_name);
             bool normalEntry = fileName != "." && fileName != "..";
-            if (normalEntry && !(flags & SCAN_HIDDEN) && fileName.StartsWith("."))
+            if (normalEntry && !(flags & SCAN_HIDDEN) && fileName.starts_with("."))
                 continue;
-            String pathAndName = path + fileName;
-            if (!stat(pathAndName.CString(), &st))
+            ea::string pathAndName = path + fileName;
+            if (!stat(pathAndName.c_str(), &st))
             {
                 if (st.st_mode & S_IFDIR)
                 {
                     if (flags & SCAN_DIRS)
-                        result.Push(deltaPath + fileName);
+                        result.push_back(deltaPath + fileName);
                     if (recursive && normalEntry)
                         ScanDirInternal(result, path + fileName, startPath, filter, flags, recursive);
                 }
                 else if (flags & SCAN_FILES)
                 {
-                    if (filterExtension.Empty() || fileName.EndsWith(filterExtension))
-                        result.Push(deltaPath + fileName);
+                    if (filterExtension.empty() || fileName.ends_with(filterExtension))
+                        result.push_back(deltaPath + fileName);
                 }
             }
         }
@@ -905,7 +1048,7 @@ void FileSystem::ScanDirInternal(Vector<String>& result, String path, const Stri
 void FileSystem::HandleBeginFrame(StringHash eventType, VariantMap& eventData)
 {
     /// Go through the execution queue and post + remove completed requests
-    for (List<AsyncExecRequest*>::Iterator i = asyncExecQueue_.Begin(); i != asyncExecQueue_.End();)
+    for (auto i = asyncExecQueue_.begin(); i != asyncExecQueue_.end();)
     {
         AsyncExecRequest* request = *i;
         if (request->IsCompleted())
@@ -918,7 +1061,7 @@ void FileSystem::HandleBeginFrame(StringHash eventType, VariantMap& eventData)
             SendEvent(E_ASYNCEXECFINISHED, newEventData);
 
             delete request;
-            i = asyncExecQueue_.Erase(i);
+            i = asyncExecQueue_.erase(i);
         }
         else
             ++i;
@@ -932,146 +1075,146 @@ void FileSystem::HandleConsoleCommand(StringHash eventType, VariantMap& eventDat
         SystemCommand(eventData[P_COMMAND].GetString(), true);
 }
 
-void SplitPath(const String& fullPath, String& pathName, String& fileName, String& extension, bool lowercaseExtension)
+void SplitPath(const ea::string& fullPath, ea::string& pathName, ea::string& fileName, ea::string& extension, bool lowercaseExtension)
 {
-    String fullPathCopy = GetInternalPath(fullPath);
+    ea::string fullPathCopy = GetInternalPath(fullPath);
 
-    unsigned extPos = fullPathCopy.FindLast('.');
-    unsigned pathPos = fullPathCopy.FindLast('/');
+    unsigned extPos = fullPathCopy.find_last_of('.');
+    unsigned pathPos = fullPathCopy.find_last_of('/');
 
-    if (extPos != String::NPOS && (pathPos == String::NPOS || extPos > pathPos))
+    if (extPos != ea::string::npos && (pathPos == ea::string::npos || extPos > pathPos))
     {
-        extension = fullPathCopy.Substring(extPos);
+        extension = fullPathCopy.substr(extPos);
         if (lowercaseExtension)
-            extension = extension.ToLower();
-        fullPathCopy = fullPathCopy.Substring(0, extPos);
+            extension = extension.to_lower();
+        fullPathCopy = fullPathCopy.substr(0, extPos);
     }
     else
-        extension.Clear();
+        extension.clear();
 
-    pathPos = fullPathCopy.FindLast('/');
-    if (pathPos != String::NPOS)
+    pathPos = fullPathCopy.find_last_of('/');
+    if (pathPos != ea::string::npos)
     {
-        fileName = fullPathCopy.Substring(pathPos + 1);
-        pathName = fullPathCopy.Substring(0, pathPos + 1);
+        fileName = fullPathCopy.substr(pathPos + 1);
+        pathName = fullPathCopy.substr(0, pathPos + 1);
     }
     else
     {
         fileName = fullPathCopy;
-        pathName.Clear();
+        pathName.clear();
     }
 }
 
-String GetPath(const String& fullPath)
+ea::string GetPath(const ea::string& fullPath)
 {
-    String path, file, extension;
+    ea::string path, file, extension;
     SplitPath(fullPath, path, file, extension);
     return path;
 }
 
-String GetFileName(const String& fullPath)
+ea::string GetFileName(const ea::string& fullPath)
 {
-    String path, file, extension;
+    ea::string path, file, extension;
     SplitPath(fullPath, path, file, extension);
     return file;
 }
 
-String GetExtension(const String& fullPath, bool lowercaseExtension)
+ea::string GetExtension(const ea::string& fullPath, bool lowercaseExtension)
 {
-    String path, file, extension;
+    ea::string path, file, extension;
     SplitPath(fullPath, path, file, extension, lowercaseExtension);
     return extension;
 }
 
-String GetFileNameAndExtension(const String& fileName, bool lowercaseExtension)
+ea::string GetFileNameAndExtension(const ea::string& fileName, bool lowercaseExtension)
 {
-    String path, file, extension;
+    ea::string path, file, extension;
     SplitPath(fileName, path, file, extension, lowercaseExtension);
     return file + extension;
 }
 
-String ReplaceExtension(const String& fullPath, const String& newExtension)
+ea::string ReplaceExtension(const ea::string& fullPath, const ea::string& newExtension)
 {
-    String path, file, extension;
+    ea::string path, file, extension;
     SplitPath(fullPath, path, file, extension);
     return path + file + newExtension;
 }
 
-String AddTrailingSlash(const String& pathName)
+ea::string AddTrailingSlash(const ea::string& pathName)
 {
-    String ret = pathName.Trimmed();
-    ret.Replace('\\', '/');
-    if (!ret.Empty() && ret.Back() != '/')
+    ea::string ret = pathName.trimmed();
+    ret.replace('\\', '/');
+    if (!ret.empty() && ret.back() != '/')
         ret += '/';
     return ret;
 }
 
-String RemoveTrailingSlash(const String& pathName)
+ea::string RemoveTrailingSlash(const ea::string& pathName)
 {
-    String ret = pathName.Trimmed();
-    ret.Replace('\\', '/');
-    if (!ret.Empty() && ret.Back() == '/')
-        ret.Resize(ret.Length() - 1);
+    ea::string ret = pathName.trimmed();
+    ret.replace('\\', '/');
+    if (!ret.empty() && ret.back() == '/')
+        ret.resize(ret.length() - 1);
     return ret;
 }
 
-String GetParentPath(const String& path)
+ea::string GetParentPath(const ea::string& path)
 {
-    unsigned pos = RemoveTrailingSlash(path).FindLast('/');
-    if (pos != String::NPOS)
-        return path.Substring(0, pos + 1);
+    unsigned pos = RemoveTrailingSlash(path).find_last_of('/');
+    if (pos != ea::string::npos)
+        return path.substr(0, pos + 1);
     else
-        return String();
+        return ea::string();
 }
 
-String GetInternalPath(const String& pathName)
+ea::string GetInternalPath(const ea::string& pathName)
 {
-    return pathName.Replaced('\\', '/');
+    return pathName.replaced('\\', '/');
 }
 
-String GetNativePath(const String& pathName)
+ea::string GetNativePath(const ea::string& pathName)
 {
 #ifdef _WIN32
-    return pathName.Replaced('/', '\\');
+    return pathName.replaced('/', '\\');
 #else
     return pathName;
 #endif
 }
 
-WString GetWideNativePath(const String& pathName)
+ea::wstring GetWideNativePath(const ea::string& pathName)
 {
+    ea::wstring result = MultiByteToWide(pathName);
 #ifdef _WIN32
-    return WString(pathName.Replaced('/', '\\'));
-#else
-    return WString(pathName);
+    result.replace(L'/', L'\\');
 #endif
+    return result;
 }
 
-bool IsAbsolutePath(const String& pathName)
+bool IsAbsolutePath(const ea::string& pathName)
 {
-    if (pathName.Empty())
+    if (pathName.empty())
         return false;
 
-    String path = GetInternalPath(pathName);
+    ea::string path = GetInternalPath(pathName);
 
     if (path[0] == '/')
         return true;
 
 #ifdef _WIN32
-    if (path.Length() > 1 && IsAlpha(path[0]) && path[1] == ':')
+    if (path.length() > 1 && IsAlpha(path[0]) && path[1] == ':')
         return true;
 #endif
 
     return false;
 }
 
-bool FileSystem::CreateDirs(const String& root, const String& subdirectory)
+bool FileSystem::CreateDirs(const ea::string& root, const ea::string& subdirectory)
 {
-    String folder = AddTrailingSlash(GetInternalPath(root));
-    String sub = GetInternalPath(subdirectory);
-    Vector<String> subs = sub.Split('/');
+    ea::string folder = AddTrailingSlash(GetInternalPath(root));
+    ea::string sub = GetInternalPath(subdirectory);
+    ea::vector<ea::string> subs = sub.split('/');
 
-    for (unsigned i = 0; i < subs.Size(); i++)
+    for (unsigned i = 0; i < subs.size(); i++)
     {
         folder += subs[i];
         folder += "/";
@@ -1089,9 +1232,9 @@ bool FileSystem::CreateDirs(const String& root, const String& subdirectory)
 
 }
 
-bool FileSystem::CreateDirsRecursive(const String& directoryIn)
+bool FileSystem::CreateDirsRecursive(const ea::string& directoryIn)
 {
-    String directory = AddTrailingSlash(GetInternalPath(directoryIn));
+    ea::string directory = AddTrailingSlash(GetInternalPath(directoryIn));
 
     if (DirExists(directory))
         return true;
@@ -1099,28 +1242,28 @@ bool FileSystem::CreateDirsRecursive(const String& directoryIn)
     if (FileExists(directory))
         return false;
 
-    String parentPath = directory;
+    ea::string parentPath = directory;
 
-    Vector<String> paths;
+    ea::vector<ea::string> paths;
 
-    paths.Push(directory);
+    paths.push_back(directory);
 
     while (true)
     {
         parentPath = GetParentPath(parentPath);
 
-        if (!parentPath.Length())
+        if (!parentPath.length())
             break;
 
-        paths.Push(parentPath);
+        paths.push_back(parentPath);
     }
 
-    if (!paths.Size())
+    if (!paths.size())
         return false;
 
-    for (auto i = (int) (paths.Size() - 1); i >= 0; i--)
+    for (auto i = (int) (paths.size() - 1); i >= 0; i--)
     {
-        const String& pathName = paths[i];
+        const ea::string& pathName = paths[i];
 
         if (FileExists(pathName))
             return false;
@@ -1141,44 +1284,44 @@ bool FileSystem::CreateDirsRecursive(const String& directoryIn)
 
 }
 
-bool FileSystem::RemoveDir(const String& directoryIn, bool recursive)
+bool FileSystem::RemoveDir(const ea::string& directoryIn, bool recursive)
 {
-    String directory = AddTrailingSlash(directoryIn);
+    ea::string directory = AddTrailingSlash(directoryIn);
 
     if (!DirExists(directory))
         return false;
 
-    Vector<String> results;
+    ea::vector<ea::string> results;
 
     // ensure empty if not recursive
     if (!recursive)
     {
         ScanDir(results, directory, "*", SCAN_DIRS | SCAN_FILES | SCAN_HIDDEN, true );
-        while (results.Remove(".")) {}
-        while (results.Remove("..")) {}
+        while (results.erase_first(".") != results.end()) {}
+        while (results.erase_first("..") != results.end()) {}
 
-        if (results.Size())
+        if (results.size())
             return false;
 
 #ifdef WIN32
-        return RemoveDirectoryW(GetWideNativePath(directory).CString()) != 0;
+        return RemoveDirectoryW(GetWideNativePath(directory).c_str()) != 0;
 #else
-        return remove(GetNativePath(directory).CString()) == 0;
+        return remove(GetNativePath(directory).c_str()) == 0;
 #endif
     }
 
     // delete all files at this level
     ScanDir(results, directory, "*", SCAN_FILES | SCAN_HIDDEN, false );
-    for (unsigned i = 0; i < results.Size(); i++)
+    for (unsigned i = 0; i < results.size(); i++)
     {
         if (!Delete(directory + results[i]))
             return false;
     }
-    results.Clear();
+    results.clear();
 
     // recurse into subfolders
     ScanDir(results, directory, "*", SCAN_DIRS, false );
-    for (unsigned i = 0; i < results.Size(); i++)
+    for (unsigned i = 0; i < results.size(); i++)
     {
         if (results[i] == "." || results[i] == "..")
             continue;
@@ -1191,20 +1334,20 @@ bool FileSystem::RemoveDir(const String& directoryIn, bool recursive)
 
 }
 
-bool FileSystem::CopyDir(const String& directoryIn, const String& directoryOut)
+bool FileSystem::CopyDir(const ea::string& directoryIn, const ea::string& directoryOut)
 {
     if (FileExists(directoryOut))
         return false;
 
-    Vector<String> results;
+    ea::vector<ea::string> results;
     ScanDir(results, directoryIn, "*", SCAN_FILES, true );
 
-    for (unsigned i = 0; i < results.Size(); i++)
+    for (unsigned i = 0; i < results.size(); i++)
     {
-        String srcFile = directoryIn + "/" + results[i];
-        String dstFile = directoryOut + "/" + results[i];
+        ea::string srcFile = directoryIn + "/" + results[i];
+        ea::string dstFile = directoryOut + "/" + results[i];
 
-        String dstPath = GetPath(dstFile);
+        ea::string dstPath = GetPath(dstFile);
 
         if (!CreateDirsRecursive(dstPath))
             return false;
@@ -1218,37 +1361,37 @@ bool FileSystem::CopyDir(const String& directoryIn, const String& directoryOut)
 
 }
 
-bool IsAbsoluteParentPath(const String& absParentPath, const String& fullPath)
+bool IsAbsoluteParentPath(const ea::string& absParentPath, const ea::string& fullPath)
 {
     if (!IsAbsolutePath(absParentPath) || !IsAbsolutePath(fullPath))
         return false;
 
-    String path1 = AddTrailingSlash(GetSanitizedPath(absParentPath));
-    String path2 = AddTrailingSlash(GetSanitizedPath(GetPath(fullPath)));
+    ea::string path1 = AddTrailingSlash(GetSanitizedPath(absParentPath));
+    ea::string path2 = AddTrailingSlash(GetSanitizedPath(GetPath(fullPath)));
 
-    if (path2.StartsWith(path1))
+    if (path2.starts_with(path1))
         return true;
 
     return false;
 }
 
-String GetSanitizedPath(const String& path)
+ea::string GetSanitizedPath(const ea::string& path)
 {
-    String sanitized = GetInternalPath(path);
-    StringVector parts = sanitized.Split('/');
+    ea::string sanitized = GetInternalPath(path);
+    StringVector parts = sanitized.split('/');
 
-    bool hasTrailingSlash = path.EndsWith("/") || path.EndsWith("\\");
+    bool hasTrailingSlash = path.ends_with("/") || path.ends_with("\\");
 
 #ifndef _WIN32
 
     bool absolute = IsAbsolutePath(path);
-    sanitized = String::Joined(parts, "/");
+    sanitized = ea::string::joined(parts, "/");
     if (absolute)
         sanitized = "/" + sanitized;
 
 #else
 
-    sanitized = String::Joined(parts, "/");
+    sanitized = ea::string::joined(parts, "/");
 
 #endif
 
@@ -1259,17 +1402,17 @@ String GetSanitizedPath(const String& path)
 
 }
 
-bool GetRelativePath(const String& fromPath, const String& toPath, String& output)
+bool GetRelativePath(const ea::string& fromPath, const ea::string& toPath, ea::string& output)
 {
-    output = String::EMPTY;
+    output = EMPTY_STRING;
 
-    String from = GetSanitizedPath(fromPath);
-    String to = GetSanitizedPath(toPath);
+    ea::string from = GetSanitizedPath(fromPath);
+    ea::string to = GetSanitizedPath(toPath);
 
-    StringVector fromParts = from.Split('/');
-    StringVector toParts = to.Split('/');
+    StringVector fromParts = from.split('/');
+    StringVector toParts = to.split('/');
 
-    if (!fromParts.Size() || !toParts.Size())
+    if (!fromParts.size() || !toParts.size())
         return false;
 
     if (fromParts == toParts)
@@ -1283,17 +1426,17 @@ bool GetRelativePath(const String& fromPath, const String& toPath, String& outpu
 
     int startIdx;
 
-    for (startIdx = 0; startIdx < toParts.Size(); startIdx++)
+    for (startIdx = 0; startIdx < toParts.size(); startIdx++)
     {
-        if (startIdx >= fromParts.Size() || fromParts[startIdx] != toParts[startIdx])
+        if (startIdx >= fromParts.size() || fromParts[startIdx] != toParts[startIdx])
             break;
     }
 
-    if (startIdx == toParts.Size())
+    if (startIdx == toParts.size())
     {
-        if (from.EndsWith("/") && to.EndsWith("/"))
+        if (from.ends_with("/") && to.ends_with("/"))
         {
-            for (unsigned i = 0; i < fromParts.Size() - startIdx; i++)
+            for (unsigned i = 0; i < fromParts.size() - startIdx; i++)
             {
                 output += "../";
             }
@@ -1303,12 +1446,12 @@ bool GetRelativePath(const String& fromPath, const String& toPath, String& outpu
         return false;
     }
 
-    for (int i = 0; i < (int)fromParts.Size() - startIdx; i++)
+    for (int i = 0; i < (int) fromParts.size() - startIdx; i++)
     {
         output += "../";
     }
 
-    for (int i = startIdx; i < (int) toParts.Size(); i++)
+    for (int i = startIdx; i < (int) toParts.size(); i++)
     {
         output += toParts[i] + "/";
     }
@@ -1317,7 +1460,7 @@ bool GetRelativePath(const String& fromPath, const String& toPath, String& outpu
 
 }
 
-String FileSystem::GetTemporaryDir() const
+ea::string FileSystem::GetTemporaryDir() const
 {
 #if defined(_WIN32)
 #if defined(MINI_URHO)
@@ -1326,7 +1469,7 @@ String FileSystem::GetTemporaryDir() const
     wchar_t pathName[MAX_PATH];
     pathName[0] = 0;
     GetTempPathW(SDL_arraysize(pathName), pathName);
-    return AddTrailingSlash(String(pathName));
+    return AddTrailingSlash(WideToMultiByte(pathName));
 #endif
 #else
     if (char* pathName = getenv("TMPDIR"))
@@ -1339,27 +1482,28 @@ String FileSystem::GetTemporaryDir() const
 #endif
 }
 
-String GetAbsolutePath(const String& path)
+ea::string GetAbsolutePath(const ea::string& path)
 {
-    Vector<String> parts;
+    ea::vector<ea::string> parts;
 #if !_WIN32
-    parts.Push("");
+    parts.push_back("");
 #endif
-    parts.Push(path.Split('/'));
+    auto split = path.split('/');
+    parts.insert(parts.end(), split.begin(), split.end());
 
     int index = 0;
-    while (index < parts.Size() - 1)
+    while (index < parts.size() - 1)
     {
         if (parts[index] != ".." && parts[index + 1] == "..")
         {
-            parts.Erase(index, 2);
+            parts.erase_at(index, index + 2);
             index = Max(0, --index);
         }
         else
             ++index;
     }
 
-    return String::Joined(parts, "/");
+    return ea::string::joined(parts, "/");
 }
 
 }

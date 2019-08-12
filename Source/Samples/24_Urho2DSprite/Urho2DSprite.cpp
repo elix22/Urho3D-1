@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -46,7 +46,6 @@ static const unsigned NUM_SPRITES = 200;
 static const StringHash VAR_MOVESPEED("MoveSpeed");
 static const StringHash VAR_ROTATESPEED("RotateSpeed");
 
-URHO3D_DEFINE_APPLICATION_MAIN(Urho2DSprite)
 
 Urho2DSprite::Urho2DSprite(Context* context) :
     Sample(context)
@@ -118,7 +117,7 @@ void Urho2DSprite::CreateScene()
         spriteNode->SetVar(VAR_ROTATESPEED, Random(-90.0f, 90.0f));
 
         // Add to sprite node vector
-        spriteNodes_.Push(spriteNode);
+        spriteNodes_.push_back(spriteNode);
     }
 
     // Get animation set
@@ -217,7 +216,7 @@ void Urho2DSprite::HandleUpdate(StringHash eventType, VariantMap& eventData)
     float halfWidth = (float)graphics->GetWidth() * 0.5f * PIXEL_SIZE;
     float halfHeight = (float)graphics->GetHeight() * 0.5f * PIXEL_SIZE;
 
-    for (unsigned i = 0; i < spriteNodes_.Size(); ++i)
+    for (unsigned i = 0; i < spriteNodes_.size(); ++i)
     {
         SharedPtr<Node> node = spriteNodes_[i];
 

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -144,7 +144,7 @@ public:
     const int* Data() const { return &x_; }
 
     /// Return as string.
-    String ToString() const;
+    ea::string ToString() const;
 
     /// Return hash value for HashSet & HashMap.
     unsigned ToHash() const { return (unsigned)x_ * 31 + (unsigned)y_; }
@@ -340,11 +340,21 @@ public:
             return *this;
     }
 
+    /// Return normalized to unit length or zero if length is too small.
+    Vector2 NormalizedOrZero(float eps = M_LARGE_EPSILON) const
+    {
+        float lenSquared = LengthSquared();
+        if (lenSquared > eps * eps)
+            return *this / sqrtf(lenSquared);
+        else
+            return Vector2::ZERO;
+    }
+
     /// Return float data.
     const float* Data() const { return &x_; }
 
     /// Return as string.
-    String ToString() const;
+    ea::string ToString() const;
 
     /// X coordinate.
     float x_;
@@ -410,5 +420,20 @@ inline float StableRandom(const Vector2& seed) { return Fract(Sin(seed.DotProduc
 
 /// Return a random value from [0, 1) from scalar seed.
 inline float StableRandom(float seed) { return StableRandom(Vector2(seed, seed)); }
+
+}
+
+namespace eastl
+{
+
+template <class T, typename Enable> struct hash;
+
+template <> struct hash<Urho3D::IntVector2>
+{
+    size_t operator()(const Urho3D::IntVector2& value) const
+    {
+        return value.ToHash();
+    }
+};
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -50,7 +50,7 @@ void Skybox::RegisterObject(Context* context)
     URHO3D_COPY_BASE_ATTRIBUTES(StaticModel);
 }
 
-void Skybox::ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryResult>& results)
+void Skybox::ProcessRayQuery(const RayOctreeQuery& query, ea::vector<RayQueryResult>& results)
 {
     // Do not record a raycast result for a skybox, as it would block all other results
 }
@@ -61,18 +61,18 @@ void Skybox::UpdateBatches(const FrameInfo& frame)
 
     if (frame.frameNumber_ != lastFrame_)
     {
-        customWorldTransforms_.Clear();
+        customWorldTransforms_.clear();
         lastFrame_ = frame.frameNumber_;
     }
 
     // Add camera position to fix the skybox in space. Use effective world transform to take reflection into account
     Matrix3x4 customWorldTransform = node_->GetWorldTransform();
     customWorldTransform.SetTranslation(node_->GetWorldPosition() + frame.camera_->GetEffectiveWorldTransform().Translation());
-    HashMap<Camera*, Matrix3x4>::Iterator it = customWorldTransforms_.Insert(MakePair(frame.camera_, customWorldTransform));
+    auto it = customWorldTransforms_.insert(ea::make_pair(frame.camera_, customWorldTransform));
 
-    for (unsigned i = 0; i < batches_.Size(); ++i)
+    for (unsigned i = 0; i < batches_.size(); ++i)
     {
-        batches_[i].worldTransform_ = &it->second_;
+        batches_[i].worldTransform_ = &it.first->second;
         batches_[i].distance_ = 0.0f;
     }
 }

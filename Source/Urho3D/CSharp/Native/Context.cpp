@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,8 +35,8 @@ extern "C"
 {
 
 const Urho3D::TypeInfo* Urho3DGetDirectorTypeInfo(Urho3D::StringHash type);
-typedef void* (SWIGSTDCALL* SWIG_CSharpCreateObjectCallback)(Urho3D::Context* context, unsigned type);
-extern SWIG_CSharpCreateObjectCallback SWIG_CSharpCreateObject;
+typedef void* (SWIGSTDCALL* Urho3D_CSharpCreateObjectCallback)(Urho3D::Context* context, unsigned type);
+extern Urho3D_CSharpCreateObjectCallback Urho3D_CSharpCreateObject;
 
 }
 
@@ -57,10 +57,8 @@ public:
         : ObjectFactory(context)
         , baseType_(baseType)
         , managedType_(typeName)
-        , eventReceiver_(context)
     {
         typeInfo_ = new TypeInfo(typeName, Urho3DGetDirectorTypeInfo(baseType));
-        eventReceiver_.SubscribeToEvent(E_ENDFRAME, [this](StringHash, VariantMap&) { OnEndFrame(); });
     }
 
     ~ManagedObjectFactory() override
@@ -70,60 +68,21 @@ public:
 
     SharedPtr<Object> CreateObject() override
     {
-        SharedPtr<Object> result((Object*)SWIG_CSharpCreateObject(context_, managedType_.Value()));
-        auto deleter = result->GetDeleter();
-        result->SetDeleter([this, deleter](RefCounted* instance)
-        {
-            if (Thread::IsMainThread())
-            {
-                // It is safe to delete objects on the main thread
-                if (deleter)
-                    // Objects may have a custom deleter (set by default factory for example).
-                    deleter(instance);
-                else
-                    delete instance;
-            }
-            else
-            {
-                MutexLock lock(mutex_);
-                deletionQueue_.Push({instance, deleter});
-            }
-        });
+        SharedPtr<Object> result((Object*)Urho3D_CSharpCreateObject(context_, managedType_.Value()));
         return result;
     }
 
 protected:
-    /// Delete one queued object per frame.
-    void OnEndFrame()
-    {
-        MutexLock lock(mutex_);
-        if (deletionQueue_.Empty())
-            return;
-
-        auto& pair = deletionQueue_.Back();
-        if (pair.second_)
-            pair.second_(pair.first_);
-        else
-            delete pair.first_;
-        deletionQueue_.Pop();
-    }
-
     /// Hash of base type (SWIG director class).
     StringHash baseType_;
     /// Hash of managed type. This is different from `baseType_`.
     StringHash managedType_;
-    /// Helper object for receiving E_ENDFRAME event.
-    ManagedObjectFactoryEventSubscriber eventReceiver_;
-    /// Lock for synchronizing `deletionQueue_` access.
-    Mutex mutex_;
-    /// LIFO deletion queue for objects that would otherwise get deleted by GC thread.
-    Vector<Pair<RefCounted*, std::function<void(RefCounted*)>>> deletionQueue_;
 };
 
 extern "C"
 {
 
-URHO3D_EXPORT_API void Urho3D_Context_RegisterFactory(Context* context, const char* typeName, unsigned baseType, const char* category)
+URHO3D_EXPORT_API void SWIGSTDCALL Urho3D_Context_RegisterFactory(Context* context, const char* typeName, unsigned baseType, const char* category)
 {
     context->RegisterFactory(new ManagedObjectFactory(context, typeName, StringHash(baseType)), category);
 }

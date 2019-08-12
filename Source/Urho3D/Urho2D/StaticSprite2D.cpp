@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@
 
 #include "../Core/Context.h"
 #include "../Graphics/Material.h"
+#include "../Graphics/Technique.h"
 #include "../Graphics/Texture2D.h"
 #include "../Resource/ResourceCache.h"
 #include "../Scene/Scene.h"
@@ -37,7 +38,6 @@ namespace Urho3D
 {
 
 extern const char* URHO2D_CATEGORY;
-extern const char* blendModeNames[];
 
 StaticSprite2D::StaticSprite2D(Context* context) :
     Drawable2D(context),
@@ -53,7 +53,7 @@ StaticSprite2D::StaticSprite2D(Context* context) :
     drawRect_(Rect::ZERO),
     textureRect_(Rect::ZERO)
 {
-    sourceBatches_.Resize(1);
+    sourceBatches_.resize(1);
     sourceBatches_[0].owner_ = this;
 }
 
@@ -280,8 +280,8 @@ void StaticSprite2D::OnWorldBoundingBoxUpdate()
     boundingBox_.Clear();
     worldBoundingBox_.Clear();
 
-    const Vector<SourceBatch2D>& sourceBatches = GetSourceBatches();
-    for (unsigned i = 0; i < sourceBatches[0].vertices_.Size(); ++i)
+    const ea::vector<SourceBatch2D>& sourceBatches = GetSourceBatches();
+    for (unsigned i = 0; i < sourceBatches[0].vertices_.size(); ++i)
         worldBoundingBox_.Merge(sourceBatches[0].vertices_[i].position_);
 
     boundingBox_ = worldBoundingBox_.Transformed(node_->GetWorldTransform().Inverse());
@@ -297,8 +297,8 @@ void StaticSprite2D::UpdateSourceBatches()
     if (!sourceBatchesDirty_)
         return;
 
-    Vector<Vertex2D>& vertices = sourceBatches_[0].vertices_;
-    vertices.Clear();
+    ea::vector<Vertex2D>& vertices = sourceBatches_[0].vertices_;
+    vertices.clear();
 
     if (!sprite_)
         return;
@@ -337,10 +337,10 @@ void StaticSprite2D::UpdateSourceBatches()
 
     vertex0.color_ = vertex1.color_ = vertex2.color_ = vertex3.color_ = color_.ToUInt();
 
-    vertices.Push(vertex0);
-    vertices.Push(vertex1);
-    vertices.Push(vertex2);
-    vertices.Push(vertex3);
+    vertices.push_back(vertex0);
+    vertices.push_back(vertex1);
+    vertices.push_back(vertex2);
+    vertices.push_back(vertex3);
 
     sourceBatchesDirty_ = false;
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,7 +35,6 @@
 #include <Urho3D/DebugNew.h>
 
 // Expands to this example's entry-point
-URHO3D_DEFINE_APPLICATION_MAIN(ConsoleInput)
 
 // Hunger level descriptions
 const char* hungerLevels[] = {
@@ -72,8 +71,8 @@ void ConsoleInput::Start()
     SubscribeToEvent(E_KEYDOWN, URHO3D_HANDLER(ConsoleInput, HandleEscKeyDown));
     UnsubscribeFromEvent(E_KEYUP);
 
-    // Hide logo to make room for the console
-    SetLogoVisible(false);
+    // Enable filesystem interaction in console.
+    GetFileSystem()->SetExecuteConsoleCommands(true);
 
     // Show the console by default, make it large. Console will show the text edit field when there is at least one
     // subscriber for the console command event
@@ -107,16 +106,19 @@ void ConsoleInput::HandleConsoleCommand(StringHash eventType, VariantMap& eventD
 void ConsoleInput::HandleUpdate(StringHash eventType, VariantMap& eventData)
 {
     // Check if there is input from stdin
-    String input = GetConsoleInput();
-    if (input.Length())
+    ea::string input = GetConsoleInput();
+    if (input.length())
         HandleInput(input);
 }
 
 void ConsoleInput::HandleEscKeyDown(StringHash eventType, VariantMap& eventData)
 {
     // Unlike the other samples, exiting the engine when ESC is pressed instead of just closing the console
-    if (eventData[KeyDown::P_KEY].GetInt() == KEY_ESCAPE && GetPlatform() != "Web")
-        engine_->Exit();
+    if (eventData[KeyDown::P_KEY].GetInt() == KEY_ESCAPE)
+    {
+        GetSubsystem<Console>()->SetVisible(false);
+        CloseSample();
+    }
 }
 
 void ConsoleInput::StartGame()
@@ -134,10 +136,10 @@ void ConsoleInput::StartGame()
     urhoThreat_ = 0;
 }
 
-void ConsoleInput::EndGame(const String& message)
+void ConsoleInput::EndGame(const ea::string& message)
 {
     Print(message);
-    Print("Game over! You survived " + String(numTurns_) + " turns.\n"
+    Print("Game over! You survived " + ea::to_string(numTurns_) + " turns.\n"
           "Do you want to play again (Y/N)?");
 
     gameOn_ = false;
@@ -160,7 +162,7 @@ void ConsoleInput::Advance()
         ++urhoThreat_;
 
     if (urhoThreat_ > 0)
-        Print(String(urhoThreatLevels[urhoThreat_ - 1]) + ".");
+        Print(ea::string(urhoThreatLevels[urhoThreat_ - 1]) + ".");
 
     if ((numTurns_ & 3u) == 0 && !eatenLastTurn_)
     {
@@ -171,7 +173,7 @@ void ConsoleInput::Advance()
             return;
         }
         else
-            Print("You are " + String(hungerLevels[hunger_]) + ".");
+            Print("You are " + ea::string(hungerLevels[hunger_]) + ".");
     }
 
     eatenLastTurn_ = false;
@@ -190,24 +192,26 @@ void ConsoleInput::Advance()
     ++numTurns_;
 }
 
-void ConsoleInput::HandleInput(const String& input)
+void ConsoleInput::HandleInput(const ea::string& input)
 {
-    String inputLower = input.ToLower().Trimmed();
-    if (inputLower.Empty())
+    ea::string inputLower = input.to_lower();
+    inputLower.trim();
+
+    if (inputLower.empty())
     {
         Print("Empty input given!");
         return;
     }
 
     if (inputLower == "quit" || inputLower == "exit")
-        engine_->Exit();
+        CloseSample();
     else if (gameOn_)
     {
         // Game is on
         if (inputLower == "help")
             Print("The following commands are available: 'eat', 'hide', 'wait', 'score', 'quit'.");
         else if (inputLower == "score")
-            Print("You have survived " + String(numTurns_) + " turns.");
+            Print("You have survived " + ea::to_string(numTurns_) + " turns.");
         else if (inputLower == "eat")
         {
             if (foodAvailable_)
@@ -222,7 +226,7 @@ void ConsoleInput::HandleInput(const String& input)
                     return;
                 }
                 else
-                    Print("You are now " + String(hungerLevels[hunger_]) + ".");
+                    Print("You are now " + ea::string(hungerLevels[hunger_]) + ".");
             }
             else
                 Print("There is no food available.");
@@ -261,14 +265,14 @@ void ConsoleInput::HandleInput(const String& input)
         if (inputLower[0] == 'y')
             StartGame();
         else if (inputLower[0] == 'n')
-            engine_->Exit();
+            CloseSample();
         else
             Print("Please answer 'y' or 'n'.");
     }
 }
 
-void ConsoleInput::Print(const String& output)
+void ConsoleInput::Print(const ea::string& output)
 {
     // Logging appears both in the engine console and stdout
-    URHO3D_LOGRAW(output + "\n");
+    URHO3D_LOGINFO(output);
 }

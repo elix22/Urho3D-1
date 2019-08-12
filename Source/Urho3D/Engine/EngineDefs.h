@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,53 +30,54 @@ namespace Urho3D
 {
 
 // Engine parameters
-static const String EP_AUTOLOAD_PATHS = "AutoloadPaths";
-static const String EP_BORDERLESS = "Borderless";
-static const String EP_DUMP_SHADERS = "DumpShaders";
-static const String EP_EVENT_PROFILER = "EventProfiler";
-static const String EP_EXTERNAL_WINDOW = "ExternalWindow";
-static const String EP_FLUSH_GPU = "FlushGPU";
-static const String EP_FORCE_GL2 = "ForceGL2";
-static const String EP_FRAME_LIMITER = "FrameLimiter";
-static const String EP_FULL_SCREEN = "FullScreen";
-static const String EP_HEADLESS = "Headless";
-static const String EP_HIGH_DPI = "HighDPI";
-static const String EP_LOG_LEVEL = "LogLevel";
-static const String EP_LOG_NAME = "LogName";
-static const String EP_LOG_QUIET = "LogQuiet";
-static const String EP_LOW_QUALITY_SHADOWS = "LowQualityShadows";
-static const String EP_MATERIAL_QUALITY = "MaterialQuality";
-static const String EP_MONITOR = "Monitor";
-static const String EP_MULTI_SAMPLE = "MultiSample";
-static const String EP_ORIENTATIONS = "Orientations";
-static const String EP_PACKAGE_CACHE_DIR = "PackageCacheDir";
-static const String EP_RENDER_PATH = "RenderPath";
-static const String EP_REFRESH_RATE = "RefreshRate";
-static const String EP_RESOURCE_PACKAGES = "ResourcePackages";
-static const String EP_RESOURCE_PATHS = "ResourcePaths";
-static const String EP_RESOURCE_PREFIX_PATHS = "ResourcePrefixPaths";
-static const String EP_SHADER_CACHE_DIR = "ShaderCacheDir";
-static const String EP_SHADOWS = "Shadows";
-static const String EP_SOUND = "Sound";
-static const String EP_SOUND_BUFFER = "SoundBuffer";
-static const String EP_SOUND_INTERPOLATION = "SoundInterpolation";
-static const String EP_SOUND_MIX_RATE = "SoundMixRate";
-static const String EP_SOUND_STEREO = "SoundStereo";
-static const String EP_TEXTURE_ANISOTROPY = "TextureAnisotropy";
-static const String EP_TEXTURE_FILTER_MODE = "TextureFilterMode";
-static const String EP_TEXTURE_QUALITY = "TextureQuality";
-static const String EP_TIME_OUT = "TimeOut";
-static const String EP_TOUCH_EMULATION = "TouchEmulation";
-static const String EP_TRIPLE_BUFFER = "TripleBuffer";
-static const String EP_VSYNC = "VSync";
-static const String EP_WINDOW_HEIGHT = "WindowHeight";
-static const String EP_WINDOW_ICON = "WindowIcon";
-static const String EP_WINDOW_POSITION_X = "WindowPositionX";
-static const String EP_WINDOW_POSITION_Y = "WindowPositionY";
-static const String EP_WINDOW_RESIZABLE = "WindowResizable";
-static const String EP_WINDOW_TITLE = "WindowTitle";
-static const String EP_WINDOW_WIDTH = "WindowWidth";
-static const String EP_WORKER_THREADS = "WorkerThreads";
-static const String EP_PROFILER_LISTEN = "ProfilerListen";
-static const String EP_PROFILER_PORT = "ProfilerPort";
+static const ea::string EP_AUTOLOAD_PATHS = "AutoloadPaths";
+static const ea::string EP_BORDERLESS = "Borderless";
+static const ea::string EP_DUMP_SHADERS = "DumpShaders";
+static const ea::string EP_EXTERNAL_WINDOW = "ExternalWindow";
+static const ea::string EP_FLUSH_GPU = "FlushGPU";
+static const ea::string EP_FORCE_GL2 = "ForceGL2";
+static const ea::string EP_FRAME_LIMITER = "FrameLimiter";
+static const ea::string EP_FULL_SCREEN = "FullScreen";
+static const ea::string EP_HEADLESS = "Headless";
+static const ea::string EP_HIGH_DPI = "HighDPI";
+static const ea::string EP_LOG_LEVEL = "LogLevel";
+static const ea::string EP_LOG_NAME = "LogName";
+static const ea::string EP_LOG_QUIET = "LogQuiet";
+static const ea::string EP_LOW_QUALITY_SHADOWS = "LowQualityShadows";
+static const ea::string EP_MATERIAL_QUALITY = "MaterialQuality";
+static const ea::string EP_MONITOR = "Monitor";
+static const ea::string EP_MULTI_SAMPLE = "MultiSample";
+static const ea::string EP_ORGANIZATION_NAME = "OrganizationName";
+static const ea::string EP_APPLICATION_NAME = "ApplicationName";
+static const ea::string EP_ORIENTATIONS = "Orientations";
+static const ea::string EP_PACKAGE_CACHE_DIR = "PackageCacheDir";
+static const ea::string EP_RENDER_PATH = "RenderPath";
+static const ea::string EP_REFRESH_RATE = "RefreshRate";
+static const ea::string EP_RESOURCE_PACKAGES = "ResourcePackages";
+static const ea::string EP_RESOURCE_PATHS = "ResourcePaths";
+static const ea::string EP_RESOURCE_PREFIX_PATHS = "ResourcePrefixPaths";
+static const ea::string EP_SHADER_CACHE_DIR = "ShaderCacheDir";
+static const ea::string EP_SHADOWS = "Shadows";
+static const ea::string EP_SOUND = "Sound";
+static const ea::string EP_SOUND_BUFFER = "SoundBuffer";
+static const ea::string EP_SOUND_INTERPOLATION = "SoundInterpolation";
+static const ea::string EP_SOUND_MIX_RATE = "SoundMixRate";
+static const ea::string EP_SOUND_STEREO = "SoundStereo";
+static const ea::string EP_TEXTURE_ANISOTROPY = "TextureAnisotropy";
+static const ea::string EP_TEXTURE_FILTER_MODE = "TextureFilterMode";
+static const ea::string EP_TEXTURE_QUALITY = "TextureQuality";
+static const ea::string EP_TIME_OUT = "TimeOut";
+static const ea::string EP_TOUCH_EMULATION = "TouchEmulation";
+static const ea::string EP_TRIPLE_BUFFER = "TripleBuffer";
+static const ea::string EP_VSYNC = "VSync";
+static const ea::string EP_WINDOW_HEIGHT = "WindowHeight";
+static const ea::string EP_WINDOW_ICON = "WindowIcon";
+static const ea::string EP_WINDOW_POSITION_X = "WindowPositionX";
+static const ea::string EP_WINDOW_POSITION_Y = "WindowPositionY";
+static const ea::string EP_WINDOW_RESIZABLE = "WindowResizable";
+static const ea::string EP_WINDOW_MAXIMIZE = "WindowMaximize";
+static const ea::string EP_WINDOW_TITLE = "WindowTitle";
+static const ea::string EP_WINDOW_WIDTH = "WindowWidth";
+static const ea::string EP_WORKER_THREADS = "WorkerThreads";
+
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -76,9 +76,9 @@ public:
     bool IsVisible() const { return visible_; }
 
     /// Return has property
-    bool HasProperty(const String& name) const;
+    bool HasProperty(const ea::string& name) const;
     /// Return property.
-    const String& GetProperty(const String& name) const;
+    const ea::string& GetProperty(const ea::string& name) const;
     /// Return layer type.
     TileMapLayerType2D GetLayerType() const;
 
@@ -124,7 +124,7 @@ private:
     /// Visible.
     bool visible_{true};
     /// Tile node or image nodes.
-    Vector<SharedPtr<Node> > nodes_;
+    ea::vector<SharedPtr<Node> > nodes_;
 };
 
 }

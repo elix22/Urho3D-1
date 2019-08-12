@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -42,8 +42,8 @@ EditorIconCache::EditorIconCache(Context* context)
     XMLElement root = icons->GetRoot();
     for (XMLElement element = root.GetChild("element"); element.NotNull(); element = element.GetNext("element"))
     {
-        String type = element.GetAttribute("type");
-        if (type.Empty())
+        ea::string type = element.GetAttribute("type");
+        if (type.empty())
         {
             URHO3D_LOGERROR("EditorIconCache.xml contains icon entry without a \"type\" attribute.");
             continue;
@@ -70,12 +70,12 @@ EditorIconCache::EditorIconCache(Context* context)
     }
 }
 
-EditorIconCache::IconData* EditorIconCache::GetIconData(const String& name)
+EditorIconCache::IconData* EditorIconCache::GetIconData(const ea::string& name)
 {
-    auto it = iconCache_.Find(name);
-    if (it != iconCache_.End())
-        return &it->second_;
-    return &iconCache_.Find("Unknown")->second_;
+    auto it = iconCache_.find(name);
+    if (it != iconCache_.end())
+        return &it->second;
+    return &iconCache_.find("Unknown")->second;
 }
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/HashMap.h"
+#include <EASTL/unordered_map.h>
+
 #include "../Container/Ptr.h"
 #include "../Math/StringHash.h"
 
@@ -103,7 +104,7 @@ public:
     /// Set per-bone blending weight by track index. Default is 1.0 (full), is multiplied  with the state's blending weight when applying the animation. Optionally recurses to child bones.
     void SetBoneWeight(unsigned index, float weight, bool recursive = false);
     /// Set per-bone blending weight by name.
-    void SetBoneWeight(const String& name, float weight, bool recursive = false);
+    void SetBoneWeight(const ea::string& name, float weight, bool recursive = false);
     /// Set per-bone blending weight by name hash.
     void SetBoneWeight(StringHash nameHash, float weight, bool recursive = false);
     /// Modify blending weight.
@@ -125,13 +126,13 @@ public:
     /// Return per-bone blending weight by track index.
     float GetBoneWeight(unsigned index) const;
     /// Return per-bone blending weight by name.
-    float GetBoneWeight(const String& name) const;
+    float GetBoneWeight(const ea::string& name) const;
     /// Return per-bone blending weight by name.
     float GetBoneWeight(StringHash nameHash) const;
     /// Return track index with matching bone node, or M_MAX_UNSIGNED if not found.
     unsigned GetTrackIndex(Node* node) const;
     /// Return track index by bone name, or M_MAX_UNSIGNED if not found.
-    unsigned GetTrackIndex(const String& name) const;
+    unsigned GetTrackIndex(const ea::string& name) const;
     /// Return track index by bone name hash, or M_MAX_UNSIGNED if not found.
     unsigned GetTrackIndex(StringHash nameHash) const;
 
@@ -176,7 +177,7 @@ private:
     /// Start bone.
     Bone* startBone_;
     /// Per-track data.
-    Vector<AnimationStateTrack> stateTracks_;
+    ea::vector<AnimationStateTrack> stateTracks_;
     /// Looped flag.
     bool looped_;
     /// Blending weight.

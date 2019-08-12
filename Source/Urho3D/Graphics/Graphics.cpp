@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,12 +27,16 @@
 #include "../Graphics/Animation.h"
 #include "../Graphics/AnimationController.h"
 #include "../Graphics/Camera.h"
+#include "../Graphics/ConstantBuffer.h"
+#include "../Graphics/Geometry.h"
 #include "../Graphics/CustomGeometry.h"
 #include "../Graphics/DebugRenderer.h"
 #include "../Graphics/DecalSet.h"
 #include "../Graphics/Graphics.h"
 #include "../Graphics/GraphicsImpl.h"
+#include "../Graphics/IndexBuffer.h"
 #include "../Graphics/Material.h"
+#include "../Graphics/OcclusionBuffer.h"
 #include "../Graphics/Octree.h"
 #include "../Graphics/ParticleEffect.h"
 #include "../Graphics/ParticleEmitter.h"
@@ -50,6 +54,9 @@
 #include "../Graphics/Texture2DArray.h"
 #include "../Graphics/Texture3D.h"
 #include "../Graphics/TextureCube.h"
+#include "../Graphics/VertexBuffer.h"
+#include "../Graphics/View.h"
+#include "../Graphics/Viewport.h"
 #include "../Graphics/Zone.h"
 #include "../IO/FileSystem.h"
 #include "../IO/Log.h"
@@ -69,11 +76,11 @@ void Graphics::SetExternalWindow(void* window)
         URHO3D_LOGERROR("Window already opened, can not set external window");
 }
 
-void Graphics::SetWindowTitle(const String& windowTitle)
+void Graphics::SetWindowTitle(const ea::string& windowTitle)
 {
     windowTitle_ = windowTitle;
     if (window_)
-        SDL_SetWindowTitle(window_, windowTitle_.CString());
+        SDL_SetWindowTitle(window_, windowTitle_.c_str());
 }
 
 void Graphics::SetWindowIcon(Image* windowIcon)
@@ -96,10 +103,10 @@ void Graphics::SetWindowPosition(int x, int y)
     SetWindowPosition(IntVector2(x, y));
 }
 
-void Graphics::SetOrientations(const String& orientations)
+void Graphics::SetOrientations(const ea::string& orientations)
 {
-    orientations_ = orientations.Trimmed();
-    SDL_SetHint(SDL_HINT_ORIENTATIONS, orientations_.CString());
+    orientations_ = orientations.trimmed();
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, orientations_.c_str());
 }
 
 bool Graphics::ToggleFullscreen()
@@ -154,9 +161,9 @@ void Graphics::SetShaderParameter(StringHash param, const Variant& value)
 
     case VAR_BUFFER:
         {
-            const PODVector<unsigned char>& buffer = value.GetBuffer();
-            if (buffer.Size() >= sizeof(float))
-                SetShaderParameter(param, reinterpret_cast<const float*>(&buffer[0]), buffer.Size() / sizeof(float));
+            const ea::vector<unsigned char>& buffer = value.GetBuffer();
+            if (buffer.size() >= sizeof(float))
+                SetShaderParameter(param, reinterpret_cast<const float*>(&buffer[0]), buffer.size() / sizeof(float));
         }
         break;
 
@@ -177,9 +184,9 @@ IntVector2 Graphics::GetWindowPosition() const
     return position_;
 }
 
-PODVector<IntVector3> Graphics::GetResolutions(int monitor) const
+ea::vector<IntVector3> Graphics::GetResolutions(int monitor) const
 {
-    PODVector<IntVector3> ret;
+    ea::vector<IntVector3> ret;
     // Emscripten is not able to return a valid list
 #ifndef __EMSCRIPTEN__
     auto numModes = (unsigned)SDL_GetNumDisplayModes(monitor);
@@ -194,7 +201,7 @@ PODVector<IntVector3> Graphics::GetResolutions(int monitor) const
 
         // Store mode if unique
         bool unique = true;
-        for (unsigned j = 0; j < ret.Size(); ++j)
+        for (unsigned j = 0; j < ret.size(); ++j)
         {
             if (ret[j].x_ == width && ret[j].y_ == height && ret[j].z_ == rate)
             {
@@ -204,7 +211,7 @@ PODVector<IntVector3> Graphics::GetResolutions(int monitor) const
         }
 
         if (unique)
-            ret.Push(IntVector3(width, height, rate));
+            ret.push_back(IntVector3(width, height, rate));
     }
 #endif
 
@@ -269,7 +276,7 @@ void Graphics::Raise() const
     SDL_RaiseWindow(window_);
 }
 
-void Graphics::BeginDumpShaders(const String& fileName)
+void Graphics::BeginDumpShaders(const ea::string& fileName)
 {
     shaderPrecache_ = new ShaderPrecache(context_, fileName);
 }
@@ -286,10 +293,10 @@ void Graphics::PrecacheShaders(Deserializer& source)
     ShaderPrecache::LoadShaders(this, source);
 }
 
-void Graphics::SetShaderCacheDir(const String& path)
+void Graphics::SetShaderCacheDir(const ea::string& path)
 {
-    String trimmedPath = path.Trimmed();
-    if (trimmedPath.Length())
+    ea::string trimmedPath = path.trimmed();
+    if (trimmedPath.length())
         shaderCacheDir_ = AddTrailingSlash(trimmedPath);
 }
 
@@ -297,14 +304,14 @@ void Graphics::AddGPUObject(GPUObject* object)
 {
     MutexLock lock(gpuObjectMutex_);
 
-    gpuObjects_.Push(object);
+    gpuObjects_.push_back(object);
 }
 
 void Graphics::RemoveGPUObject(GPUObject* object)
 {
     MutexLock lock(gpuObjectMutex_);
 
-    gpuObjects_.Remove(object);
+    gpuObjects_.erase_first(object);
 }
 
 void* Graphics::ReserveScratchBuffer(unsigned size)
@@ -316,40 +323,40 @@ void* Graphics::ReserveScratchBuffer(unsigned size)
         maxScratchBufferRequest_ = size;
 
     // First check for a free buffer that is large enough
-    for (Vector<ScratchBuffer>::Iterator i = scratchBuffers_.Begin(); i != scratchBuffers_.End(); ++i)
+    for (auto i = scratchBuffers_.begin(); i != scratchBuffers_.end(); ++i)
     {
         if (!i->reserved_ && i->size_ >= size)
         {
             i->reserved_ = true;
-            return i->data_.Get();
+            return i->data_.get();
         }
     }
 
     // Then check if a free buffer can be resized
-    for (Vector<ScratchBuffer>::Iterator i = scratchBuffers_.Begin(); i != scratchBuffers_.End(); ++i)
+    for (auto i = scratchBuffers_.begin(); i != scratchBuffers_.end(); ++i)
     {
         if (!i->reserved_)
         {
-            i->data_ = new unsigned char[size];
+            i->data_.reset(new unsigned char[size]);
             i->size_ = size;
             i->reserved_ = true;
 
-            URHO3D_LOGDEBUG("Resized scratch buffer to size " + String(size));
+            URHO3D_LOGTRACE("Resized scratch buffer to size " + ea::to_string(size));
 
-            return i->data_.Get();
+            return i->data_.get();
         }
     }
 
     // Finally allocate a new buffer
     ScratchBuffer newBuffer;
-    newBuffer.data_ = new unsigned char[size];
+    newBuffer.data_.reset(new unsigned char[size]);
     newBuffer.size_ = size;
     newBuffer.reserved_ = true;
-    scratchBuffers_.Push(newBuffer);
+    scratchBuffers_.push_back(newBuffer);
 
-    URHO3D_LOGDEBUG("Allocated scratch buffer with size " + String(size));
+    URHO3D_LOGDEBUG("Allocated scratch buffer with size " + ea::to_string(size));
 
-    return newBuffer.data_.Get();
+    return newBuffer.data_.get();
 }
 
 void Graphics::FreeScratchBuffer(void* buffer)
@@ -357,9 +364,9 @@ void Graphics::FreeScratchBuffer(void* buffer)
     if (!buffer)
         return;
 
-    for (Vector<ScratchBuffer>::Iterator i = scratchBuffers_.Begin(); i != scratchBuffers_.End(); ++i)
+    for (auto i = scratchBuffers_.begin(); i != scratchBuffers_.end(); ++i)
     {
-        if (i->reserved_ && i->data_.Get() == buffer)
+        if (i->reserved_ && i->data_.get() == buffer)
         {
             i->reserved_ = false;
             return;
@@ -371,14 +378,14 @@ void Graphics::FreeScratchBuffer(void* buffer)
 
 void Graphics::CleanupScratchBuffers()
 {
-    for (Vector<ScratchBuffer>::Iterator i = scratchBuffers_.Begin(); i != scratchBuffers_.End(); ++i)
+    for (auto i = scratchBuffers_.begin(); i != scratchBuffers_.end(); ++i)
     {
         if (!i->reserved_ && i->size_ > maxScratchBufferRequest_ * 2 && i->size_ >= 1024 * 1024)
         {
-            i->data_ = maxScratchBufferRequest_ > 0 ? (new unsigned char[maxScratchBufferRequest_]) : nullptr;
+            i->data_.reset(maxScratchBufferRequest_ > 0 ? (new unsigned char[maxScratchBufferRequest_]) : nullptr);
             i->size_ = maxScratchBufferRequest_;
 
-            URHO3D_LOGDEBUG("Resized scratch buffer to size " + String(maxScratchBufferRequest_));
+            URHO3D_LOGTRACE("Resized scratch buffer to size " + ea::to_string(maxScratchBufferRequest_));
         }
     }
 
@@ -428,6 +435,13 @@ void RegisterGraphicsLibrary(Context* context)
     DebugRenderer::RegisterObject(context);
     Octree::RegisterObject(context);
     Zone::RegisterObject(context);
+    VertexBuffer::RegisterObject(context);
+    IndexBuffer::RegisterObject(context);
+    Geometry::RegisterObject(context);
+    ConstantBuffer::RegisterObject(context);
+    View::RegisterObject(context);
+    Viewport::RegisterObject(context);
+    OcclusionBuffer::RegisterObject(context);
 }
 
 

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,10 +23,9 @@
 #pragma once
 
 
-#include <Urho3D/Urho3DAll.h>
+#include <Urho3D/Engine/Application.h>
 #include <Toolbox/SystemUI/AttributeInspector.h>
 #include "Project.h"
-#include "Plugins/PluginManagerNative.h"
 
 using namespace std::placeholders;
 
@@ -36,6 +35,9 @@ namespace Urho3D
 class Tab;
 class SceneTab;
 class AssetConverter;
+class SubCommand;
+
+static const unsigned EDITOR_VIEW_LAYER = 1U << 31;
 
 class Editor : public Application
 {
@@ -50,6 +52,9 @@ public:
     /// Tear down editor application.
     void Stop() override;
 
+    ///
+    void ExecuteSubcommand(SubCommand* cmd);
+
     /// Renders UI elements.
     void OnUpdate(VariantMap& args);
     /// Renders menu bar at the top of the screen.
@@ -58,43 +63,82 @@ public:
     template<typename T> T* CreateTab() { return (T*)CreateTab(T::GetTypeStatic()); }
     /// Create a new tab of specified type.
     Tab* CreateTab(StringHash type);
+    ///
+    Tab* GetTabByName(const ea::string& uniqueName);
+    ///
+    Tab* GetTabByResource(const ea::string& resourceName);
+    /// Returns first tab of specified type.
+    Tab* GetTab(StringHash type);
+    /// Returns first tab of specified type.
+    template<typename T> T* GetTab() { return (T*)GetTab(T::GetTypeStatic()); }
+
     /// Return active scene tab.
     Tab* GetActiveTab() { return activeTab_; }
     /// Return currently open scene tabs.
-    const Vector<SharedPtr<Tab>>& GetSceneViews() const { return tabs_; }
+    const ea::vector<SharedPtr<Tab>>& GetSceneViews() const { return tabs_; }
     /// Return a map of names and type hashes from specified category.
-    StringVector GetObjectsByCategory(const String& category);
-    /// Get absolute path of `resourceName`. If it is empty, use `defaultResult`. If no resource is found then save file
-    /// dialog will be invoked for selecting a new path.
-    String GetResourceAbsolutePath(const String& resourceName, const String& defaultResult, const char* patterns,
-        const String& dialogTitle);
+    StringVector GetObjectsByCategory(const ea::string& category);
     /// Returns a list of open content tabs/docks/windows. This list does not include utility docks/tabs/windows.
-    const Vector<SharedPtr<Tab>>& GetContentTabs() const { return tabs_; }
+    const ea::vector<SharedPtr<Tab>>& GetContentTabs() const { return tabs_; }
     /// Opens project or creates new one.
-    Project* OpenProject(const String& projectPath);
+    void OpenProject(const ea::string& projectPath);
     /// Close current project.
     void CloseProject();
     /// Return path containing data directories of engine.
-    const String& GetCoreResourcePrefixPath() const { return coreResourcePrefixPath_; }
+    const ea::string& GetCoreResourcePrefixPath() const { return coreResourcePrefixPath_; }
+    /// Create tabs that are open by default and persist through entire lifetime of editor.
+    void CreateDefaultTabs();
     /// Load default tab layout.
     void LoadDefaultLayout();
+    /// Returns ID of root dockspace.
+    ImGuiID GetDockspaceID() const { return dockspaceId_; }
+    ///
+    ImFont* GetMonoSpaceFont() const { return monoFont_; }
+    ///
+    void UpdateWindowTitle(const ea::string& resourcePath=EMPTY_STRING);
+    ///
+    VariantMap& GetEngineParameters() { return engineParameters_; }
 
 protected:
     /// Process console commands.
     void OnConsoleCommand(VariantMap& args);
+    /// Process any global hotkeys.
+    void HandleHotkeys();
+    /// Renders a project plugins submenu.
+    void RenderProjectMenu();
+    ///
+    void SetupSystemUI();
+    ///
+    template<typename T> void RegisterSubcommand();
+    /// Opens a file dialog for folder selection. Project is opened or created in selected folder.
+    void OpenOrCreateProject();
 
     /// List of active scene tabs.
-    Vector<SharedPtr<Tab>> tabs_;
+    ea::vector<SharedPtr<Tab>> tabs_;
     /// Last focused scene tab.
     WeakPtr<Tab> activeTab_;
     /// Prefix path of CoreData and EditorData.
-    String coreResourcePrefixPath_;
+    ea::string coreResourcePrefixPath_;
     /// Currently loaded project.
     SharedPtr<Project> project_;
-#if URHO3D_PLUGINS_NATIVE
-    /// Native plugin manager.
-    PluginManagerNative pluginsNative_;
-#endif
+    /// ID of dockspace root.
+    ImGuiID dockspaceId_;
+    /// Path to a project that editor should open on the end of the frame.
+    ea::string pendingOpenProject_;
+    /// Flag indicating that editor should create and load default layout.
+    bool loadDefaultLayout_ = false;
+    ///
+    ImFont* monoFont_ = nullptr;
+    ///
+    bool exiting_ = false;
+    ///
+    ea::string defaultProjectPath_;
+    ///
+    ea::vector<SharedPtr<SubCommand>> subCommands_;
+    /// Global editor settings.
+    JSONValue editorSettings_;
+    ///
+    ea::string flavorPendingRemoval_;
 };
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,8 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
-#include "../Container/HashSet.h"
+#include <EASTL/unique_ptr.h>
+
 #include "../Math/BoundingBox.h"
 #include "../Math/Matrix3x4.h"
 #include "../Scene/Component.h"
@@ -143,9 +143,9 @@ public:
     /// Rebuild part of the navigation mesh in the rectangular area. Return true if successful.
     virtual bool Build(const IntVector2& from, const IntVector2& to);
     /// Return tile data.
-    virtual PODVector<unsigned char> GetTileData(const IntVector2& tile) const;
+    virtual ea::vector<unsigned char> GetTileData(const IntVector2& tile) const;
     /// Add tile to navigation mesh.
-    virtual bool AddTile(const PODVector<unsigned char>& tileData);
+    virtual bool AddTile(const ea::vector<unsigned char>& tileData);
     /// Remove tile from navigation mesh.
     virtual void RemoveTile(const IntVector2& tile);
     /// Remove all tiles from navigation mesh.
@@ -153,7 +153,7 @@ public:
     /// Return whether the navigation mesh has tile.
     bool HasTile(const IntVector2& tile) const;
     /// Return bounding box of the tile in the node space.
-    BoundingBox GetTileBoudningBox(const IntVector2& tile) const;
+    BoundingBox GetTileBoundingBox(const IntVector2& tile) const;
     /// Return index of the tile at the position.
     IntVector2 GetTileIndex(const Vector3& position) const;
     /// Find the nearest point on the navigation mesh to a given point. Extents specifies how far out from the specified point to check along each axis.
@@ -163,11 +163,11 @@ public:
     Vector3 MoveAlongSurface(const Vector3& start, const Vector3& end, const Vector3& extents = Vector3::ONE, int maxVisited = 3,
         const dtQueryFilter* filter = nullptr);
     /// Find a path between world space points. Return non-empty list of points if successful. Extents specifies how far off the navigation mesh the points can be.
-    void FindPath(PODVector<Vector3>& dest, const Vector3& start, const Vector3& end, const Vector3& extents = Vector3::ONE,
+    void FindPath(ea::vector<Vector3>& dest, const Vector3& start, const Vector3& end, const Vector3& extents = Vector3::ONE,
         const dtQueryFilter* filter = nullptr);
     /// Find a path between world space points. Return non-empty list of navigation path points if successful. Extents specifies how far off the navigation mesh the points can be.
     void FindPath
-        (PODVector<NavigationPathPoint>& dest, const Vector3& start, const Vector3& end, const Vector3& extents = Vector3::ONE,
+        (ea::vector<NavigationPathPoint>& dest, const Vector3& start, const Vector3& end, const Vector3& extents = Vector3::ONE,
             const dtQueryFilter* filter = nullptr);
     /// Return a random point on the navigation mesh.
     Vector3 GetRandomPoint(const dtQueryFilter* filter = nullptr, dtPolyRef* randomRef = nullptr);
@@ -187,10 +187,10 @@ public:
     void DrawDebugGeometry(bool depthTest);
 
     /// Return the given name of this navigation mesh.
-    String GetMeshName() const { return meshName_; }
+    ea::string GetMeshName() const { return meshName_; }
 
     /// Set the name of this navigation mesh.
-    void SetMeshName(const String& newName);
+    void SetMeshName(const ea::string& newName);
 
     /// Return tile size.
     int GetTileSize() const { return tileSize_; }
@@ -256,9 +256,9 @@ public:
     NavmeshPartitionType GetPartitionType() const { return partitionType_; }
 
     /// Set navigation data attribute.
-    virtual void SetNavigationDataAttr(const PODVector<unsigned char>& value);
+    virtual void SetNavigationDataAttr(const ea::vector<unsigned char>& value);
     /// Return navigation data attribute.
-    virtual PODVector<unsigned char> GetNavigationDataAttr() const;
+    virtual ea::vector<unsigned char> GetNavigationDataAttr() const;
 
     /// Draw debug geometry for OffMeshConnection components.
     void SetDrawOffMeshConnections(bool enable) { drawOffMeshConnections_ = enable; }
@@ -280,32 +280,32 @@ private:
 
 protected:
     /// Collect geometry from under Navigable components.
-    void CollectGeometries(Vector<NavigationGeometryInfo>& geometryList);
+    void CollectGeometries(ea::vector<NavigationGeometryInfo>& geometryList);
     /// Visit nodes and collect navigable geometry.
-    void CollectGeometries(Vector<NavigationGeometryInfo>& geometryList, Node* node, HashSet<Node*>& processedNodes, bool recursive);
+    void CollectGeometries(ea::vector<NavigationGeometryInfo>& geometryList, Node* node, ea::hash_set<Node*>& processedNodes, bool recursive);
     /// Get geometry data within a bounding box.
-    void GetTileGeometry(NavBuildData* build, Vector<NavigationGeometryInfo>& geometryList, BoundingBox& box);
+    void GetTileGeometry(NavBuildData* build, ea::vector<NavigationGeometryInfo>& geometryList, BoundingBox& box);
     /// Add a triangle mesh to the geometry data.
     void AddTriMeshGeometry(NavBuildData* build, Geometry* geometry, const Matrix3x4& transform);
     /// Build one tile of the navigation mesh. Return true if successful.
-    virtual bool BuildTile(Vector<NavigationGeometryInfo>& geometryList, int x, int z);
+    virtual bool BuildTile(ea::vector<NavigationGeometryInfo>& geometryList, int x, int z);
     /// Build tiles in the rectangular area. Return number of built tiles.
-    unsigned BuildTiles(Vector<NavigationGeometryInfo>& geometryList, const IntVector2& from, const IntVector2& to);
+    unsigned BuildTiles(ea::vector<NavigationGeometryInfo>& geometryList, const IntVector2& from, const IntVector2& to);
     /// Ensure that the navigation mesh query is initialized. Return true if successful.
     bool InitializeQuery();
     /// Release the navigation mesh and the query.
     virtual void ReleaseNavigationMesh();
 
     /// Identifying name for this navigation mesh.
-    String meshName_;
+    ea::string meshName_;
     /// Detour navigation mesh.
     dtNavMesh* navMesh_;
     /// Detour navigation mesh query.
     dtNavMeshQuery* navMeshQuery_;
     /// Detour navigation mesh query filter.
-    UniquePtr<dtQueryFilter> queryFilter_;
+    ea::unique_ptr<dtQueryFilter> queryFilter_;
     /// Temporary data for finding a path.
-    UniquePtr<FindPathData> pathData_;
+    ea::unique_ptr<FindPathData> pathData_;
     /// Tile size.
     int tileSize_;
     /// Cell size.
@@ -349,7 +349,7 @@ protected:
     /// Debug draw NavArea components.
     bool drawNavAreas_;
     /// NavAreas for this NavMesh
-    Vector<WeakPtr<NavArea> > areas_;
+    ea::vector<WeakPtr<NavArea> > areas_;
 };
 
 /// Register Navigation library objects.

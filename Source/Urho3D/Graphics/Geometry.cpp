@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,7 @@
 
 #include "../Precompiled.h"
 
+#include "../Core/Context.h"
 #include "../Graphics/Geometry.h"
 #include "../Graphics/Graphics.h"
 #include "../Graphics/IndexBuffer.h"
@@ -30,9 +31,13 @@
 #include "../Math/Ray.h"
 
 #include "../DebugNew.h"
+#include "Geometry.h"
+
 
 namespace Urho3D
 {
+
+extern const char* GEOMETRY_CATEGORY;
 
 Geometry::Geometry(Context* context) :
     Object(context),
@@ -50,6 +55,11 @@ Geometry::Geometry(Context* context) :
 
 Geometry::~Geometry() = default;
 
+void Geometry::RegisterObject(Context* context)
+{
+    context->RegisterFactory<Geometry>();
+}
+
 bool Geometry::SetNumVertexBuffers(unsigned num)
 {
     if (num >= MAX_VERTEX_STREAMS)
@@ -58,15 +68,15 @@ bool Geometry::SetNumVertexBuffers(unsigned num)
         return false;
     }
 
-    unsigned oldSize = vertexBuffers_.Size();
-    vertexBuffers_.Resize(num);
+    unsigned oldSize = vertexBuffers_.size();
+    vertexBuffers_.resize(num);
 
     return true;
 }
 
 bool Geometry::SetVertexBuffer(unsigned index, VertexBuffer* buffer)
 {
-    if (index >= vertexBuffers_.Size())
+    if (index >= vertexBuffers_.size())
     {
         URHO3D_LOGERROR("Stream index out of bounds");
         return false;
@@ -90,8 +100,8 @@ bool Geometry::SetDrawRange(PrimitiveType type, unsigned indexStart, unsigned in
     }
     if (indexBuffer_ && indexStart + indexCount > indexBuffer_->GetIndexCount())
     {
-        URHO3D_LOGERROR("Illegal draw range " + String(indexStart) + " to " + String(indexStart + indexCount - 1) + ", index buffer has " +
-                 String(indexBuffer_->GetIndexCount()) + " indices");
+        URHO3D_LOGERROR("Illegal draw range " + ea::to_string(indexStart) + " to " + ea::to_string(indexStart + indexCount - 1) + ", index buffer has " +
+                 ea::to_string(indexBuffer_->GetIndexCount()) + " indices");
         return false;
     }
 
@@ -125,8 +135,8 @@ bool Geometry::SetDrawRange(PrimitiveType type, unsigned indexStart, unsigned in
         // We can allow setting an illegal draw range now if the caller guarantees to resize / fill the buffer later
         if (checkIllegal && indexStart + indexCount > indexBuffer_->GetIndexCount())
         {
-            URHO3D_LOGERROR("Illegal draw range " + String(indexStart) + " to " + String(indexStart + indexCount - 1) +
-                     ", index buffer has " + String(indexBuffer_->GetIndexCount()) + " indices");
+            URHO3D_LOGERROR("Illegal draw range " + ea::to_string(indexStart) + " to " + ea::to_string(indexStart + indexCount - 1) +
+                     ", index buffer has " + ea::to_string(indexBuffer_->GetIndexCount()) + " indices");
             return false;
         }
     }
@@ -153,21 +163,21 @@ void Geometry::SetLodDistance(float distance)
     lodDistance_ = distance;
 }
 
-void Geometry::SetRawVertexData(const SharedArrayPtr<unsigned char>& data, const PODVector<VertexElement>& elements)
+void Geometry::SetRawVertexData(const ea::shared_array<unsigned char>& data, const ea::vector<VertexElement>& elements)
 {
     rawVertexData_ = data;
     rawVertexSize_ = VertexBuffer::GetVertexSize(elements);
     rawElements_ = elements;
 }
 
-void Geometry::SetRawVertexData(const SharedArrayPtr<unsigned char>& data, unsigned elementMask)
+void Geometry::SetRawVertexData(const ea::shared_array<unsigned char>& data, unsigned elementMask)
 {
     rawVertexData_ = data;
     rawVertexSize_ = VertexBuffer::GetVertexSize(elementMask);
     rawElements_ = VertexBuffer::GetElements(elementMask);
 }
 
-void Geometry::SetRawIndexData(const SharedArrayPtr<unsigned char>& data, unsigned indexSize)
+void Geometry::SetRawIndexData(const ea::shared_array<unsigned char>& data, unsigned indexSize)
 {
     rawIndexData_ = data;
     rawIndexSize_ = indexSize;
@@ -190,14 +200,14 @@ void Geometry::Draw(Graphics* graphics)
 
 VertexBuffer* Geometry::GetVertexBuffer(unsigned index) const
 {
-    return index < vertexBuffers_.Size() ? vertexBuffers_[index] : nullptr;
+    return index < vertexBuffers_.size() ? vertexBuffers_[index] : nullptr;
 }
 
 unsigned short Geometry::GetBufferHash() const
 {
     unsigned short hash = 0;
 
-    for (unsigned i = 0; i < vertexBuffers_.Size(); ++i)
+    for (unsigned i = 0; i < vertexBuffers_.size(); ++i)
     {
         VertexBuffer* vBuf = vertexBuffers_[i];
         hash += *((unsigned short*)&vBuf);
@@ -210,15 +220,15 @@ unsigned short Geometry::GetBufferHash() const
 }
 
 void Geometry::GetRawData(const unsigned char*& vertexData, unsigned& vertexSize, const unsigned char*& indexData,
-    unsigned& indexSize, const PODVector<VertexElement>*& elements) const
+    unsigned& indexSize, const ea::vector<VertexElement>*& elements) const
 {
     if (rawVertexData_)
     {
-        vertexData = rawVertexData_;
+        vertexData = rawVertexData_.get();
         vertexSize = rawVertexSize_;
         elements = &rawElements_;
     }
-    else if (vertexBuffers_.Size() && vertexBuffers_[0])
+    else if (vertexBuffers_.size() && vertexBuffers_[0])
     {
         vertexData = vertexBuffers_[0]->GetShadowData();
         vertexSize = vertexBuffers_[0]->GetVertexSize();
@@ -233,7 +243,7 @@ void Geometry::GetRawData(const unsigned char*& vertexData, unsigned& vertexSize
 
     if (rawIndexData_)
     {
-        indexData = rawIndexData_;
+        indexData = rawIndexData_.get();
         indexSize = rawIndexSize_;
     }
     else
@@ -254,8 +264,8 @@ void Geometry::GetRawData(const unsigned char*& vertexData, unsigned& vertexSize
     }
 }
 
-void Geometry::GetRawDataShared(SharedArrayPtr<unsigned char>& vertexData, unsigned& vertexSize,
-    SharedArrayPtr<unsigned char>& indexData, unsigned& indexSize, const PODVector<VertexElement>*& elements) const
+void Geometry::GetRawDataShared(ea::shared_array<unsigned char>& vertexData, unsigned& vertexSize,
+    ea::shared_array<unsigned char>& indexData, unsigned& indexSize, const ea::vector<VertexElement>*& elements) const
 {
     if (rawVertexData_)
     {
@@ -263,7 +273,7 @@ void Geometry::GetRawDataShared(SharedArrayPtr<unsigned char>& vertexData, unsig
         vertexSize = rawVertexSize_;
         elements = &rawElements_;
     }
-    else if (vertexBuffers_.Size() && vertexBuffers_[0])
+    else if (vertexBuffers_.size() && vertexBuffers_[0])
     {
         vertexData = vertexBuffers_[0]->GetShadowDataShared();
         vertexSize = vertexBuffers_[0]->GetVertexSize();
@@ -305,7 +315,7 @@ float Geometry::GetHitDistance(const Ray& ray, Vector3* outNormal, Vector2* outU
     const unsigned char* indexData;
     unsigned vertexSize;
     unsigned indexSize;
-    const PODVector<VertexElement>* elements;
+    const ea::vector<VertexElement>* elements;
 
     GetRawData(vertexData, vertexSize, indexData, indexSize, elements);
 
@@ -332,7 +342,7 @@ bool Geometry::IsInside(const Ray& ray) const
     const unsigned char* indexData;
     unsigned vertexSize;
     unsigned indexSize;
-    const PODVector<VertexElement>* elements;
+    const ea::vector<VertexElement>* elements;
 
     GetRawData(vertexData, vertexSize, indexData, indexSize, elements);
 

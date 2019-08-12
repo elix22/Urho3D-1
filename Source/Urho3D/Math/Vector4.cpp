@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -34,11 +34,11 @@ namespace Urho3D
 const Vector4 Vector4::ZERO;
 const Vector4 Vector4::ONE(1.0f, 1.0f, 1.0f, 1.0f);
 
-String Vector4::ToString() const
+ea::string Vector4::ToString() const
 {
     char tempBuffer[CONVERSION_BUFFER_LENGTH];
     sprintf(tempBuffer, "%g %g %g %g", x_, y_, z_, w_);
-    return String(tempBuffer);
+    return ea::string(tempBuffer);
 }
 
 }

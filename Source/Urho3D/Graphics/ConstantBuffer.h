@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
+#include <EASTL/unique_ptr.h>
+
 #include "../Core/Object.h"
 #include "../Graphics/GPUObject.h"
 #include "../Graphics/GraphicsDefs.h"
@@ -42,6 +43,9 @@ public:
     explicit ConstantBuffer(Context* context);
     /// Destruct.
     ~ConstantBuffer() override;
+
+    /// Register object with the engine.
+    static void RegisterObject(Context* context);
 
     /// Recreate the GPU resource and restore data if applicable.
     void OnDeviceReset() override;
@@ -65,7 +69,7 @@ public:
 
 private:
     /// Shadow data.
-    SharedArrayPtr<unsigned char> shadowData_;
+    ea::unique_ptr<unsigned char[]> shadowData_;
     /// Buffer byte size.
     unsigned size_{};
     /// Dirty flag.

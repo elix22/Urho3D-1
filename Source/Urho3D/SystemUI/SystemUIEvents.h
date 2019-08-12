@@ -29,9 +29,12 @@
 namespace Urho3D
 {
 
+URHO3D_EVENT(E_ENDRENDERINGSYSTEMUI, EndRenderingSystemUI)
+{
+}
+
 URHO3D_EVENT(E_CONSOLECLOSED, ConsoleClosed)
 {
-
 }
 
 URHO3D_EVENT(E_ATTRIBUTEINSPECTORMENU, AttributeInspectorMenu)
@@ -46,6 +49,7 @@ URHO3D_EVENT(E_ATTRIBUTEINSPECTVALUEMODIFIED, AttributeInspectorValueModified)
     URHO3D_PARAM(P_ATTRIBUTEINFO, AttributeInfo);                // AttributeInfo pointer
     URHO3D_PARAM(P_OLDVALUE, OldValue);                          // Variant
     URHO3D_PARAM(P_NEWVALUE, NewValue);                          // Variant
+    URHO3D_PARAM(P_MODIFIED, Modified);                          // unsigned
 }
 
 URHO3D_EVENT(E_ATTRIBUTEINSPECTOATTRIBUTE, AttributeInspectorAttribute)

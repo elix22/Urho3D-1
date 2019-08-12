@@ -1,5 +1,6 @@
 //
-// Copyright (c) 2017 the Urho3D project.
+// Copyright (c) 2008-2017 the Urho3D project.
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,23 +20,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-#include "Urho3D/Input/InputEvents.h"
-#include "Urho3D/Input/Input.h"
-#include "Urho3D/Core/CoreEvents.h"
-#include "Urho3D/Core/Context.h"
-#include "Urho3D/Core/Profiler.h"
-#include "Urho3D/Core/Utils.h"
-#include "Urho3D/Engine/EngineEvents.h"
-#include "Urho3D/Graphics/GraphicsEvents.h"
-#include "Urho3D/Graphics/Graphics.h"
-#include "Urho3D/Resource/ResourceCache.h"
-#include "SystemUI.h"
-#include "Console.h"
+#include "../Core/Context.h"
+#include "../Core/CoreEvents.h"
+#include "../Core/Profiler.h"
+#include "../Core/Macros.h"
+#include "../Engine/EngineEvents.h"
+#include "../Graphics/Graphics.h"
+#include "../Graphics/GraphicsEvents.h"
+#include "../Input/Input.h"
+#include "../Input/InputEvents.h"
+#include "../IO/Log.h"
+#include "../Resource/ResourceCache.h"
+#include "../SystemUI/SystemUI.h"
+#include "../SystemUI/Console.h"
 #include <SDL/SDL.h>
 #include <ImGuizmo/ImGuizmo.h>
 #include <ImGui/imgui_internal.h>
 #include <ImGui/imgui_freetype.h>
-#include <IO/Log.h>
 
 
 using namespace std::placeholders;
@@ -50,7 +51,7 @@ SystemUI::SystemUI(Urho3D::Context* context)
     , vertexBuffer_(context)
     , indexBuffer_(context)
 {
-    ImGui::CreateContext();
+    imContext_ = ImGui::CreateContext();
 
     ImGuiIO& io = ImGui::GetIO();
     io.KeyMap[ImGuiKey_Tab] = SCANCODE_TAB;
@@ -72,6 +73,7 @@ SystemUI::SystemUI(Urho3D::Context* context)
     io.KeyMap[ImGuiKey_Z] = SCANCODE_Z;
     io.KeyMap[ImGuiKey_PageUp] = SCANCODE_PAGEUP;
     io.KeyMap[ImGuiKey_PageDown] = SCANCODE_DOWN;
+    io.KeyMap[ImGuiKey_Space] = SCANCODE_SPACE;
 
     io.SetClipboardTextFn = [](void* userData, const char* text) { SDL_SetClipboardText(text); };
     io.GetClipboardTextFn = [](void* userData) -> const char* { return SDL_GetClipboardText(); };
@@ -81,25 +83,19 @@ SystemUI::SystemUI(Urho3D::Context* context)
     SetScale(Vector3::ZERO, false);
 
     SubscribeToEvent(E_APPLICATIONSTARTED, [this](StringHash, VariantMap&) {
-        ImGuiIO& io = ImGui::GetIO();
-        if (io.Fonts->Fonts.empty())
-        {
-            io.Fonts->AddFontDefault();
-            ReallocateFontTexture();
-        }
-        UpdateProjectionMatrix();
-        // Initializes ImGui. ImGui::Render() can not be called unless imgui is initialized. This call avoids initialization
-        // check on every frame in E_ENDRENDERING.
-        ImGui::NewFrame();
-        ImGui::EndFrame();
+        Start();
         UnsubscribeFromEvent(E_APPLICATIONSTARTED);
     });
 
     // Subscribe to events
     SubscribeToEvent(E_SDLRAWINPUT, std::bind(&SystemUI::OnRawEvent, this, _2));
-    SubscribeToEvent(E_SCREENMODE, std::bind(&SystemUI::UpdateProjectionMatrix, this));
-    SubscribeToEvent(E_INPUTEND, [&](StringHash, VariantMap&)
-    {
+    SubscribeToEvent(E_SCREENMODE, [this](StringHash, VariantMap&) {
+        UpdateProjectionMatrix();
+        ReallocateFontTexture();
+    });
+    SubscribeToEvent(E_INPUTEND, [&](StringHash, VariantMap&) {
+        if (GetInput()->IsMinimized())
+            return;
         float timeStep = GetTime()->GetTimeStep();
         ImGui::GetIO().DeltaTime = timeStep > 0.0f ? timeStep : 1.0f / 60.0f;
         ImGui::NewFrame();
@@ -107,7 +103,10 @@ SystemUI::SystemUI(Urho3D::Context* context)
     });
     SubscribeToEvent(E_ENDRENDERING, [this](StringHash, VariantMap&)
     {
+        if (GetInput()->IsMinimized())
+            return;
         URHO3D_PROFILE("SystemUiRender");
+        SendEvent(E_ENDRENDERINGSYSTEMUI);
         ImGui::Render();
         OnRenderDrawLists(ImGui::GetDrawData());
     });
@@ -116,8 +115,8 @@ SystemUI::SystemUI(Urho3D::Context* context)
 SystemUI::~SystemUI()
 {
     ImGui::EndFrame();
-    ImGui::Shutdown(ImGui::GetCurrentContext());
-    ImGui::DestroyContext();
+    ImGui::Shutdown(imContext_);
+    ImGui::DestroyContext(imContext_);
 }
 
 void SystemUI::UpdateProjectionMatrix()
@@ -151,9 +150,9 @@ void SystemUI::OnRawEvent(VariantMap& args)
     case SDL_KEYUP:
     case SDL_KEYDOWN:
     {
-        auto code = evt->key.keysym.scancode;
-        auto down = evt->type == SDL_KEYDOWN;
-        if (code < 512)
+        SDL_Scancode code = evt->key.keysym.scancode;
+        bool down = evt->type == SDL_KEYDOWN;
+        if (code < 512U)
             io.KeysDown[code] = down;
         if (evt->key.keysym.sym == SDLK_LCTRL || evt->key.keysym.sym == SDLK_RCTRL)
             io.KeyCtrl = down;
@@ -168,21 +167,44 @@ void SystemUI::OnRawEvent(VariantMap& args)
     case SDL_MOUSEWHEEL:
         io.MouseWheel = evt->wheel.y;
         break;
-    URHO3D_FALLTHROUGH
     case SDL_MOUSEBUTTONUP:
-    URHO3D_FALLTHROUGH
+        URHO3D_FALLTHROUGH;
     case SDL_MOUSEBUTTONDOWN:
-        io.MouseDown[evt->button.button - 1] = evt->type == SDL_MOUSEBUTTONDOWN;
+    {
+        int imguiButton;
+        switch (evt->button.button)
+        {
+        case SDL_BUTTON_LEFT:
+            imguiButton = 0;
+            break;
+        case SDL_BUTTON_MIDDLE:
+            imguiButton = 2;
+            break;
+        case SDL_BUTTON_RIGHT:
+            imguiButton = 1;
+            break;
+        case SDL_BUTTON_X1:
+            imguiButton = 3;
+            break;
+        case SDL_BUTTON_X2:
+            imguiButton = 4;
+            break;
+        default:
+            imguiButton = -1;
+        }
+        if (imguiButton >= 0)
+            io.MouseDown[imguiButton] = evt->type == SDL_MOUSEBUTTONDOWN;
+    }
+    URHO3D_FALLTHROUGH;
     case SDL_MOUSEMOTION:
         io.MousePos.x = evt->motion.x / uiZoom_;
         io.MousePos.y = evt->motion.y / uiZoom_;
         break;
-    URHO3D_FALLTHROUGH
     case SDL_FINGERUP:
         io.MouseDown[0] = false;
         io.MousePos.x = -1;
         io.MousePos.y = -1;
-    URHO3D_FALLTHROUGH
+        URHO3D_FALLTHROUGH;
     case SDL_FINGERDOWN:
         io.MouseDown[0] = true;
     case SDL_FINGERMOTION:
@@ -215,7 +237,7 @@ void SystemUI::OnRenderDrawLists(ImDrawData* data)
         // in rendering loop.
         if (cmdList->VtxBuffer.Size > vertexBuffer_.GetVertexCount())
         {
-            PODVector<VertexElement> elems = {VertexElement(TYPE_VECTOR2, SEM_POSITION),
+            ea::vector<VertexElement> elems = {VertexElement(TYPE_VECTOR2, SEM_POSITION),
                                               VertexElement(TYPE_VECTOR2, SEM_TEXCOORD),
                                               VertexElement(TYPE_UBYTE4_NORM, SEM_COLOR)
             };
@@ -298,43 +320,54 @@ void SystemUI::OnRenderDrawLists(ImDrawData* data)
     graphics->SetScissorTest(false);
 }
 
-ImFont* SystemUI::AddFont(const String& fontPath, const PODVector<unsigned short>& ranges, float size, bool merge)
+ImFont* SystemUI::AddFont(const ea::string& fontPath, const ImWchar* ranges, float size, bool merge)
 {
-    if (!ranges.Empty() && ranges.Back() != 0)
-    {
-        URHO3D_LOGWARNING("SystemUI: List of font ranges must be terminated with a zero.");
-        return nullptr;
-    }
-
-    auto io = ImGui::GetIO();
-
-    fontSizes_.Push(size);
-
-    if (size == 0)
-    {
-        if (io.Fonts->Fonts.empty())
-            size = SYSTEMUI_DEFAULT_FONT_SIZE * fontScale_;
-        else
-            size = io.Fonts->Fonts.back()->FontSize;
-    }
-    else
-        size *= fontScale_;
+    float previousSize = fontSizes_.empty() ? SYSTEMUI_DEFAULT_FONT_SIZE : fontSizes_.back();
+    fontSizes_.push_back(size);
+    size = (size == 0 ? previousSize : size) * fontScale_;
 
     if (auto fontFile = GetSubsystem<ResourceCache>()->GetFile(fontPath))
     {
-        PODVector<uint8_t> data;
-        data.Resize(fontFile->GetSize());
-        auto bytesLen = fontFile->Read(&data.Front(), data.Size());
-        ImFontConfig cfg;
-        cfg.MergeMode = merge;
-        cfg.FontDataOwnedByAtlas = false;
-        cfg.PixelSnapH = true;
-        if (auto newFont = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(&data.Front(), bytesLen, size, &cfg,
-            ranges.Empty() ? nullptr : &ranges.Front()))
-        {
-            ReallocateFontTexture();
-            return newFont;
-        }
+        ea::vector<uint8_t> data;
+        data.resize(fontFile->GetSize());
+        auto bytesLen = fontFile->Read(&data.front(), data.size());
+        return AddFont(data.data(), bytesLen, ranges, size, merge);
+    }
+    return nullptr;
+}
+
+ImFont* SystemUI::AddFont(const void* data, unsigned dsize, const ImWchar* ranges, float size, bool merge)
+{
+    float previousSize = fontSizes_.empty() ? SYSTEMUI_DEFAULT_FONT_SIZE : fontSizes_.back();
+    fontSizes_.push_back(size);
+    size = (size == 0 ? previousSize : size) * fontScale_;
+
+    ImFontConfig cfg;
+    cfg.MergeMode = merge;
+    cfg.FontDataOwnedByAtlas = false;
+    cfg.PixelSnapH = true;
+    if (auto* newFont = ImGui::GetIO().Fonts->AddFontFromMemoryTTF((void*)data, dsize, size, &cfg, ranges))
+    {
+        ReallocateFontTexture();
+        return newFont;
+    }
+    return nullptr;
+}
+
+ImFont* SystemUI::AddFontCompressed(const void* data, unsigned dsize, const ImWchar* ranges, float size, bool merge)
+{
+    float previousSize = fontSizes_.empty() ? SYSTEMUI_DEFAULT_FONT_SIZE : fontSizes_.back();
+    fontSizes_.push_back(size);
+    size = (size == 0 ? previousSize : size) * fontScale_;
+
+    ImFontConfig cfg;
+    cfg.MergeMode = merge;
+    cfg.FontDataOwnedByAtlas = false;
+    cfg.PixelSnapH = true;
+    if (auto* newFont = ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF((void*)data, dsize, size, &cfg, ranges))
+    {
+        ReallocateFontTexture();
+        return newFont;
     }
     return nullptr;
 }
@@ -347,22 +380,22 @@ void SystemUI::ReallocateFontTexture()
     int width, height;
 
     ImGuiFreeType::BuildFontAtlas(io.Fonts, ImGuiFreeType::ForceAutoHint);
-    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    io.Fonts->GetTexDataAsAlpha8(&pixels, &width, &height);
 
-    if (fontTexture_.Null())
+    if (!fontTexture_)
     {
-        fontTexture_ = new Texture2D(context_);
+        fontTexture_ = context_->CreateObject<Texture2D>();
         fontTexture_->SetNumLevels(1);
         fontTexture_->SetFilterMode(FILTER_BILINEAR);
     }
 
     if (fontTexture_->GetWidth() != width || fontTexture_->GetHeight() != height)
-        fontTexture_->SetSize(width, height, Graphics::GetRGBAFormat());
+        fontTexture_->SetSize(width, height, Graphics::GetAlphaFormat());
 
     fontTexture_->SetData(0, 0, 0, width, height, pixels);
 
     // Store our identifier
-    io.Fonts->TexID = (void*)fontTexture_.Get();
+    io.Fonts->TexID = (void*)fontTexture_;
     io.Fonts->ClearTexData();
 }
 
@@ -438,6 +471,21 @@ bool SystemUI::IsAnyItemHovered() const
     return ui::IsAnyItemHovered() || ui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
 }
 
+void SystemUI::Start()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.Fonts->Fonts.empty())
+    {
+        io.Fonts->AddFontDefault();
+        ReallocateFontTexture();
+    }
+    UpdateProjectionMatrix();
+    // Initializes ImGui. ImGui::Render() can not be called unless imgui is initialized. This call avoids initialization
+    // check on every frame in E_ENDRENDERING.
+    ImGui::NewFrame();
+    ImGui::EndFrame();
+}
+
 int ToImGui(MouseButton button)
 {
     switch (button)
@@ -445,9 +493,9 @@ int ToImGui(MouseButton button)
     case MOUSEB_LEFT:
         return 0;
     case MOUSEB_MIDDLE:
-        return 1;
-    case MOUSEB_RIGHT:
         return 2;
+    case MOUSEB_RIGHT:
+        return 1;
     case MOUSEB_X1:
         return 3;
     case MOUSEB_X2:

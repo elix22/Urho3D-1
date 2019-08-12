@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -77,19 +77,19 @@ bool ObjectAnimation::Save(Serializer& dest) const
 
 bool ObjectAnimation::LoadXML(const XMLElement& source)
 {
-    attributeAnimationInfos_.Clear();
+    attributeAnimationInfos_.clear();
 
     XMLElement animElem;
     animElem = source.GetChild("attributeanimation");
     while (animElem)
     {
-        String name = animElem.GetAttribute("name");
+        ea::string name = animElem.GetAttribute("name");
 
-        SharedPtr<ValueAnimation> animation(new ValueAnimation(context_));
+        SharedPtr<ValueAnimation> animation(context_->CreateObject<ValueAnimation>());
         if (!animation->LoadXML(animElem))
             return false;
 
-        String wrapModeString = animElem.GetAttribute("wrapmode");
+        ea::string wrapModeString = animElem.GetAttribute("wrapmode");
         WrapMode wrapMode = WM_LOOP;
         for (int i = 0; i <= WM_CLAMP; ++i)
         {
@@ -111,13 +111,13 @@ bool ObjectAnimation::LoadXML(const XMLElement& source)
 
 bool ObjectAnimation::SaveXML(XMLElement& dest) const
 {
-    for (HashMap<String, SharedPtr<ValueAnimationInfo> >::ConstIterator i = attributeAnimationInfos_.Begin();
-         i != attributeAnimationInfos_.End(); ++i)
+    for (auto i = attributeAnimationInfos_.begin();
+         i != attributeAnimationInfos_.end(); ++i)
     {
         XMLElement animElem = dest.CreateChild("attributeanimation");
-        animElem.SetAttribute("name", i->first_);
+        animElem.SetAttribute("name", i->first);
 
-        const ValueAnimationInfo* info = i->second_;
+        const ValueAnimationInfo* info = i->second;
         if (!info->GetAnimation()->SaveXML(animElem))
             return false;
 
@@ -130,7 +130,7 @@ bool ObjectAnimation::SaveXML(XMLElement& dest) const
 
 bool ObjectAnimation::LoadJSON(const JSONValue& source)
 {
-    attributeAnimationInfos_.Clear();
+    attributeAnimationInfos_.clear();
 
     JSONValue attributeAnimationsValue = source.Get("attributeanimations");
     if (attributeAnimationsValue.IsNull())
@@ -140,15 +140,15 @@ bool ObjectAnimation::LoadJSON(const JSONValue& source)
 
     const JSONObject& attributeAnimationsObject = attributeAnimationsValue.GetObject();
 
-    for (JSONObject::ConstIterator it = attributeAnimationsObject.Begin(); it != attributeAnimationsObject.End(); it++)
+    for (auto it = attributeAnimationsObject.begin(); it != attributeAnimationsObject.end(); it++)
     {
-        String name = it->first_;
-        JSONValue value = it->second_;
-        SharedPtr<ValueAnimation> animation(new ValueAnimation(context_));
+        ea::string name = it->first;
+        JSONValue value = it->second;
+        SharedPtr<ValueAnimation> animation(context_->CreateObject<ValueAnimation>());
         if (!animation->LoadJSON(value))
             return false;
 
-        String wrapModeString = value.Get("wrapmode").GetString();
+        ea::string wrapModeString = value.Get("wrapmode").GetString();
         WrapMode wrapMode = WM_LOOP;
         for (int i = 0; i <= WM_CLAMP; ++i)
         {
@@ -170,27 +170,27 @@ bool ObjectAnimation::SaveJSON(JSONValue& dest) const
 {
     JSONValue attributeAnimationsValue;
 
-    for (HashMap<String, SharedPtr<ValueAnimationInfo> >::ConstIterator i = attributeAnimationInfos_.Begin();
-         i != attributeAnimationInfos_.End(); ++i)
+    for (auto i = attributeAnimationInfos_.begin();
+         i != attributeAnimationInfos_.end(); ++i)
     {
         JSONValue animValue;
-        animValue.Set("name", i->first_);
+        animValue.Set("name", i->first);
 
-        const ValueAnimationInfo* info = i->second_;
+        const ValueAnimationInfo* info = i->second;
         if (!info->GetAnimation()->SaveJSON(animValue))
             return false;
 
         animValue.Set("wrapmode", wrapModeNames[info->GetWrapMode()]);
         animValue.Set("speed", (float) info->GetSpeed());
 
-        attributeAnimationsValue.Set(i->first_, animValue);
+        attributeAnimationsValue.Set(i->first, animValue);
     }
 
     dest.Set("attributeanimations", attributeAnimationsValue);
     return true;
 }
 
-void ObjectAnimation::AddAttributeAnimation(const String& name, ValueAnimation* attributeAnimation, WrapMode wrapMode, float speed)
+void ObjectAnimation::AddAttributeAnimation(const ea::string& name, ValueAnimation* attributeAnimation, WrapMode wrapMode, float speed)
 {
     if (!attributeAnimation)
         return;
@@ -201,15 +201,16 @@ void ObjectAnimation::AddAttributeAnimation(const String& name, ValueAnimation* 
     SendAttributeAnimationAddedEvent(name);
 }
 
-void ObjectAnimation::RemoveAttributeAnimation(const String& name)
+void ObjectAnimation::RemoveAttributeAnimation(const ea::string& name)
 {
-    HashMap<String, SharedPtr<ValueAnimationInfo> >::Iterator i = attributeAnimationInfos_.Find(name);
-    if (i != attributeAnimationInfos_.End())
+    auto i = attributeAnimationInfos_.find(
+        name);
+    if (i != attributeAnimationInfos_.end())
     {
         SendAttributeAnimationRemovedEvent(name);
 
-        i->second_->GetAnimation()->SetOwner(nullptr);
-        attributeAnimationInfos_.Erase(i);
+        i->second->GetAnimation()->SetOwner(nullptr);
+        attributeAnimationInfos_.erase(i);
     }
 }
 
@@ -218,47 +219,48 @@ void ObjectAnimation::RemoveAttributeAnimation(ValueAnimation* attributeAnimatio
     if (!attributeAnimation)
         return;
 
-    for (HashMap<String, SharedPtr<ValueAnimationInfo> >::Iterator i = attributeAnimationInfos_.Begin();
-         i != attributeAnimationInfos_.End(); ++i)
+    for (auto i = attributeAnimationInfos_.begin();
+         i != attributeAnimationInfos_.end(); ++i)
     {
-        if (i->second_->GetAnimation() == attributeAnimation)
+        if (i->second->GetAnimation() == attributeAnimation)
         {
-            SendAttributeAnimationRemovedEvent(i->first_);
+            SendAttributeAnimationRemovedEvent(i->first);
 
             attributeAnimation->SetOwner(nullptr);
-            attributeAnimationInfos_.Erase(i);
+            attributeAnimationInfos_.erase(i);
             return;
         }
     }
 }
 
-ValueAnimation* ObjectAnimation::GetAttributeAnimation(const String& name) const
+ValueAnimation* ObjectAnimation::GetAttributeAnimation(const ea::string& name) const
 {
     ValueAnimationInfo* info = GetAttributeAnimationInfo(name);
     return info ? info->GetAnimation() : nullptr;
 }
 
-WrapMode ObjectAnimation::GetAttributeAnimationWrapMode(const String& name) const
+WrapMode ObjectAnimation::GetAttributeAnimationWrapMode(const ea::string& name) const
 {
     ValueAnimationInfo* info = GetAttributeAnimationInfo(name);
     return info ? info->GetWrapMode() : WM_LOOP;
 }
 
-float ObjectAnimation::GetAttributeAnimationSpeed(const String& name) const
+float ObjectAnimation::GetAttributeAnimationSpeed(const ea::string& name) const
 {
     ValueAnimationInfo* info = GetAttributeAnimationInfo(name);
     return info ? info->GetSpeed() : 1.0f;
 }
 
-ValueAnimationInfo* ObjectAnimation::GetAttributeAnimationInfo(const String& name) const
+ValueAnimationInfo* ObjectAnimation::GetAttributeAnimationInfo(const ea::string& name) const
 {
-    HashMap<String, SharedPtr<ValueAnimationInfo> >::ConstIterator i = attributeAnimationInfos_.Find(name);
-    if (i != attributeAnimationInfos_.End())
-        return i->second_;
+    auto i = attributeAnimationInfos_.find(
+        name);
+    if (i != attributeAnimationInfos_.end())
+        return i->second;
     return nullptr;
 }
 
-void ObjectAnimation::SendAttributeAnimationAddedEvent(const String& name)
+void ObjectAnimation::SendAttributeAnimationAddedEvent(const ea::string& name)
 {
     using namespace AttributeAnimationAdded;
     VariantMap& eventData = GetEventDataMap();
@@ -267,7 +269,7 @@ void ObjectAnimation::SendAttributeAnimationAddedEvent(const String& name)
     SendEvent(E_ATTRIBUTEANIMATIONADDED, eventData);
 }
 
-void ObjectAnimation::SendAttributeAnimationRemovedEvent(const String& name)
+void ObjectAnimation::SendAttributeAnimationRemovedEvent(const ea::string& name)
 {
     using namespace AttributeAnimationRemoved;
     VariantMap& eventData = GetEventDataMap();

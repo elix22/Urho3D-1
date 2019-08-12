@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,10 +22,10 @@
 
 #pragma once
 
+#include <EASTL/hash_set.h>
+#include <EASTL/unordered_map.h>
+
 #include "../Core/Attribute.h"
-#include "../Container/HashMap.h"
-#include "../Container/HashSet.h"
-#include "../Container/Ptr.h"
 #include "../Math/StringHash.h"
 
 #include <cstring>
@@ -121,13 +121,13 @@ struct URHO3D_API DirtyBits
 struct URHO3D_API NetworkState
 {
     /// Cached network attribute infos.
-    const Vector<AttributeInfo>* attributes_{};
+    const ea::vector<AttributeInfo>* attributes_{};
     /// Current network attribute values.
-    Vector<Variant> currentValues_;
+    ea::vector<Variant> currentValues_;
     /// Previous network attribute values.
-    Vector<Variant> previousValues_;
+    ea::vector<Variant> previousValues_;
     /// Replication states that are tracking this object.
-    PODVector<ReplicationState*> replicationStates_;
+    ea::vector<ReplicationState*> replicationStates_;
     /// Previous user variables.
     VariantMap previousVars_;
     /// Bitmask for intercepting network messages. Used on the client only.
@@ -162,9 +162,9 @@ struct URHO3D_API NodeReplicationState : public ReplicationState
     /// Dirty attribute bits.
     DirtyBits dirtyAttributes_;
     /// Dirty user vars.
-    HashSet<StringHash> dirtyVars_;
+    ea::hash_set<StringHash> dirtyVars_;
     /// Components by ID.
-    HashMap<unsigned, ComponentReplicationState> componentStates_;
+    ea::unordered_map<unsigned, ComponentReplicationState> componentStates_;
     /// Interest management priority accumulator.
     float priorityAcc_{};
     /// Whether exists in the SceneState's dirty set.
@@ -175,14 +175,14 @@ struct URHO3D_API NodeReplicationState : public ReplicationState
 struct URHO3D_API SceneReplicationState : public ReplicationState
 {
     /// Nodes by ID.
-    HashMap<unsigned, NodeReplicationState> nodeStates_;
+    ea::unordered_map<unsigned, NodeReplicationState> nodeStates_;
     /// Dirty node IDs.
-    HashSet<unsigned> dirtyNodes_;
+    ea::hash_set<unsigned> dirtyNodes_;
 
     void Clear()
     {
-        nodeStates_.Clear();
-        dirtyNodes_.Clear();
+        nodeStates_.clear();
+        dirtyNodes_.clear();
     }
 };
 

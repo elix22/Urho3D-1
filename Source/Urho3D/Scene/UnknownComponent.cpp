@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,52 +35,6 @@
 namespace Urho3D
 {
 
-static HashMap<StringHash, String> unknownTypeToName;
-static String letters("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
-
-static String GenerateNameFromType(StringHash typeHash)
-{
-    if (unknownTypeToName.Contains(typeHash))
-        return unknownTypeToName[typeHash];
-
-    String test;
-
-    // Begin brute-force search
-    unsigned numLetters = letters.Length();
-    unsigned combinations = numLetters;
-    bool found = false;
-
-    for (unsigned i = 1; i < 6; ++i)
-    {
-        test.Resize(i);
-
-        for (unsigned j = 0; j < combinations; ++j)
-        {
-            unsigned current = j;
-
-            for (unsigned k = 0; k < i; ++k)
-            {
-                test[k] = letters[current % numLetters];
-                current /= numLetters;
-            }
-
-            if (StringHash(test) == typeHash)
-            {
-                found = true;
-                break;
-            }
-        }
-
-        if (found)
-            break;
-
-        combinations *= numLetters;
-    }
-
-    unknownTypeToName[typeHash] = test;
-    return test;
-}
-
 UnknownComponent::UnknownComponent(Context* context) :
     Component(context),
     useXML_(false)
@@ -95,21 +49,21 @@ void UnknownComponent::RegisterObject(Context* context)
 bool UnknownComponent::Load(Deserializer& source)
 {
     useXML_ = false;
-    xmlAttributes_.Clear();
-    xmlAttributeInfos_.Clear();
+    xmlAttributes_.clear();
+    xmlAttributeInfos_.clear();
 
     // Assume we are reading from a component data buffer, and the type has already been read
     unsigned dataSize = source.GetSize() - source.GetPosition();
-    binaryAttributes_.Resize(dataSize);
+    binaryAttributes_.resize(dataSize);
     return dataSize ? source.Read(&binaryAttributes_[0], dataSize) == dataSize : true;
 }
 
 bool UnknownComponent::LoadXML(const XMLElement& source)
 {
     useXML_ = true;
-    xmlAttributes_.Clear();
-    xmlAttributeInfos_.Clear();
-    binaryAttributes_.Clear();
+    xmlAttributes_.clear();
+    xmlAttributeInfos_.clear();
+    binaryAttributes_.clear();
 
     XMLElement attrElem = source.GetChild("attribute");
     while (attrElem)
@@ -119,19 +73,19 @@ bool UnknownComponent::LoadXML(const XMLElement& source)
         attr.name_ = attrElem.GetAttribute("name");
         attr.type_ = VAR_STRING;
 
-        if (!attr.name_.Empty())
+        if (!attr.name_.empty())
         {
-            String attrValue = attrElem.GetAttribute("value");
-            attr.defaultValue_ = String::EMPTY;
-            xmlAttributeInfos_.Push(attr);
-            xmlAttributes_.Push(attrValue);
+            ea::string attrValue = attrElem.GetAttribute("value");
+            attr.defaultValue_ = EMPTY_STRING;
+            xmlAttributeInfos_.push_back(attr);
+            xmlAttributes_.push_back(attrValue);
         }
 
         attrElem = attrElem.GetNext("attribute");
     }
 
     // Fix up pointers to the attributes after all have been read
-    for (unsigned i = 0; i < xmlAttributeInfos_.Size(); ++i)
+    for (unsigned i = 0; i < xmlAttributeInfos_.size(); ++i)
         xmlAttributeInfos_[i].ptr_ = &xmlAttributes_[i];
 
     return true;
@@ -141,31 +95,31 @@ bool UnknownComponent::LoadXML(const XMLElement& source)
 bool UnknownComponent::LoadJSON(const JSONValue& source)
 {
     useXML_ = true;
-    xmlAttributes_.Clear();
-    xmlAttributeInfos_.Clear();
-    binaryAttributes_.Clear();
+    xmlAttributes_.clear();
+    xmlAttributeInfos_.clear();
+    binaryAttributes_.clear();
 
     JSONArray attributesArray = source.Get("attributes").GetArray();
-    for (unsigned i = 0; i < attributesArray.Size(); i++)
+    for (unsigned i = 0; i < attributesArray.size(); i++)
     {
-        const JSONValue& attrVal = attributesArray.At(i);
+        const JSONValue& attrVal = attributesArray.at(i);
 
         AttributeInfo attr;
         attr.mode_ = AM_FILE;
         attr.name_ = attrVal.Get("name").GetString();
         attr.type_ = VAR_STRING;
 
-        if (!attr.name_.Empty())
+        if (!attr.name_.empty())
         {
-            String attrValue = attrVal.Get("value").GetString();
-            attr.defaultValue_ = String::EMPTY;
-            xmlAttributeInfos_.Push(attr);
-            xmlAttributes_.Push(attrValue);
+            ea::string attrValue = attrVal.Get("value").GetString();
+            attr.defaultValue_ = EMPTY_STRING;
+            xmlAttributeInfos_.push_back(attr);
+            xmlAttributes_.push_back(attrValue);
         }
     }
 
     // Fix up pointers to the attributes after all have been read
-    for (unsigned i = 0; i < xmlAttributeInfos_.Size(); ++i)
+    for (unsigned i = 0; i < xmlAttributeInfos_.size(); ++i)
         xmlAttributeInfos_[i].ptr_ = &xmlAttributes_[i];
 
     return true;
@@ -183,10 +137,10 @@ bool UnknownComponent::Save(Serializer& dest) const
     if (!dest.WriteUInt(id_))
         return false;
 
-    if (!binaryAttributes_.Size())
+    if (!binaryAttributes_.size())
         return true;
     else
-        return dest.Write(&binaryAttributes_[0], binaryAttributes_.Size()) == binaryAttributes_.Size();
+        return dest.Write(&binaryAttributes_[0], binaryAttributes_.size()) == binaryAttributes_.size();
 }
 
 bool UnknownComponent::SaveXML(XMLElement& dest) const
@@ -206,7 +160,7 @@ bool UnknownComponent::SaveXML(XMLElement& dest) const
     if (!dest.SetInt("id", id_))
         return false;
 
-    for (unsigned i = 0; i < xmlAttributeInfos_.Size(); ++i)
+    for (unsigned i = 0; i < xmlAttributeInfos_.size(); ++i)
     {
         XMLElement attrElem = dest.CreateChild("attribute");
         attrElem.SetAttribute("name", xmlAttributeInfos_[i].name_);
@@ -226,20 +180,20 @@ bool UnknownComponent::SaveJSON(JSONValue& dest) const
     dest.Set("id", (int) id_);
 
     JSONArray attributesArray;
-    attributesArray.Reserve(xmlAttributeInfos_.Size());
-    for (unsigned i = 0; i < xmlAttributeInfos_.Size(); ++i)
+    attributesArray.reserve(xmlAttributeInfos_.size());
+    for (unsigned i = 0; i < xmlAttributeInfos_.size(); ++i)
     {
         JSONValue attrVal;
         attrVal.Set("name", xmlAttributeInfos_[i].name_);
         attrVal.Set("value", xmlAttributes_[i]);
-        attributesArray.Push(attrVal);
+        attributesArray.push_back(attrVal);
     }
     dest.Set("attributes", attributesArray);
 
     return true;
 }
 
-void UnknownComponent::SetTypeName(const String& typeName)
+void UnknownComponent::SetTypeName(const ea::string& typeName)
 {
     typeName_ = typeName;
     typeHash_ = typeName;
@@ -247,7 +201,15 @@ void UnknownComponent::SetTypeName(const String& typeName)
 
 void UnknownComponent::SetType(StringHash typeHash)
 {
-    typeName_ = GenerateNameFromType(typeHash);
+#if URHO3D_HASH_DEBUG
+    StringHashRegister* registry = StringHash::GetGlobalStringHashRegister();
+    if (registry->Contains(typeHash))
+        typeName_ = registry->GetString(typeHash);
+#endif
+
+    if (typeName_.empty())
+        typeName_ = typeHash.ToString();
+
     typeHash_ = typeHash;
 }
 

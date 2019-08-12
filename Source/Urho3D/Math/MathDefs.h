@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -33,6 +33,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <limits>
+#include <type_traits>
 
 namespace Urho3D
 {
@@ -101,6 +102,9 @@ inline unsigned FloatToRawIntBits(float value)
 /// Check whether a floating point value is NaN.
 template <class T> inline bool IsNaN(T value) { return std::isnan(value); }
 
+/// Check whether a floating point value is positive or negative infinity
+template <class T> inline bool IsInf(T value) { return std::isinf(value); }
+
 /// Clamp a number to a range.
 template <class T>
 inline T Clamp(T value, T min, T max)
@@ -151,8 +155,21 @@ template <class T> inline T Ln(T x) { return log(x); }
 /// Return square root of X.
 template <class T> inline T Sqrt(T x) { return sqrt(x); }
 
-/// Return floating-point remainder of X/Y.
-template <class T> inline T Mod(T x, T y) { return fmod(x, y); }
+/// Return remainder of X/Y.
+template<typename T, typename std::enable_if<std::is_floating_point<T>::value>::type* = nullptr>
+inline T Mod(T x, T y) { return fmod(x, y); }
+
+/// Return remainder of X/Y.
+template<typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
+inline T Mod(T x, T y) { return x % y; }
+
+/// Return positive remainder of X/Y.
+template<typename T, typename std::enable_if<std::is_integral<T>::value>::type* = nullptr>
+inline T AbsMod(T x, T y)
+{
+    const T result = x % y;
+    return result < 0 ? result + y : result;
+}
 
 /// Return fractional part of passed value in range [0, 1).
 template <class T> inline T Fract(T value) { return value - floor(value); }
@@ -168,6 +185,18 @@ template <class T> inline T Round(T x) { return round(x); }
 
 /// Round value to nearest integer.
 template <class T> inline int RoundToInt(T x) { return static_cast<int>(round(x)); }
+
+/// Round value to nearest multiple. 
+template <class T> inline T RoundToNearestMultiple(T x, T multiple)
+{
+    T mag = Abs(x);
+    multiple = Abs(multiple);
+    T remainder = Mod(mag, multiple);
+    if (remainder >= multiple / 2) 
+        return (FloorToInt<T>(mag / multiple) * multiple + multiple) * Sign(x);
+    else
+        return (FloorToInt<T>(mag / multiple) * multiple)*Sign(x);
+}
 
 /// Round value up.
 template <class T> inline T Ceil(T x) { return ceil(x); }
@@ -284,6 +313,13 @@ inline float HalfToFloat(unsigned short value)
     float out;
     *((unsigned*)&out) = t1;
     return out;
+}
+
+/// Wrap a value fitting it in the range defined by [min, max)
+template<typename T> inline T Wrap(T value, T min, T max)
+{
+    T range = max - min;
+    return min + Mod(value, range);
 }
 
 /// Calculate both sine and cosine, with angle in degrees.

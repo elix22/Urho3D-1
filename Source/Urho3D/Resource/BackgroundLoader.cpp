@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -45,7 +45,7 @@ BackgroundLoader::~BackgroundLoader()
 {
     MutexLock lock(backgroundLoadMutex_);
 
-    backgroundLoadQueue_.Clear();
+    backgroundLoadQueue_.clear();
 }
 
 void BackgroundLoader::ThreadFunction()
@@ -55,16 +55,16 @@ void BackgroundLoader::ThreadFunction()
         backgroundLoadMutex_.Acquire();
 
         // Search for a queued resource that has not been loaded yet
-        HashMap<Pair<StringHash, StringHash>, BackgroundLoadItem>::Iterator i = backgroundLoadQueue_.Begin();
-        while (i != backgroundLoadQueue_.End())
+        auto i = backgroundLoadQueue_.begin();
+        while (i != backgroundLoadQueue_.end())
         {
-            if (i->second_.resource_->GetAsyncLoadState() == ASYNC_QUEUED)
+            if (i->second.resource_->GetAsyncLoadState() == ASYNC_QUEUED)
                 break;
             else
                 ++i;
         }
 
-        if (i == backgroundLoadQueue_.End())
+        if (i == backgroundLoadQueue_.end())
         {
             // No resources to load found
             backgroundLoadMutex_.Release();
@@ -72,7 +72,7 @@ void BackgroundLoader::ThreadFunction()
         }
         else
         {
-            BackgroundLoadItem& item = i->second_;
+            BackgroundLoadItem& item = i->second;
             Resource* resource = item.resource_;
             // We can be sure that the item is not removed from the queue as long as it is in the
             // "queued" or "loading" state
@@ -88,19 +88,18 @@ void BackgroundLoader::ThreadFunction()
 
             // Process dependencies now
             // Need to lock the queue again when manipulating other entries
-            Pair<StringHash, StringHash> key = MakePair(resource->GetType(), resource->GetNameHash());
+            ea::pair<StringHash, StringHash> key = ea::make_pair(resource->GetType(), resource->GetNameHash());
             backgroundLoadMutex_.Acquire();
-            if (item.dependents_.Size())
+            if (item.dependents_.size())
             {
-                for (HashSet<Pair<StringHash, StringHash> >::Iterator i = item.dependents_.Begin();
-                     i != item.dependents_.End(); ++i)
+                for (auto i = item.dependents_.begin(); i != item.dependents_.end(); ++i)
                 {
-                    HashMap<Pair<StringHash, StringHash>, BackgroundLoadItem>::Iterator j = backgroundLoadQueue_.Find(*i);
-                    if (j != backgroundLoadQueue_.End())
-                        j->second_.dependencies_.Erase(key);
+                    auto j = backgroundLoadQueue_.find(*i);
+                    if (j != backgroundLoadQueue_.end())
+                        j->second.dependencies_.erase(key);
                 }
 
-                item.dependents_.Clear();
+                item.dependents_.clear();
             }
 
             resource->SetAsyncLoadState(success ? ASYNC_SUCCESS : ASYNC_FAIL);
@@ -109,15 +108,15 @@ void BackgroundLoader::ThreadFunction()
     }
 }
 
-bool BackgroundLoader::QueueResource(StringHash type, const String& name, bool sendEventOnFailure, Resource* caller)
+bool BackgroundLoader::QueueResource(StringHash type, const ea::string& name, bool sendEventOnFailure, Resource* caller)
 {
     StringHash nameHash(name);
-    Pair<StringHash, StringHash> key = MakePair(type, nameHash);
+    ea::pair<StringHash, StringHash> key = ea::make_pair(type, nameHash);
 
     MutexLock lock(backgroundLoadMutex_);
 
     // Check if already exists in the queue
-    if (backgroundLoadQueue_.Find(key) != backgroundLoadQueue_.End())
+    if (backgroundLoadQueue_.find(key) != backgroundLoadQueue_.end())
         return false;
 
     BackgroundLoadItem& item = backgroundLoadQueue_[key];
@@ -127,7 +126,7 @@ bool BackgroundLoader::QueueResource(StringHash type, const String& name, bool s
     item.resource_ = DynamicCast<Resource>(owner_->GetContext()->CreateObject(type));
     if (!item.resource_)
     {
-        URHO3D_LOGERROR("Could not load unknown resource type " + String(type));
+        URHO3D_LOGERROR("Could not load unknown resource type " + type.ToString());
 
         if (sendEventOnFailure && Thread::IsMainThread())
         {
@@ -138,7 +137,7 @@ bool BackgroundLoader::QueueResource(StringHash type, const String& name, bool s
             owner_->SendEvent(E_UNKNOWNRESOURCETYPE, eventData);
         }
 
-        backgroundLoadQueue_.Erase(key);
+        backgroundLoadQueue_.erase(key);
         return false;
     }
 
@@ -150,13 +149,14 @@ bool BackgroundLoader::QueueResource(StringHash type, const String& name, bool s
     // If this is a resource calling for the background load of more resources, mark the dependency as necessary
     if (caller)
     {
-        Pair<StringHash, StringHash> callerKey = MakePair(caller->GetType(), caller->GetNameHash());
-        HashMap<Pair<StringHash, StringHash>, BackgroundLoadItem>::Iterator j = backgroundLoadQueue_.Find(callerKey);
-        if (j != backgroundLoadQueue_.End())
+        ea::pair<StringHash, StringHash> callerKey = ea::make_pair(caller->GetType(), caller->GetNameHash());
+        auto j = backgroundLoadQueue_.find(
+            callerKey);
+        if (j != backgroundLoadQueue_.end())
         {
-            BackgroundLoadItem& callerItem = j->second_;
-            item.dependents_.Insert(callerKey);
-            callerItem.dependencies_.Insert(key);
+            BackgroundLoadItem& callerItem = j->second;
+            item.dependents_.insert(callerKey);
+            callerItem.dependencies_.insert(key);
         }
         else
             URHO3D_LOGWARNING("Resource " + caller->GetName() +
@@ -175,20 +175,21 @@ void BackgroundLoader::WaitForResource(StringHash type, StringHash nameHash)
     backgroundLoadMutex_.Acquire();
 
     // Check if the resource in question is being background loaded
-    Pair<StringHash, StringHash> key = MakePair(type, nameHash);
-    HashMap<Pair<StringHash, StringHash>, BackgroundLoadItem>::Iterator i = backgroundLoadQueue_.Find(key);
-    if (i != backgroundLoadQueue_.End())
+    ea::pair<StringHash, StringHash> key = ea::make_pair(type, nameHash);
+    auto i = backgroundLoadQueue_.find(
+        key);
+    if (i != backgroundLoadQueue_.end())
     {
         backgroundLoadMutex_.Release();
 
         {
-            Resource* resource = i->second_.resource_;
+            Resource* resource = i->second.resource_;
             HiresTimer waitTimer;
             bool didWait = false;
 
             for (;;)
             {
-                unsigned numDeps = i->second_.dependencies_.Size();
+                unsigned numDeps = i->second.dependencies_.size();
                 AsyncLoadState state = resource->GetAsyncLoadState();
                 if (numDeps > 0 || state == ASYNC_QUEUED || state == ASYNC_LOADING)
                 {
@@ -200,15 +201,15 @@ void BackgroundLoader::WaitForResource(StringHash type, StringHash nameHash)
             }
 
             if (didWait)
-                URHO3D_LOGDEBUG("Waited " + String(waitTimer.GetUSec(false) / 1000) + " ms for background loaded resource " +
+                URHO3D_LOGDEBUG("Waited " + ea::to_string(waitTimer.GetUSec(false) / 1000) + " ms for background loaded resource " +
                          resource->GetName());
         }
 
         // This may take a long time and may potentially wait on other resources, so it is important we do not hold the mutex during this
-        FinishBackgroundLoading(i->second_);
+        FinishBackgroundLoading(i->second);
 
         backgroundLoadMutex_.Acquire();
-        backgroundLoadQueue_.Erase(i);
+        backgroundLoadQueue_.erase(i);
         backgroundLoadMutex_.Release();
     }
     else
@@ -223,11 +224,11 @@ void BackgroundLoader::FinishResources(int maxMs)
 
         backgroundLoadMutex_.Acquire();
 
-        for (HashMap<Pair<StringHash, StringHash>, BackgroundLoadItem>::Iterator i = backgroundLoadQueue_.Begin();
-             i != backgroundLoadQueue_.End();)
+        for (auto i = backgroundLoadQueue_.begin();
+             i != backgroundLoadQueue_.end();)
         {
-            Resource* resource = i->second_.resource_;
-            unsigned numDeps = i->second_.dependencies_.Size();
+            Resource* resource = i->second.resource_;
+            unsigned numDeps = i->second.dependencies_.size();
             AsyncLoadState state = resource->GetAsyncLoadState();
             if (numDeps > 0 || state == ASYNC_QUEUED || state == ASYNC_LOADING)
                 ++i;
@@ -236,9 +237,9 @@ void BackgroundLoader::FinishResources(int maxMs)
                 // Finishing a resource may need it to wait for other resources to load, in which case we can not
                 // hold on to the mutex
                 backgroundLoadMutex_.Release();
-                FinishBackgroundLoading(i->second_);
+                FinishBackgroundLoading(i->second);
                 backgroundLoadMutex_.Acquire();
-                i = backgroundLoadQueue_.Erase(i);
+                i = backgroundLoadQueue_.erase(i);
             }
 
             // Break when the time limit passed so that we keep sufficient FPS
@@ -253,7 +254,7 @@ void BackgroundLoader::FinishResources(int maxMs)
 unsigned BackgroundLoader::GetNumQueuedResources() const
 {
     MutexLock lock(backgroundLoadMutex_);
-    return backgroundLoadQueue_.Size();
+    return backgroundLoadQueue_.size();
 }
 
 void BackgroundLoader::FinishBackgroundLoading(BackgroundLoadItem& item)
@@ -264,7 +265,7 @@ void BackgroundLoader::FinishBackgroundLoading(BackgroundLoadItem& item)
     // If BeginLoad() phase was successful, call EndLoad() and get the final success/failure result
     if (success)
     {
-        URHO3D_PROFILE(String("Finish" + resource->GetTypeName()).CString());
+        URHO3D_PROFILE(ea::string("Finish" + resource->GetTypeName()).c_str());
         URHO3D_LOGDEBUG("Finishing background loaded resource " + resource->GetName());
         success = resource->EndLoad();
     }

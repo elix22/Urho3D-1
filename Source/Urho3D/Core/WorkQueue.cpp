@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -82,7 +82,7 @@ WorkQueue::~WorkQueue()
     shutDown_ = true;
     Resume();
 
-    for (unsigned i = 0; i < threads_.Size(); ++i)
+    for (unsigned i = 0; i < threads_.size(); ++i)
         threads_[i]->Stop();
 }
 
@@ -91,7 +91,7 @@ void WorkQueue::CreateThreads(unsigned numThreads)
 #ifdef URHO3D_THREADING
     // Other subsystems may initialize themselves according to the number of threads.
     // Therefore allow creating the threads only once, after which the amount is fixed
-    if (!threads_.Empty())
+    if (!threads_.empty())
         return;
 
     // Start threads in paused mode
@@ -100,8 +100,9 @@ void WorkQueue::CreateThreads(unsigned numThreads)
     for (unsigned i = 0; i < numThreads; ++i)
     {
         SharedPtr<WorkerThread> thread(new WorkerThread(this, i + 1));
+        thread->SetName(Format("Worker {}", i + 1));
         thread->Run();
-        threads_.Push(thread);
+        threads_.push_back(thread);
     }
 #else
     URHO3D_LOGERROR("Can not create worker threads as threading is disabled");
@@ -110,10 +111,10 @@ void WorkQueue::CreateThreads(unsigned numThreads)
 
 SharedPtr<WorkItem> WorkQueue::GetFreeItem()
 {
-    if (poolItems_.Size() > 0)
+    if (!poolItems_.empty())
     {
-        SharedPtr<WorkItem> item = poolItems_.Front();
-        poolItems_.PopFront();
+        SharedPtr<WorkItem> item = poolItems_.front();
+        poolItems_.pop_front();
         return item;
     }
     else
@@ -134,39 +135,39 @@ void WorkQueue::AddWorkItem(const SharedPtr<WorkItem>& item)
     }
 
     // Check for duplicate items.
-    assert(!workItems_.Contains(item));
+    assert(ea::find(workItems_.begin(), workItems_.end(), item) == workItems_.end());
 
     // Push to the main thread list to keep item alive
     // Clear completed flag in case item is reused
-    workItems_.Push(item);
+    workItems_.push_back(item);
     item->completed_ = false;
 
     // Make sure worker threads' list is safe to modify
-    if (threads_.Size() && !paused_)
+    if (threads_.size() && !paused_)
         queueMutex_.Acquire();
 
     // Find position for new item
-    if (queue_.Empty())
-        queue_.Push(item);
+    if (queue_.empty())
+        queue_.push_back(item.Get());
     else
     {
         bool inserted = false;
 
-        for (List<WorkItem*>::Iterator i = queue_.Begin(); i != queue_.End(); ++i)
+        for (auto i = queue_.begin(); i != queue_.end(); ++i)
         {
             if ((*i)->priority_ <= item->priority_)
             {
-                queue_.Insert(i, item);
+                queue_.insert(i, item.Get());
                 inserted = true;
                 break;
             }
         }
 
         if (!inserted)
-            queue_.Push(item);
+            queue_.push_back(item.Get());
     }
 
-    if (threads_.Size())
+    if (threads_.size())
     {
         queueMutex_.Release();
         paused_ = false;
@@ -191,15 +192,15 @@ bool WorkQueue::RemoveWorkItem(SharedPtr<WorkItem> item)
     MutexLock lock(queueMutex_);
 
     // Can only remove successfully if the item was not yet taken by threads for execution
-    List<WorkItem*>::Iterator i = queue_.Find(item.Get());
-    if (i != queue_.End())
+    auto i = ea::find(queue_.begin(), queue_.end(), item.Get());
+    if (i != queue_.end())
     {
-        List<SharedPtr<WorkItem> >::Iterator j = workItems_.Find(item);
-        if (j != workItems_.End())
+        auto j = ea::find(workItems_.begin(), workItems_.end(), item);
+        if (j != workItems_.end())
         {
-            queue_.Erase(i);
+            queue_.erase(i);
             ReturnToPool(item);
-            workItems_.Erase(j);
+            workItems_.erase(j);
             return true;
         }
     }
@@ -207,22 +208,22 @@ bool WorkQueue::RemoveWorkItem(SharedPtr<WorkItem> item)
     return false;
 }
 
-unsigned WorkQueue::RemoveWorkItems(const Vector<SharedPtr<WorkItem> >& items)
+unsigned WorkQueue::RemoveWorkItems(const ea::vector<SharedPtr<WorkItem> >& items)
 {
     MutexLock lock(queueMutex_);
     unsigned removed = 0;
 
-    for (Vector<SharedPtr<WorkItem> >::ConstIterator i = items.Begin(); i != items.End(); ++i)
+    for (auto i = items.begin(); i != items.end(); ++i)
     {
-        List<WorkItem*>::Iterator j = queue_.Find(i->Get());
-        if (j != queue_.End())
+        auto j = ea::find(queue_.begin(), queue_.end(), i->Get());
+        if (j != queue_.end())
         {
-            List<SharedPtr<WorkItem> >::Iterator k = workItems_.Find(*i);
-            if (k != workItems_.End())
+            auto k = ea::find(workItems_.begin(), workItems_.end(), *i);
+            if (k != workItems_.end())
             {
-                queue_.Erase(j);
+                queue_.erase(j);
                 ReturnToPool(*k);
-                workItems_.Erase(k);
+                workItems_.erase(k);
                 ++removed;
             }
         }
@@ -258,18 +259,18 @@ void WorkQueue::Complete(unsigned priority)
 {
     completing_ = true;
 
-    if (threads_.Size())
+    if (threads_.size())
     {
         Resume();
 
         // Take work items also in the main thread until queue empty or no high-priority items anymore
-        while (!queue_.Empty())
+        while (!queue_.empty())
         {
             queueMutex_.Acquire();
-            if (!queue_.Empty() && queue_.Front()->priority_ >= priority)
+            if (!queue_.empty() && queue_.front()->priority_ >= priority)
             {
-                WorkItem* item = queue_.Front();
-                queue_.PopFront();
+                WorkItem* item = queue_.front();
+                queue_.pop_front();
                 queueMutex_.Release();
                 item->workFunction_(item, 0);
                 item->completed_ = true;
@@ -287,16 +288,16 @@ void WorkQueue::Complete(unsigned priority)
         }
 
         // If no work at all remaining, pause worker threads by leaving the mutex locked
-        if (queue_.Empty())
+        if (queue_.empty())
             Pause();
     }
     else
     {
         // No worker threads: ensure all high-priority items are completed in the main thread
-        while (!queue_.Empty() && queue_.Front()->priority_ >= priority)
+        while (!queue_.empty() && queue_.front()->priority_ >= priority)
         {
-            WorkItem* item = queue_.Front();
-            queue_.PopFront();
+            WorkItem* item = queue_.front();
+            queue_.pop_front();
             item->workFunction_(item, 0);
             item->completed_ = true;
         }
@@ -306,11 +307,23 @@ void WorkQueue::Complete(unsigned priority)
     completing_ = false;
 }
 
+unsigned WorkQueue::GetNumIncomplete(unsigned priority) const
+{
+    unsigned incomplete = 0;
+    for (const auto& workItem : workItems_)
+    {
+        if (workItem->priority_ >= priority && !workItem->completed_)
+            ++incomplete;
+    }
+
+    return incomplete;
+}
+
 bool WorkQueue::IsCompleted(unsigned priority) const
 {
-    for (List<SharedPtr<WorkItem> >::ConstIterator i = workItems_.Begin(); i != workItems_.End(); ++i)
+    for (const auto & workItem : workItems_)
     {
-        if ((*i)->priority_ >= priority && !(*i)->completed_)
+        if (workItem->priority_ >= priority && !workItem->completed_)
             return false;
     }
 
@@ -331,12 +344,12 @@ void WorkQueue::ProcessItems(unsigned threadIndex)
         else
         {
             queueMutex_.Acquire();
-            if (!queue_.Empty())
+            if (!queue_.empty())
             {
                 wasActive = true;
 
-                WorkItem* item = queue_.Front();
-                queue_.PopFront();
+                WorkItem* item = queue_.front();
+                queue_.pop_front();
                 queueMutex_.Release();
                 item->workFunction_(item, threadIndex);
                 item->completed_ = true;
@@ -357,7 +370,7 @@ void WorkQueue::PurgeCompleted(unsigned priority)
     // Purge completed work items and send completion events. Do not signal items lower than priority threshold,
     // as those may be user submitted and lead to eg. scene manipulation that could happen in the middle of the
     // render update, which is not allowed
-    for (List<SharedPtr<WorkItem> >::Iterator i = workItems_.Begin(); i != workItems_.End();)
+    for (auto i = workItems_.begin(); i != workItems_.end();)
     {
         if ((*i)->completed_ && (*i)->priority_ >= priority)
         {
@@ -371,7 +384,7 @@ void WorkQueue::PurgeCompleted(unsigned priority)
             }
 
             ReturnToPool(*i);
-            i = workItems_.Erase(i);
+            i = workItems_.erase(i);
         }
         else
             ++i;
@@ -380,12 +393,12 @@ void WorkQueue::PurgeCompleted(unsigned priority)
 
 void WorkQueue::PurgePool()
 {
-    unsigned currentSize = poolItems_.Size();
+    unsigned currentSize = poolItems_.size();
     int difference = lastSize_ - currentSize;
 
     // Difference tolerance, should be fairly significant to reduce the pool size.
-    for (unsigned i = 0; poolItems_.Size() > 0 && difference > tolerance_ && i < (unsigned)difference; i++)
-        poolItems_.PopFront();
+    for (unsigned i = 0; !poolItems_.empty() && difference > tolerance_ && i < (unsigned)difference; i++)
+        poolItems_.pop_front();
 
     lastSize_ = currentSize;
 }
@@ -407,23 +420,23 @@ void WorkQueue::ReturnToPool(SharedPtr<WorkItem>& item)
         item->sendEvent_ = false;
         item->completed_ = false;
 
-        poolItems_.Push(item);
+        poolItems_.push_back(item);
     }
 }
 
 void WorkQueue::HandleBeginFrame(StringHash eventType, VariantMap& eventData)
 {
     // If no worker threads, complete low-priority work here
-    if (threads_.Empty() && !queue_.Empty())
+    if (threads_.empty() && !queue_.empty())
     {
         URHO3D_PROFILE("CompleteWorkNonthreaded");
 
         HiresTimer timer;
 
-        while (!queue_.Empty() && timer.GetUSec(false) < maxNonThreadedWorkMs_ * 1000LL)
+        while (!queue_.empty() && timer.GetUSec(false) < maxNonThreadedWorkMs_ * 1000LL)
         {
-            WorkItem* item = queue_.Front();
-            queue_.PopFront();
+            WorkItem* item = queue_.front();
+            queue_.pop_front();
             item->workFunction_(item, 0);
             item->completed_ = true;
         }

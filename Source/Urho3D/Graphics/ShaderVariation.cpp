@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,14 +31,14 @@
 namespace Urho3D
 {
 
-ShaderParameter::ShaderParameter(const String& name, unsigned glType, int location) :   // NOLINT(hicpp-member-init)
+ShaderParameter::ShaderParameter(const ea::string& name, unsigned glType, int location) :   // NOLINT(hicpp-member-init)
     name_{name},
     glType_{glType},
     location_{location}
 {
 }
 
-ShaderParameter::ShaderParameter(ShaderType type, const String& name, unsigned offset, unsigned size, unsigned buffer) :    // NOLINT(hicpp-member-init)
+ShaderParameter::ShaderParameter(ShaderType type, const ea::string& name, unsigned offset, unsigned size, unsigned buffer) :    // NOLINT(hicpp-member-init)
     type_{type},
     name_{name},
     offset_{offset},
@@ -47,7 +47,7 @@ ShaderParameter::ShaderParameter(ShaderType type, const String& name, unsigned o
 {
 }
 
-ShaderParameter::ShaderParameter(ShaderType type, const String& name, unsigned reg, unsigned regCount) :    // NOLINT(hicpp-member-init)
+ShaderParameter::ShaderParameter(ShaderType type, const ea::string& name, unsigned reg, unsigned regCount) :    // NOLINT(hicpp-member-init)
     type_{type},
     name_{name},
     register_{reg},
@@ -67,7 +67,7 @@ ShaderVariation::~ShaderVariation()
     Release();
 }
 
-void ShaderVariation::SetName(const String& name)
+void ShaderVariation::SetName(const ea::string& name)
 {
     name_ = name;
 }

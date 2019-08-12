@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -36,7 +36,7 @@ namespace Urho3D
 StringHashRegister::StringHashRegister(bool threadSafe)
 {
     if (threadSafe)
-        mutex_ = MakeUnique<Mutex>();
+        mutex_ = ea::make_unique<Mutex>();
 }
 
 
@@ -50,15 +50,15 @@ StringHash StringHashRegister::RegisterString(const StringHash& hash, const char
     if (mutex_)
         mutex_->Acquire();
 
-    auto iter = map_.Find(hash);
-    if (iter == map_.End())
+    auto iter = map_.find(hash);
+    if (iter == map_.end())
     {
-        map_.Populate(hash, string);
+        map_.populate(hash, string);
     }
-    else if (iter->second_.Compare(string, false) != 0)
+    else if (iter->second.comparei(string) != 0)
     {
         URHO3D_LOGWARNINGF("StringHash collision detected! Both \"%s\" and \"%s\" have hash #%s",
-            string, iter->second_.CString(), hash.ToString().CString());
+            string, iter->second.c_str(), hash.ToString().c_str());
     }
 
     if (mutex_)
@@ -73,12 +73,12 @@ StringHash StringHashRegister::RegisterString(const char* string)
     return RegisterString(hash, string);
 }
 
-String StringHashRegister::GetStringCopy(const StringHash& hash) const
+ea::string StringHashRegister::GetStringCopy(const StringHash& hash) const
 {
     if (mutex_)
         mutex_->Acquire();
 
-    const String copy = GetString(hash);
+    const ea::string copy = GetString(hash);
 
     if (mutex_)
         mutex_->Release();
@@ -91,7 +91,7 @@ bool StringHashRegister::Contains(const StringHash& hash) const
     if (mutex_)
         mutex_->Acquire();
 
-    const bool contains = map_.Contains(hash);
+    const bool contains = map_.contains(hash);
 
     if (mutex_)
         mutex_->Release();
@@ -99,10 +99,10 @@ bool StringHashRegister::Contains(const StringHash& hash) const
     return contains;
 }
 
-const String& StringHashRegister::GetString(const StringHash& hash) const
+const ea::string& StringHashRegister::GetString(const StringHash& hash) const
 {
-    auto iter = map_.Find(hash);
-    return iter == map_.End() ? String::EMPTY : iter->second_;
+    auto iter = map_.find(hash);
+    return iter == map_.end() ? EMPTY_STRING : iter->second;
 }
 
 }

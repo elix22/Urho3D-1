@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -58,16 +58,16 @@ extern "C" unsigned SDL_TVOS_GetActiveProcessorCount();
 #include <ntdef.h>
 #include <Rpc.h>
 #endif
-#elif defined(__linux__) && !defined(__ANDROID__)
-#include <pwd.h>
-#include <sys/sysinfo.h>
-#include <sys/utsname.h>
-#include <uuid/uuid.h>
 #elif defined(__APPLE__)
 #include <sys/sysctl.h>
 #include <SystemConfiguration/SystemConfiguration.h> // For the detection functions inside GetLoginName().
 #elif defined(__ANDROID__)
 #include <jni.h>
+#else
+#include <pwd.h>
+#include <sys/sysinfo.h>
+#include <sys/utsname.h>
+#include <uuid/uuid.h>
 #endif
 #ifndef _WIN32
 #include <unistd.h>
@@ -115,9 +115,10 @@ namespace Urho3D
 #ifdef _WIN32
 static bool consoleOpened = false;
 #endif
-static String currentLine;
-static Vector<String> arguments;
-static String miniDumpDir;
+static ea::string currentLine;
+static ea::vector<ea::string> arguments;
+static ea::string miniDumpDir;
+extern ea::string specifiedExecutableFile;
 
 #if defined(IOS)
 static void GetCPUData(host_basic_info_data_t* data)
@@ -194,16 +195,16 @@ void InitFPU()
 #endif
 }
 
-void ErrorDialog(const String& title, const String& message)
+void ErrorDialog(const ea::string& title, const ea::string& message)
 {
 #ifndef MINI_URHO
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title.CString(), message.CString(), nullptr);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title.c_str(), message.c_str(), nullptr);
 #endif
 }
 
-void ErrorExit(const String& message, int exitCode)
+void ErrorExit(const ea::string& message, int exitCode)
 {
-    if (!message.Empty())
+    if (!message.empty())
         PrintLine(message, true);
 
     exit(exitCode);
@@ -224,7 +225,7 @@ void OpenConsoleWindow()
 #endif
 }
 
-void PrintUnicode(const String& str, bool error)
+void PrintUnicode(const ea::string& str, bool error)
 {
 #if !defined(__ANDROID__) && !defined(IOS) && !defined(TVOS)
 #ifdef _WIN32
@@ -232,30 +233,30 @@ void PrintUnicode(const String& str, bool error)
     // though it means that proper Unicode output will not work
     FILE* out = error ? stderr : stdout;
     if (!_isatty(_fileno(out)))
-        fprintf(out, "%s", str.CString());
+        fprintf(out, "%s", str.c_str());
     else
     {
         HANDLE stream = GetStdHandle(error ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
         if (stream == INVALID_HANDLE_VALUE)
             return;
-        WString strW(str);
+        ea::wstring strW = MultiByteToWide(str);
         DWORD charsWritten;
-        WriteConsoleW(stream, strW.CString(), strW.Length(), &charsWritten, nullptr);
+        WriteConsoleW(stream, strW.c_str(), strW.length(), &charsWritten, nullptr);
     }
 #else
-    fprintf(error ? stderr : stdout, "%s", str.CString());
+    fprintf(error ? stderr : stdout, "%s", str.c_str());
 #endif
 #endif
 }
 
-void PrintUnicodeLine(const String& str, bool error)
+void PrintUnicodeLine(const ea::string& str, bool error)
 {
     PrintUnicode(str + "\n", error);
 }
 
-void PrintLine(const String& str, bool error)
+void PrintLine(const ea::string& str, bool error)
 {
-    PrintLine(str.CString(), error);
+    PrintLine(str.c_str(), error);
 }
 
 void PrintLine(const char* str, bool error)
@@ -265,15 +266,15 @@ void PrintLine(const char* str, bool error)
 #endif
 }
 
-const Vector<String>& ParseArguments(const String& cmdLine, bool skipFirstArgument)
+const ea::vector<ea::string>& ParseArguments(const ea::string& cmdLine, bool skipFirstArgument)
 {
-    arguments.Clear();
+    arguments.clear();
 
     unsigned cmdStart = 0, cmdEnd = 0;
     bool inCmd = false;
     bool inQuote = false;
 
-    for (unsigned i = 0; i < cmdLine.Length(); ++i)
+    for (unsigned i = 0; i < cmdLine.length(); ++i)
     {
         if (cmdLine[i] == '\"')
             inQuote = !inQuote;
@@ -284,9 +285,7 @@ const Vector<String>& ParseArguments(const String& cmdLine, bool skipFirstArgume
                 inCmd = false;
                 cmdEnd = i;
                 // Do not store the first argument (executable name)
-                if (!skipFirstArgument)
-                    arguments.Push(cmdLine.Substring(cmdStart, cmdEnd - cmdStart));
-                skipFirstArgument = false;
+                arguments.push_back(cmdLine.substr(cmdStart, cmdEnd - cmdStart));
             }
         }
         else
@@ -300,51 +299,57 @@ const Vector<String>& ParseArguments(const String& cmdLine, bool skipFirstArgume
     }
     if (inCmd)
     {
-        cmdEnd = cmdLine.Length();
-        if (!skipFirstArgument)
-            arguments.Push(cmdLine.Substring(cmdStart, cmdEnd - cmdStart));
+        cmdEnd = cmdLine.length();
+        arguments.push_back(cmdLine.substr(cmdStart, cmdEnd - cmdStart));
     }
 
     // Strip double quotes from the arguments
-    for (unsigned i = 0; i < arguments.Size(); ++i)
-        arguments[i].Replace("\"", "");
+    for (unsigned i = 0; i < arguments.size(); ++i)
+        arguments[i].replace("\"", "");
+
+    if (!arguments.empty())
+    {
+        specifiedExecutableFile = arguments.front();
+        if (skipFirstArgument)
+            arguments.pop_front();
+    }
 
     return arguments;
 }
 
-const Vector<String>& ParseArguments(const char* cmdLine)
+const ea::vector<ea::string>& ParseArguments(const char* cmdLine)
 {
-    return ParseArguments(String(cmdLine));
+    return ParseArguments(ea::string(cmdLine));
 }
 
-const Vector<String>& ParseArguments(const WString& cmdLine)
+const ea::vector<ea::string>& ParseArguments(const ea::wstring& cmdLine)
 {
-    return ParseArguments(String(cmdLine));
+    return ParseArguments(WideToMultiByte(cmdLine));
 }
 
-const Vector<String>& ParseArguments(const wchar_t* cmdLine)
+const ea::vector<ea::string>& ParseArguments(const wchar_t* cmdLine)
 {
-    return ParseArguments(String(cmdLine));
+    return ParseArguments(WideToMultiByte(cmdLine));
 }
 
-const Vector<String>& ParseArguments(int argc, char** argv)
+const ea::vector<ea::string>& ParseArguments(int argc, char** argv)
 {
-    String cmdLine;
+    ea::string cmdLine;
 
     for (int i = 0; i < argc; ++i)
-        cmdLine.AppendWithFormat("\"%s\" ", (const char*)argv[i]);
+        cmdLine.append_sprintf("\"%s\" ", (const char*)argv[i]);
 
     return ParseArguments(cmdLine);
 }
 
-const Vector<String>& GetArguments()
+const ea::vector<ea::string>& GetArguments()
 {
     return arguments;
 }
 
-String GetConsoleInput()
+ea::string GetConsoleInput()
 {
-    String ret;
+    ea::string ret;
 #ifdef URHO3D_TESTING
     // When we are running automated tests, reading the console may block. Just return empty in that case
     return ret;
@@ -376,15 +381,15 @@ String GetConsoleInput()
                 if (c == '\b')
                 {
                     PrintUnicode("\b \b");
-                    int length = currentLine.LengthUTF8();
+                    int length = LengthUTF8(currentLine);
                     if (length)
-                        currentLine = currentLine.SubstringUTF8(0, length - 1);
+                        currentLine = SubstringUTF8(currentLine, 0, length - 1);
                 }
                 else if (c == '\r')
                 {
                     PrintUnicode("\n");
                     ret = currentLine;
-                    currentLine.Clear();
+                    currentLine.clear();
                     return ret;
                 }
                 else
@@ -393,7 +398,7 @@ String GetConsoleInput()
                     wchar_t out = c;
                     DWORD charsWritten;
                     WriteConsoleW(output, &out, 1, &charsWritten, nullptr);
-                    currentLine.AppendUTF8(c);
+                    AppendUTF8(currentLine, c);
                 }
             }
         }
@@ -415,7 +420,7 @@ String GetConsoleInput()
 #endif
 }
 
-String GetPlatform()
+ea::string GetPlatform()
 {
 #if defined(__ANDROID__)
     return "Android";
@@ -505,20 +510,20 @@ unsigned GetNumLogicalCPUs()
 #endif
 }
 
-void SetMiniDumpDir(const String& pathName)
+void SetMiniDumpDir(const ea::string& pathName)
 {
     miniDumpDir = AddTrailingSlash(pathName);
 }
 
-String GetMiniDumpDir()
+ea::string GetMiniDumpDir()
 {
 #ifndef MINI_URHO
-    if (miniDumpDir.Empty())
+    if (miniDumpDir.empty())
     {
         char* pathName = SDL_GetPrefPath("urho3d", "crashdumps");
         if (pathName)
         {
-            String ret(pathName);
+            ea::string ret(pathName);
             SDL_free(pathName);
             return ret;
         }
@@ -551,7 +556,7 @@ unsigned long long GetTotalMemory()
     return 0ull;
 }
 
-String GetLoginName()
+ea::string GetLoginName()
 {
 #if defined(__linux__) && !defined(__ANDROID__)
     struct passwd *p = getpwuid(getuid());
@@ -583,7 +588,7 @@ String GetLoginName()
     return "(?)";
 }
 
-String GetHostName()
+ea::string GetHostName()
 {
 #if (defined(__linux__) || defined(__APPLE__)) && !defined(__ANDROID__)
     char buffer[256];
@@ -614,12 +619,12 @@ static void GetOS(RTL_OSVERSIONINFOW *r)
 }
 #endif
 
-String GetOSVersion()
+ea::string GetOSVersion()
 {
 #if defined(__linux__) && !defined(__ANDROID__)
     struct utsname u{};
     if (uname(&u) == 0)
-        return String(u.sysname) + " " + u.release;
+        return ea::string(u.sysname) + " " + u.release;
 #elif defined(_WIN32) && defined(HAVE_RTL_OSVERSIONINFOW) && !defined(MINI_URHO)
     RTL_OSVERSIONINFOW r;
     GetOS(&r);
@@ -648,8 +653,8 @@ String GetOSVersion()
 
     if (sysctlbyname("kern.osrelease", &kernel_r, &size, NULL, 0) != -1)
     {
-        Vector<String> kernel_version = String(kernel_r).Split('.');
-        String version = "macOS/Mac OS X ";
+        ea::vector<ea::string> kernel_version = ea::string(kernel_r).split('.');
+        ea::string version = "macOS/Mac OS X ";
         int major = ToInt(kernel_version[0]);
         int minor = ToInt(kernel_version[1]);
 
@@ -750,7 +755,7 @@ String GetOSVersion()
     return "(?)";
 }
 
-String GenerateUUID()
+ea::string GenerateUUID()
 {
 #if _WIN32
     UUID uuid{};
@@ -759,7 +764,7 @@ String GenerateUUID()
     UuidCreate(&uuid);
     UuidToStringA(&uuid, &str);
 
-    String result(reinterpret_cast<const char*>(str));
+    ea::string result(reinterpret_cast<const char*>(str));
     RpcStringFreeA(&str);
     return result;
 #elif ANDROID
@@ -785,7 +790,7 @@ String GenerateUUID()
         (uint8_t)(lower >> 24), (uint8_t)(lower >> 16), (uint8_t)(lower >> 8), (uint8_t)lower
     );
 
-    return String(str);
+    return ea::string(str);
 #elif __APPLE__
     auto guid = CFUUIDCreate(NULL);
     auto bytes = CFUUIDGetUUIDBytes(guid);
@@ -797,51 +802,24 @@ String GenerateUUID()
         bytes.byte8, bytes.byte9, bytes.byte10, bytes.byte11, bytes.byte12, bytes.byte13, bytes.byte14, bytes.byte15
     );
 
-    return String(str);
+    return ea::string(str);
 #else
     uuid_t uuid{};
     char str[37]{};
 
-    uuid_generate_random(uuid);
+    uuid_generate(uuid);
     uuid_unparse(uuid, str);
-    return String(str);
+    return ea::string(str);
 #endif
 }
 
-Process::Process(const String& command, const Vector<String>& args)
+URHO3D_API unsigned GetCurrentProcessID()
 {
-    command_ = "\"" + GetNativePath((IsAbsolutePath(command) ? "" : "./") + command).Replaced("\"", "\\\"") + "\" ";
-    for (const auto& arg: args)
-    {
-        command_ += "\"";
-        command_ += arg.Replaced("\"", "\\\"");
-        command_ += "\" ";
-    }
-}
-
-int Process::Run()
-{
-    char buffer[1024];
-    String command;
-    if (!subprocessDir_.Empty())
-    {
-        command = "cd \"";
-        command += GetNativePath(AddTrailingSlash(subprocessDir_)).Replaced("\"", "\\\"");
-        command += "\"";
 #if _WIN32
-        command += "&";
+    return ::GetCurrentProcessId();
 #else
-        command += ";";
+    return getpid();
 #endif
-        command += command_;
-    }
-
-    String output;
-    FILE* stream = popen(command.Empty() ? command_.CString() : command.CString(), "r");
-    while (fgets(buffer, sizeof(buffer), stream) != nullptr)
-        output.Append(buffer);
-
-    return pclose(stream);
 }
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -63,7 +63,7 @@ public:
     /// Stop playback.
     void Stop();
     /// Set sound type, determines the master gain group.
-    void SetSoundType(const String& type);
+    void SetSoundType(const ea::string& type);
     /// Set frequency.
     void SetFrequency(float frequency);
     /// Set gain. 0.0 is silence, 1.0 is full volume.
@@ -84,7 +84,7 @@ public:
     volatile signed char* GetPlayPosition() const { return position_; }
 
     /// Return sound type, determines the master gain group.
-    String GetSoundType() const { return soundType_; }
+    ea::string GetSoundType() const { return soundType_; }
 
     /// Return playback time position.
     float GetTimePosition() const { return timePosition_; }
@@ -129,7 +129,7 @@ protected:
     /// Audio subsystem.
     WeakPtr<Audio> audio_;
     /// SoundSource type, determines the master gain group.
-    String soundType_;
+    ea::string soundType_;
     /// SoundSource type hash.
     StringHash soundTypeHash_;
     /// Frequency.

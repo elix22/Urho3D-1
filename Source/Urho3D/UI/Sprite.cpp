@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@
 
 #include "../Core/Context.h"
 #include "../Graphics/Texture2D.h"
+#include "../Graphics/Technique.h"
 #include "../Resource/ResourceCache.h"
 #include "../UI/Sprite.h"
 
@@ -32,7 +33,6 @@
 namespace Urho3D
 {
 
-extern const char* blendModeNames[];
 extern const char* horizontalAlignments[];
 extern const char* verticalAlignments[];
 extern const char* UI_CATEGORY;
@@ -54,7 +54,7 @@ void Sprite::RegisterObject(Context* context)
 {
     context->RegisterFactory<Sprite>(UI_CATEGORY);
 
-    URHO3D_ACCESSOR_ATTRIBUTE("Name", GetName, SetName, String, String::EMPTY, AM_FILE);
+    URHO3D_ACCESSOR_ATTRIBUTE("Name", GetName, SetName, ea::string, EMPTY_STRING, AM_FILE);
     URHO3D_ACCESSOR_ATTRIBUTE("Position", GetPosition, SetPosition, Vector2, Vector2::ZERO, AM_FILE);
     URHO3D_ACCESSOR_ATTRIBUTE("Size", GetSize, SetSize, IntVector2, IntVector2::ZERO, AM_FILE);
     URHO3D_ACCESSOR_ATTRIBUTE("Hotspot", GetHotSpot, SetHotSpot, IntVector2, IntVector2::ZERO, AM_FILE);
@@ -107,7 +107,7 @@ IntVector2 Sprite::ElementToScreen(const IntVector2& position)
     return IntVector2((int)transformedPos.x_, (int)transformedPos.y_);
 }
 
-void Sprite::GetBatches(PODVector<UIBatch>& batches, PODVector<float>& vertexData, const IntRect& currentScissor)
+void Sprite::GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, const IntRect& currentScissor)
 {
     bool allOpaque = true;
     if (GetDerivedOpacity() < 1.0f || colors_[C_TOPLEFT].a_ < 1.0f || colors_[C_TOPRIGHT].a_ < 1.0f ||

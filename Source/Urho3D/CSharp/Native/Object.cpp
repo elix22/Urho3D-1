@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -28,16 +28,16 @@
 #  define SWIGSTDCALL
 #endif
 
-typedef void* (SWIGSTDCALL* SWIG_CSharpCloneGCHandleCallback)(void*);
-extern URHO3D_EXPORT_API SWIG_CSharpCloneGCHandleCallback SWIG_CSharpCloneGCHandle;
+typedef void* (SWIGSTDCALL* Urho3D_CSharpCloneGCHandleCallback)(void*);
+extern URHO3D_EXPORT_API Urho3D_CSharpCloneGCHandleCallback Urho3D_CSharpCloneGCHandle;
 
-typedef void (SWIGSTDCALL* SWIG_CSharpFreeGCHandleCallback)(void*);
-extern URHO3D_EXPORT_API SWIG_CSharpFreeGCHandleCallback SWIG_CSharpFreeGCHandle;
+typedef void (SWIGSTDCALL* Urho3D_CSharpFreeGCHandleCallback)(void*);
+extern URHO3D_EXPORT_API Urho3D_CSharpFreeGCHandleCallback Urho3D_CSharpFreeGCHandle;
 
 namespace Urho3D
 {
 
-typedef void(*EventHandlerCallback)(unsigned, VariantMap*);
+typedef void(SWIGSTDCALL*EventHandlerCallback)(unsigned, VariantMap*);
 
 class ManagedEventHandler : public EventHandler
 {
@@ -51,7 +51,7 @@ public:
 
     ~ManagedEventHandler() override
     {
-        SWIG_CSharpFreeGCHandle(callbackHandle_);
+        Urho3D_CSharpFreeGCHandle(callbackHandle_);
         callbackHandle_ = 0;
     }
 
@@ -62,7 +62,7 @@ public:
 
     EventHandler* Clone() const override
     {
-        return new ManagedEventHandler(receiver_, callback_, SWIG_CSharpCloneGCHandle(callbackHandle_));
+        return new ManagedEventHandler(receiver_, callback_, Urho3D_CSharpCloneGCHandle(callbackHandle_));
     }
 
 public:
@@ -75,7 +75,7 @@ protected:
 extern "C"
 {
 
-URHO3D_EXPORT_API void Urho3D_Object_SubscribeToEvent(Object* receiver, Object* sender, unsigned eventType,
+URHO3D_EXPORT_API void SWIGSTDCALL Urho3D_Object_SubscribeToEvent(Object* receiver, Object* sender, unsigned eventType,
     EventHandlerCallback callback, void* callbackHandle)
 {
     // callbackHandle is a handle to Action<> which references receiver object. We have to ensure object is alive as long as

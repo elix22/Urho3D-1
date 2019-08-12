@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -52,7 +52,7 @@ public:
     static void RegisterObject(Context* context);
 
     /// Process octree raycast. May be called from a worker thread.
-    void ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryResult>& results) override;
+    void ProcessRayQuery(const RayOctreeQuery& query, ea::vector<RayQueryResult>& results) override;
     /// Calculate distance and prepare batches for rendering. May be called from worker thread(s), possibly re-entrantly.
     void UpdateBatches(const FrameInfo& frame) override;
     /// Return the geometry for a specific LOD level.
@@ -71,13 +71,13 @@ public:
     /// Set occlusion LOD level. By default (M_MAX_UNSIGNED) same as visible.
     void SetOcclusionLodLevel(unsigned level);
     /// Apply default materials from a material list file. If filename is empty (default), the model's resource name with extension .txt will be used.
-    void ApplyMaterialList(const String& fileName = String::EMPTY);
+    void ApplyMaterialList(const ea::string& fileName = EMPTY_STRING);
 
     /// Return model.
     Model* GetModel() const { return model_; }
 
     /// Return number of geometries.
-    unsigned GetNumGeometries() const { return geometries_.Size(); }
+    unsigned GetNumGeometries() const { return geometries_.size(); }
 
     /// Return material from the first geometry, assuming all the geometries use the same material.
     virtual Material* GetMaterial() const { return GetMaterial(0); }
@@ -114,9 +114,9 @@ protected:
     void CalculateLodLevels();
 
     /// Extra per-geometry data.
-    PODVector<StaticModelGeometryData> geometryData_;
+    ea::vector<StaticModelGeometryData> geometryData_;
     /// All geometries.
-    Vector<Vector<SharedPtr<Geometry> > > geometries_;
+    ea::vector<ea::vector<SharedPtr<Geometry> > > geometries_;
     /// Model.
     SharedPtr<Model> model_;
     /// Occlusion LOD level.

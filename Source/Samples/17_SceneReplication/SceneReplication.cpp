@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -67,7 +67,6 @@ static const unsigned CTRL_BACK = 2;
 static const unsigned CTRL_LEFT = 4;
 static const unsigned CTRL_RIGHT = 8;
 
-URHO3D_DEFINE_APPLICATION_MAIN(SceneReplication)
 
 SceneReplication::SceneReplication(Context* context) :
     Sample(context)
@@ -237,7 +236,7 @@ void SceneReplication::SubscribeToEvents()
     GetSubsystem<Network>()->RegisterRemoteEvent(E_CLIENTOBJECTID);
 }
 
-Button* SceneReplication::CreateButton(const String& text, int width)
+Button* SceneReplication::CreateButton(const ea::string& text, int width)
 {
     auto* cache = GetSubsystem<ResourceCache>();
     auto* font = cache->GetResource<Font>("Fonts/Anonymous Pro.ttf");
@@ -380,9 +379,9 @@ void SceneReplication::HandlePhysicsPreStep(StringHash eventType, VariantMap& ev
     // Server: apply controls to client objects
     else if (network->IsServerRunning())
     {
-        const Vector<SharedPtr<Connection> >& connections = network->GetClientConnections();
+        const ea::vector<SharedPtr<Connection> >& connections = network->GetClientConnections();
 
-        for (unsigned i = 0; i < connections.Size(); ++i)
+        for (unsigned i = 0; i < connections.size(); ++i)
         {
             Connection* connection = connections[i];
             // Get the object this connection is controlling
@@ -417,8 +416,9 @@ void SceneReplication::HandlePhysicsPreStep(StringHash eventType, VariantMap& ev
 void SceneReplication::HandleConnect(StringHash eventType, VariantMap& eventData)
 {
     auto* network = GetSubsystem<Network>();
-    String address = textEdit_->GetText().Trimmed();
-    if (address.Empty())
+    ea::string address = textEdit_->GetText();
+    address.trim();
+    if (address.empty())
         address = "localhost"; // Use localhost to connect if nothing else specified
 
     // Connect to server, specify scene to use as a client for replication
@@ -491,7 +491,7 @@ void SceneReplication::HandleClientDisconnected(StringHash eventType, VariantMap
     if (object)
         object->Remove();
 
-    serverObjects_.Erase(connection);
+    serverObjects_.erase(connection);
 }
 
 void SceneReplication::HandleClientObjectID(StringHash eventType, VariantMap& eventData)

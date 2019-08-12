@@ -2,14 +2,16 @@
 // Proxy classes (base classes, ie, not derived classes)
 %typemap(csbody) SWIGTYPE %{
   private global::System.Runtime.InteropServices.HandleRef swigCPtr;
-  private static InstanceCache<$csclassname> _instanceCache = new InstanceCache<$csclassname>();
-  protected bool swigCMemOwn;
+  private bool swigCMemOwn;
+  private static global::Urho3DNet.InstanceCache<$csclassname> _instanceCache = new global::Urho3DNet.InstanceCache<$csclassname>();
   internal static $csclassname wrap(global::System.IntPtr cPtr, bool cMemoryOwn)
   {
     if (cPtr == global::System.IntPtr.Zero)
       return null;
     return _instanceCache.GetOrAdd(cPtr, () => {
-      var type = $imclassname.SWIGTypeRegistry[$imclassname.$csclazznameSWIGTypeId(cPtr)];
+      global::System.Type type;
+      if (!$imclassname.SWIGTypeRegistry.TryGetValue($imclassname.$csclazznameSWIGTypeId(cPtr), out type))
+        type = typeof($csclassname);
       if (type == typeof($csclassname))
         return new $csclassname(cPtr, cMemoryOwn);
       return ($csclassname)global::System.Activator.CreateInstance(type, global::System.Reflection.BindingFlags.Instance|global::System.Reflection.BindingFlags.NonPublic|global::System.Reflection.BindingFlags.Public, null, new object[]{cPtr, cMemoryOwn}, null);
@@ -28,23 +30,27 @@
 %}
 
 // Derived proxy classes
-%typemap(csbody_derived) SWIGTYPE %{
+%typemap(csbody_derived, directorsetup="\n    SetupSwigDirector();") SWIGTYPE %{
   private global::System.Runtime.InteropServices.HandleRef swigCPtr;
-  private static InstanceCache<$csclassname> _instanceCache = new InstanceCache<$csclassname>();
+  private bool swigCMemOwn;
+  private static global::Urho3DNet.InstanceCache<$csclassname> _instanceCache = new global::Urho3DNet.InstanceCache<$csclassname>();
   internal new static $csclassname wrap(global::System.IntPtr cPtr, bool cMemoryOwn)
   {
     if (cPtr == global::System.IntPtr.Zero)
       return null;
     return _instanceCache.GetOrAdd(cPtr, () => {
-      var type = $imclassname.SWIGTypeRegistry[$imclassname.$csclazznameSWIGTypeId(cPtr)];
+      global::System.Type type;
+      if (!$imclassname.SWIGTypeRegistry.TryGetValue($imclassname.$csclazznameSWIGTypeId(cPtr), out type))
+        type = typeof($csclassname);
       if (type == typeof($csclassname))
         return new $csclassname(cPtr, cMemoryOwn);
       return ($csclassname)global::System.Activator.CreateInstance(type, global::System.Reflection.BindingFlags.Instance|global::System.Reflection.BindingFlags.NonPublic|global::System.Reflection.BindingFlags.Public, null, new object[]{cPtr, cMemoryOwn}, null);
     });
   }
 
-  internal $csclassname(global::System.IntPtr cPtr, bool cMemoryOwn) : base($imclassname.$csclazznameSWIGUpcast(cPtr), cMemoryOwn) {
-    swigCPtr = new global::System.Runtime.InteropServices.HandleRef(this, cPtr);
+  internal $csclassname(global::System.IntPtr cPtr, bool cMemoryOwn) : base($imclassname.$csclazznameSWIGUpcast(cPtr), false) {
+    swigCMemOwn = cMemoryOwn;
+    swigCPtr = new global::System.Runtime.InteropServices.HandleRef(this, cPtr);$directorsetup
     _instanceCache.AddNew(swigCPtr);
   }
 
@@ -53,31 +59,30 @@
   }
 %}
 
-%typemap(csdestruct, methodname="Dispose", methodmodifiers="public") SWIGTYPE {
+%typemap(csdisposing, methodname="Dispose", methodmodifiers="protected", parameters="bool disposing") SWIGTYPE {
     lock(this) {
       if (swigCPtr.Handle != global::System.IntPtr.Zero) {
-        _instanceCache.Remove(swigCPtr);
         if (swigCMemOwn) {
+          _instanceCache.Remove(swigCPtr);
           swigCMemOwn = false;
           $imcall;
         }
         swigCPtr = new global::System.Runtime.InteropServices.HandleRef(null, global::System.IntPtr.Zero);
       }
-      global::System.GC.SuppressFinalize(this);
     }
   }
 
-%typemap(csdestruct_derived, methodname="Dispose", methodmodifiers="public") SWIGTYPE {
+%typemap(csdisposing_derived, methodname="Dispose", methodmodifiers="protected", parameters="bool disposing") SWIGTYPE {
     lock(this) {
       if (swigCPtr.Handle != global::System.IntPtr.Zero) {
         if (swigCMemOwn) {
+          _instanceCache.Remove(swigCPtr);
           swigCMemOwn = false;
           $imcall;
         }
         swigCPtr = new global::System.Runtime.InteropServices.HandleRef(null, global::System.IntPtr.Zero);
       }
-      global::System.GC.SuppressFinalize(this);
-      base.Dispose();
+      base.Dispose(disposing);
     }
   }
 
@@ -144,7 +149,7 @@
 
 %typemap(csbody) SWIGTYPE *, SWIGTYPE &, SWIGTYPE &&, SWIGTYPE [] %{
   private global::System.Runtime.InteropServices.HandleRef swigCPtr;
-  private static InstanceCache<$csclassname> _instanceCache = new InstanceCache<$csclassname>();
+  private static global::Urho3DNet.InstanceCache<$csclassname> _instanceCache = new global::Urho3DNet.InstanceCache<$csclassname>();
   internal static $csclassname wrap(global::System.IntPtr cPtr, bool cMemoryOwn)
   {
     if (cPtr == global::System.IntPtr.Zero)

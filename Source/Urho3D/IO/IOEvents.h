@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,9 @@ namespace Urho3D
 URHO3D_EVENT(E_LOGMESSAGE, LogMessage)
 {
     URHO3D_PARAM(P_MESSAGE, Message);              // String
+    URHO3D_PARAM(P_LOGGER, Logger);                // String
     URHO3D_PARAM(P_LEVEL, Level);                  // int
+    URHO3D_PARAM(P_TIME, Time);                    // unsigned
 }
 
 /// Async system command execution finished.

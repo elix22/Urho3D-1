@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,7 @@
 //
 #pragma once
 
-
+#include <Toolbox/Common/UndoManager.h>
 #include "Tabs/Tab.h"
 
 namespace Urho3D
@@ -30,24 +30,41 @@ namespace Urho3D
 class BaseResourceTab
     : public Tab
 {
+    URHO3D_OBJECT(BaseResourceTab, Tab);
 public:
     /// Construct.
     explicit BaseResourceTab(Context* context);
+    /// Returns type of resource that this tab can handle.
+    virtual StringHash GetResourceType() = 0;
     /// Load resource from cache.
-    bool LoadResource(const String& resourcePath) override;
+    bool LoadResource(const ea::string& resourcePath) override;
     /// Save resource o disk.
     bool SaveResource() override;
-    /// Save project data to xml.
-    virtual void OnSaveProject(JSONValue& tab);
-    /// Load project data from xml.
-    virtual void OnLoadProject(const JSONValue& tab);
+    /// Save ui settings.
+    void OnSaveUISettings(ImGuiTextBuffer* buf) override;
+    /// Load ui settings.
+    const char* OnLoadUISettings(const char* name, const char* line) override;
+    /// Returns name of opened resource.
+    ea::string GetResourceName() const { return resourceName_; }
+    /// Returns true when loaded resource was modified.
+    bool IsModified() const override;
+    /// Closes current tab and unloads it's contents from memory.
+    void Close() override;
+    ///
+    void OnBeforeEnd() override;
 
 protected:
     /// Set resource name.
-    void SetResourceName(const String& resourceName);
+    void SetResourceName(const ea::string& resourceName);
 
     /// Name of loaded resource.
-    String resourceName_;
+    ea::string resourceName_;
+    /// Comparing undo stack size allows determining if open resource was modified during last frame.
+    int lastUndoIndex_ = 0;
+    /// State change tracker.
+    Undo::Manager undo_;
+    /// Resource that user would like to open on top of current loaded resource. Used for displaying warning.
+    ea::string pendingLoadResource_;
 };
 
 }

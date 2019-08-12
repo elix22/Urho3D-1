@@ -12,7 +12,10 @@
 /lib*/
 generated/
 /Source/Urho3D/tolua++-prefix/
-/build
+/cmake-build*
+captures/
+.cxx/
+.externalNativeBuild/
 
 # Output files
 /Source/**/*.a
@@ -24,7 +27,6 @@ generated/
 /Source/Urho3D/Urho3D.pc.msvc
 /Source/Urho3D/Urho3DAll.h
 /Source/Urho3D/librevision.h
-Android/build
 
 # Compiled shaders
 *.vs?
@@ -67,7 +69,8 @@ Android/build
 /*.workspace
 
 # Android project settings
-/Android/local.properties
+/android/local.properties
+/android/build
 
 # Android output directories
 gradle*
@@ -87,7 +90,6 @@ CTestTestfile.cmake
 !/Source/ThirdParty/SDL/include/*cmake
 !/Source/ThirdParty/Assimp/cmake-modules/*cmake
 /Docs/**/*.cmake
-/build
 
 # Precompiled header files
 *.gch/
@@ -107,6 +109,7 @@ configure*
 *.bak
 Thumbs.db
 .*
+!.ci
 *.DotSettings
 *.DotSettings.user
 __pycache__

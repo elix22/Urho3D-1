@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -62,7 +62,7 @@ public:
     /// Handle enabled/disabled state change.
     void OnSetEnabled() override;
     /// Return the depended on nodes to order network updates.
-    void GetDependencyNodes(PODVector<Node*>& dest) override;
+    void GetDependencyNodes(ea::vector<Node*>& dest) override;
     /// Visualize the component as debug geometry.
     void DrawDebugGeometry(DebugRenderer* debug, bool depthTest) override;
 
@@ -99,7 +99,7 @@ public:
     PhysicsWorld* GetPhysicsWorld() const { return physicsWorld_; }
 
     /// Return Bullet constraint.
-    btTypedConstraint* GetConstraint() const { return constraint_.Get(); }
+    btTypedConstraint* GetConstraint() const { return constraint_.get(); }
 
     /// Return constraint type.
     ConstraintType GetConstraintType() const { return constraintType_; }
@@ -172,7 +172,7 @@ private:
     /// Other rigid body.
     WeakPtr<RigidBody> otherBody_;
     /// Bullet constraint.
-    UniquePtr<btTypedConstraint> constraint_;
+    ea::unique_ptr<btTypedConstraint> constraint_;
     /// Constraint type.
     ConstraintType constraintType_;
     /// Constraint position.

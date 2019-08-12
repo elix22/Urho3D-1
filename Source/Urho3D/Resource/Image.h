@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
+#include <EASTL/shared_array.h>
+
 #include "../Resource/Resource.h"
 
 struct SDL_Surface;
@@ -41,6 +42,8 @@ enum CompressedFormat
     CF_DXT3,
     CF_DXT5,
     CF_ETC1,
+    CF_ETC2_RGB,
+    CF_ETC2_RGBA,
     CF_PVRTC_RGB_2BPP,
     CF_PVRTC_RGBA_2BPP,
     CF_PVRTC_RGB_4BPP,
@@ -91,7 +94,7 @@ public:
     /// Save the image to a stream. Regardless of original format, the image is saved as png. Compressed image data is not supported. Return true if successful.
     bool Save(Serializer& dest) const override;
     /// Save the image to a file. Format of the image is determined by file extension. JPG is saved with maximum quality.
-    bool SaveFile(const String& fileName) const override;
+    bool SaveFile(const ea::string& fileName) const override;
 
     /// Set 2D size and number of color components. Old image data will be destroyed and new data is undefined. Return true if successful.
     bool SetSize(int width, int height, unsigned components);
@@ -120,17 +123,17 @@ public:
     /// Clear the image with an integer color. R component is in the 8 lowest bits.
     void ClearInt(unsigned uintColor);
     /// Save in BMP format. Return true if successful.
-    bool SaveBMP(const String& fileName) const;
+    bool SaveBMP(const ea::string& fileName) const;
     /// Save in PNG format. Return true if successful.
-    bool SavePNG(const String& fileName) const;
+    bool SavePNG(const ea::string& fileName) const;
     /// Save in TGA format. Return true if successful.
-    bool SaveTGA(const String& fileName) const;
+    bool SaveTGA(const ea::string& fileName) const;
     /// Save in JPG format with specified quality. Return true if successful.
-    bool SaveJPG(const String& fileName, int quality) const;
+    bool SaveJPG(const ea::string& fileName, int quality) const;
     /// Save in DDS format. Only uncompressed RGBA images are supported. Return true if successful.
-    bool SaveDDS(const String& fileName) const;
+    bool SaveDDS(const ea::string& fileName) const;
     /// Save in WebP format with minimum (fastest) or specified compression. Return true if successful. Fails always if WebP support is not compiled in.
-    bool SaveWEBP(const String& fileName, float compression = 0.0f) const;
+    bool SaveWEBP(const ea::string& fileName, float compression = 0.0f) const;
     /// Whether this texture is detected as a cubemap, only relevant for DDS.
     bool IsCubemap() const { return cubemap_; }
     /// Whether this texture has been detected as a volume, only relevant for DDS.
@@ -164,7 +167,7 @@ public:
     unsigned GetComponents() const { return components_; }
 
     /// Return pixel data.
-    unsigned char* GetData() const { return data_; }
+    unsigned char* GetData() const { return data_.get(); }
 
     /// Return whether is compressed.
     bool IsCompressed() const { return compressedFormat_ != CF_NONE; }
@@ -184,7 +187,7 @@ public:
     /// Return a compressed mip level.
     CompressedLevel GetCompressedLevel(unsigned index) const;
     /// Return subimage from the image by the defined rect or null if failed. 3D images are not supported. You must free the subimage yourself.
-    Image* GetSubimage(const IntRect& rect) const;
+    SharedPtr<Image> GetSubimage(const IntRect& rect) const;
     /// Return an SDL surface from the image, or null if failed. Only RGB images are supported. Specify rect to only return partial image. You must free the surface yourself.
     SDL_Surface* GetSDLSurface(const IntRect& rect = IntRect::ZERO) const;
     /// Precalculate the mip levels. Used by asynchronous texture loading.
@@ -196,9 +199,9 @@ public:
     /// Clean up the mip levels.
     void CleanupLevels();
     /// Get all stored mip levels starting from this.
-    void GetLevels(PODVector<Image*>& levels);
+    void GetLevels(ea::vector<Image*>& levels);
     /// Get all stored mip levels starting from this.
-    void GetLevels(PODVector<const Image*>& levels) const;
+    void GetLevels(ea::vector<const Image*>& levels) const;
 
 private:
     /// Decode an image using stb_image.
@@ -225,7 +228,7 @@ private:
     /// Compressed format.
     CompressedFormat compressedFormat_{CF_NONE};
     /// Pixel data.
-    SharedArrayPtr<unsigned char> data_;
+    ea::shared_array<unsigned char> data_;
     /// Precalculated mip level image.
     SharedPtr<Image> nextLevel_;
     /// Next texture array or cube map image.

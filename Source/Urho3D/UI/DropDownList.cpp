@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -46,15 +46,15 @@ DropDownList::DropDownList(Context* context) :
 {
     focusMode_ = FM_FOCUSABLE_DEFOCUSABLE;
 
-    auto* window = new Window(context_);
+    auto window(context_->CreateObject<Window>());
     window->SetInternal(true);
-    SetPopup(window);
+    SetPopup(window.Get());
 
-    listView_ = new ListView(context_);
+    listView_ = context_->CreateObject<ListView>();
     listView_->SetInternal(true);
     listView_->SetScrollBarsVisible(false, false);
     popup_->SetLayout(LM_VERTICAL);
-    popup_->AddChild(listView_);
+    popup_->AddChild(listView_.Get());
     placeholder_ = CreateChild<UIElement>("DDL_Placeholder");
     placeholder_->SetInternal(true);
     auto* text = placeholder_->CreateChild<Text>("DDL_Placeholder_Text");
@@ -84,7 +84,7 @@ void DropDownList::ApplyAttributes()
     SetSelection(selectionAttr_);
 }
 
-void DropDownList::GetBatches(PODVector<UIBatch>& batches, PODVector<float>& vertexData, const IntRect& currentScissor)
+void DropDownList::GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, const IntRect& currentScissor)
 {
     Menu::GetBatches(batches, vertexData, currentScissor);
 
@@ -132,7 +132,7 @@ void DropDownList::OnShowPopup()
     SetPopupOffset(0, showAbove ? -popup_->GetHeight() : GetHeight());
 
     // Focus the ListView to allow making the selection with keys
-    GetSubsystem<UI>()->SetFocusElement(listView_);
+    GetSubsystem<UI>()->SetFocusElement(listView_.Get());
 }
 
 void DropDownList::OnHidePopup()
@@ -185,7 +185,7 @@ void DropDownList::SetSelection(unsigned index)
     listView_->SetSelection(index);
 }
 
-void DropDownList::SetPlaceholderText(const String& text)
+void DropDownList::SetPlaceholderText(const ea::string& text)
 {
     placeholder_->GetChildStaticCast<Text>(0)->SetText(text);
 }
@@ -205,7 +205,7 @@ UIElement* DropDownList::GetItem(unsigned index) const
     return listView_->GetItem(index);
 }
 
-PODVector<UIElement*> DropDownList::GetItems() const
+ea::vector<UIElement*> DropDownList::GetItems() const
 {
     return listView_->GetItems();
 }
@@ -220,7 +220,7 @@ UIElement* DropDownList::GetSelectedItem() const
     return listView_->GetSelectedItem();
 }
 
-const String& DropDownList::GetPlaceholderText() const
+const ea::string& DropDownList::GetPlaceholderText() const
 {
     return placeholder_->GetChildStaticCast<Text>(0)->GetText();
 }
@@ -266,7 +266,7 @@ bool DropDownList::FilterPopupImplicitAttributes(XMLElement& dest) const
         return false;
 
     // Window popup
-    if (dest.GetAttribute("style").Empty() && !dest.SetAttribute("style", "none"))
+    if (dest.GetAttribute("style").empty() && !dest.SetAttribute("style", "none"))
         return false;
     if (!RemoveChildXML(dest, "Layout Mode", "Vertical"))
         return false;
@@ -279,7 +279,7 @@ bool DropDownList::FilterPopupImplicitAttributes(XMLElement& dest) const
         return false;
     if (!listView_->FilterAttributes(childElem))
         return false;
-    if (childElem.GetAttribute("style").Empty() && !childElem.SetAttribute("style", "none"))
+    if (childElem.GetAttribute("style").empty() && !childElem.SetAttribute("style", "none"))
         return false;
     if (!RemoveChildXML(childElem, "Focus Mode", "NotFocusable"))
         return false;
@@ -300,13 +300,13 @@ bool DropDownList::FilterPopupImplicitAttributes(XMLElement& dest) const
 
     if (panelElem)
     {
-        if (panelElem.GetAttribute("style").Empty() && !panelElem.SetAttribute("style", "none"))
+        if (panelElem.GetAttribute("style").empty() && !panelElem.SetAttribute("style", "none"))
             return false;
         // Item container
         XMLElement containerElem = panelElem.GetChild("element");
         if (containerElem)
         {
-            if (containerElem.GetAttribute("style").Empty() && !containerElem.SetAttribute("style", "none"))
+            if (containerElem.GetAttribute("style").empty() && !containerElem.SetAttribute("style", "none"))
                 return false;
         }
     }

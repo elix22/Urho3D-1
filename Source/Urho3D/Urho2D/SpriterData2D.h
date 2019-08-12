@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,9 @@
 //
 
 #pragma once
+
+#include <EASTL/vector.h>
+#include <EASTL/string.h>
 
 namespace pugi
 {
@@ -60,10 +63,10 @@ struct SpriterData
     bool Load(const void* data, size_t size);
 
     int scmlVersion_{};
-    String generator_;
-    String generatorVersion_;
-    PODVector<Folder*> folders_;
-    PODVector<Entity*> entities_;
+    ea::string generator_;
+    ea::string generatorVersion_;
+    ea::vector<Folder*> folders_;
+    ea::vector<Entity*> entities_;
 };
 
 /// Folder.
@@ -76,8 +79,8 @@ struct Folder
     bool Load(const pugi::xml_node& node);
 
     int id_{};
-    String name_;
-    PODVector<File*> files_;
+    ea::string name_;
+    ea::vector<File*> files_;
 };
 
 /// File.
@@ -90,7 +93,7 @@ struct File
 
     Folder* folder_{};
     int id_{};
-    String name_;
+    ea::string name_;
     float width_{};
     float height_{};
     float pivotX_{};
@@ -107,9 +110,9 @@ struct Entity
     bool Load(const pugi::xml_node& node);
 
     int id_{};
-    String name_;
-    PODVector<CharacterMap*> characterMaps_;
-    PODVector<Animation*> animations_;
+    ea::string name_;
+    ea::vector<CharacterMap*> characterMaps_;
+    ea::vector<Animation*> animations_;
 };
 
 /// Character map.
@@ -122,8 +125,8 @@ struct CharacterMap
     bool Load(const pugi::xml_node& node);
 
     int id_{};
-    String name_;
-    PODVector<MapInstruction*> maps_;
+    ea::string name_;
+    ea::vector<MapInstruction*> maps_;
 };
 
 /// Map instruction.
@@ -150,11 +153,11 @@ struct Animation
     bool Load(const pugi::xml_node& node);
 
     int id_{};
-    String name_;
+    ea::string name_;
     float length_{};
     bool looping_{};
-    PODVector<MainlineKey*> mainlineKeys_;
-    PODVector<Timeline*> timelines_;
+    ea::vector<MainlineKey*> mainlineKeys_;
+    ea::vector<Timeline*> timelines_;
 };
 
 /// Mainline key.
@@ -168,8 +171,8 @@ struct MainlineKey
 
     int id_{};
     float time_{};
-    PODVector<Ref*> boneRefs_;
-    PODVector<Ref*> objectRefs_;
+    ea::vector<Ref*> boneRefs_;
+    ea::vector<Ref*> objectRefs_;
 };
 
 /// Ref.
@@ -204,9 +207,9 @@ struct Timeline
     bool Load(const pugi::xml_node& node);
 
     int id_{};
-    String name_;
+    ea::string name_;
     ObjectType objectType_;
-    PODVector<SpatialTimelineKey*> keys_;
+    ea::vector<SpatialTimelineKey*> keys_;
 };
 
 /// Curve type.

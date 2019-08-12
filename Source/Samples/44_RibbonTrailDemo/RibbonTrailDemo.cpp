@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -42,7 +42,6 @@
 
 #include <Urho3D/DebugNew.h>
 
-URHO3D_DEFINE_APPLICATION_MAIN(RibbonTrailDemo)
 
 RibbonTrailDemo::RibbonTrailDemo(Context* context) :
     Sample(context),
@@ -155,19 +154,19 @@ void RibbonTrailDemo::CreateScene()
     Node* boxTextNode1 = scene_->CreateChild("BoxText1");
     boxTextNode1->SetPosition(Vector3(-1.0f, 2.0f, 0.0f));
     auto* boxText1 = boxTextNode1->CreateComponent<Text3D>();
-    boxText1->SetText(String("Face Camera Trail (4 Column)"));
+    boxText1->SetText(ea::string("Face Camera Trail (4 Column)"));
     boxText1->SetFont(cache->GetResource<Font>("Fonts/BlueHighway.sdf"), 24);
 
     Node* boxTextNode2 = scene_->CreateChild("BoxText2");
     boxTextNode2->SetPosition(Vector3(-6.0f, 2.0f, 0.0f));
     auto* boxText2 = boxTextNode2->CreateComponent<Text3D>();
-    boxText2->SetText(String("Face Camera Trail (1 Column)"));
+    boxText2->SetText(ea::string("Face Camera Trail (1 Column)"));
     boxText2->SetFont(cache->GetResource<Font>("Fonts/BlueHighway.sdf"), 24);
 
     Node* ninjaTextNode2 = scene_->CreateChild("NinjaText");
     ninjaTextNode2->SetPosition(Vector3(4.0f, 2.5f, 0.0f));
     auto* ninjaText = ninjaTextNode2->CreateComponent<Text3D>();
-    ninjaText->SetText(String("Bone Trail (4 Column)"));
+    ninjaText->SetText(ea::string("Bone Trail (4 Column)"));
     ninjaText->SetFont(cache->GetResource<Font>("Fonts/BlueHighway.sdf"), 24);
 
     // Create the camera.
@@ -267,7 +266,7 @@ void RibbonTrailDemo::HandleUpdate(StringHash eventType, VariantMap& eventData)
         Quaternion());
 
     // Get elapsed attack animation time.
-    float swordAnimTime = ninjaAnimCtrl_->GetAnimationState(String("Models/NinjaSnowWar/Ninja_Attack3.ani"))->GetTime();
+    float swordAnimTime = ninjaAnimCtrl_->GetAnimationState(ea::string("Models/NinjaSnowWar/Ninja_Attack3.ani"))->GetTime();
 
     // Stop emitting trail when sword is finished slashing.
     if (!swordTrail_->IsEmitting() && swordAnimTime > swordTrailStartTime_ && swordAnimTime < swordTrailEndTime_)

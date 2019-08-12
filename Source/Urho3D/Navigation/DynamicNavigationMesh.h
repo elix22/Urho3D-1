@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,8 @@
 //
 
 #pragma once
+
+#include <EASTL/unique_ptr.h>
 
 #include "../Navigation/NavigationMesh.h"
 
@@ -63,11 +65,11 @@ public:
     /// Rebuild part of the navigation mesh in the rectangular area. Return true if successful.
     bool Build(const IntVector2& from, const IntVector2& to) override;
     /// Return tile data.
-    PODVector<unsigned char> GetTileData(const IntVector2& tile) const override;
+    ea::vector<unsigned char> GetTileData(const IntVector2& tile) const override;
     /// Return whether the Obstacle is touching the given tile.
     bool IsObstacleInTile(Obstacle* obstacle, const IntVector2& tile) const;
     /// Add tile to navigation mesh.
-    bool AddTile(const PODVector<unsigned char>& tileData) override;
+    bool AddTile(const ea::vector<unsigned char>& tileData) override;
     /// Remove tile from navigation mesh.
     void RemoveTile(const IntVector2& tile) override;
     /// Remove all tiles from navigation mesh.
@@ -78,9 +80,9 @@ public:
     void DrawDebugGeometry(bool depthTest);
 
     /// Set navigation data attribute.
-    void SetNavigationDataAttr(const PODVector<unsigned char>& value) override;
+    void SetNavigationDataAttr(const ea::vector<unsigned char>& value) override;
     /// Return navigation data attribute.
-    PODVector<unsigned char> GetNavigationDataAttr() const override;
+    ea::vector<unsigned char> GetNavigationDataAttr() const override;
 
     /// Set the maximum number of obstacles allowed.
     void SetMaxObstacles(unsigned maxObstacles) { maxObstacles_ = maxObstacles; }
@@ -114,11 +116,11 @@ protected:
     void RemoveObstacle(Obstacle* obstacle, bool silent = false);
 
     /// Build one tile of the navigation mesh. Return true if successful.
-    int BuildTile(Vector<NavigationGeometryInfo>& geometryList, int x, int z, TileCacheData* tiles);
+    int BuildTile(ea::vector<NavigationGeometryInfo>& geometryList, int x, int z, TileCacheData* tiles);
     /// Build tiles in the rectangular area. Return number of built tiles.
-    unsigned BuildTiles(Vector<NavigationGeometryInfo>& geometryList, const IntVector2& from, const IntVector2& to);
+    unsigned BuildTiles(ea::vector<NavigationGeometryInfo>& geometryList, const IntVector2& from, const IntVector2& to);
     /// Off-mesh connections to be rebuilt in the mesh processor.
-    PODVector<OffMeshConnection*> CollectOffMeshConnections(const BoundingBox& bounds);
+    ea::vector<OffMeshConnection*> CollectOffMeshConnections(const BoundingBox& bounds);
     /// Release the navigation mesh, query, and tile cache.
     void ReleaseNavigationMesh() override;
 
@@ -133,11 +135,11 @@ private:
     /// Detour tile cache instance that works with the nav mesh.
     dtTileCache* tileCache_{};
     /// Used by dtTileCache to allocate blocks of memory.
-    UniquePtr<dtTileCacheAlloc> allocator_;
+    ea::unique_ptr<dtTileCacheAlloc> allocator_;
     /// Used by dtTileCache to compress the original tiles to use when reconstructing for changes.
-    UniquePtr<dtTileCacheCompressor> compressor_;
+    ea::unique_ptr<dtTileCacheCompressor> compressor_;
     /// Mesh processor used by Detour, in this case a 'pass-through' processor.
-    UniquePtr<dtTileCacheMeshProcess> meshProcessor_;
+    ea::unique_ptr<dtTileCacheMeshProcess> meshProcessor_;
     /// Maximum number of obstacle objects allowed.
     unsigned maxObstacles_{1024};
     /// Maximum number of layers that are allowed to be constructed.
@@ -145,7 +147,7 @@ private:
     /// Debug draw Obstacles.
     bool drawObstacles_{};
     /// Queue of tiles to be built.
-    PODVector<IntVector2> tileQueue_;
+    ea::vector<IntVector2> tileQueue_;
 };
 
 }

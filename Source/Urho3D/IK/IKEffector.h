@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -96,7 +96,7 @@ public:
      * @brief Retrieves the name of the target node. The node doesn't
      * necessarily have to exist in the scene graph.
      */
-    const String& GetTargetName() const;
+    const ea::string& GetTargetName() const;
 
     /*!
      * @brief Sets the name of the target node. The node doesn't necessarily
@@ -104,7 +104,7 @@ public:
      * this name, it is selected as the target.
      * @note This clears the existing target node.
      */
-    void SetTargetName(const String& nodeName);
+    void SetTargetName(const ea::string& nodeName);
 
     /// Returns the current target position in world space.
     const Vector3& GetTargetPosition() const;
@@ -190,7 +190,7 @@ private:
     WeakPtr<IKSolver> solver_;
     ik_node_t* ikEffectorNode_;
 
-    String targetName_;
+    ea::string targetName_;
     Vector3 targetPosition_;
     Quaternion targetRotation_;
     unsigned chainLength_;

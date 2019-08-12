@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -137,7 +137,7 @@ protected:
     /// Filter implicit attributes in serialization process.
     bool FilterImplicitAttributes(XMLElement& dest) const override;
     /// Filter implicit attributes in serialization process for internal scroll bar.
-    bool FilterScrollBarImplicitAttributes(XMLElement& dest, const String& name) const;
+    bool FilterScrollBarImplicitAttributes(XMLElement& dest, const ea::string& name) const;
     /// Resize panel based on scrollbar visibility.
     void UpdatePanelSize();
     /// Recalculate view size, validate view position and update scrollbars.

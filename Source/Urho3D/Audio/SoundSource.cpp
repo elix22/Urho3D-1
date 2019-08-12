@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -134,7 +134,7 @@ void SoundSource::RegisterObject(Context* context)
 
     URHO3D_ACCESSOR_ATTRIBUTE("Is Enabled", IsEnabled, SetEnabled, bool, true, AM_DEFAULT);
     URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Sound", GetSoundAttr, SetSoundAttr, ResourceRef, ResourceRef(Sound::GetTypeStatic()), AM_DEFAULT);
-    URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Type", GetSoundType, SetSoundType, String, SOUND_EFFECT, AM_DEFAULT);
+    URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Type", GetSoundType, SetSoundType, ea::string, SOUND_EFFECT, AM_DEFAULT);
     URHO3D_ATTRIBUTE("Frequency", float, frequency_, 0.0f, AM_DEFAULT);
     URHO3D_ATTRIBUTE("Gain", float, gain_, 1.0f, AM_DEFAULT);
     URHO3D_ATTRIBUTE("Attenuation", float, attenuation_, 1.0f, AM_DEFAULT);
@@ -188,13 +188,13 @@ void SoundSource::Play(Sound* sound)
 
     // Forget the Sound & Is Playing attribute previous values so that they will be sent again, triggering
     // the sound correctly on network clients even after the initial playback
-    if (networkState_ && networkState_->attributes_ && networkState_->previousValues_.Size())
+    if (networkState_ && networkState_->attributes_ && networkState_->previousValues_.size())
     {
-        for (unsigned i = 1; i < networkState_->previousValues_.Size(); ++i)
+        for (unsigned i = 1; i < networkState_->previousValues_.size(); ++i)
         {
             // The indexing is different for SoundSource & SoundSource3D, as SoundSource3D removes two attributes,
             // so go by attribute types
-            VariantType type = networkState_->attributes_->At(i).type_;
+            VariantType type = networkState_->attributes_->at(i).type_;
             if (type == VAR_RESOURCEREF || type == VAR_BOOL)
                 networkState_->previousValues_[i] = Variant::EMPTY;
         }
@@ -269,7 +269,7 @@ void SoundSource::Stop()
     MarkNetworkUpdate();
 }
 
-void SoundSource::SetSoundType(const String& type)
+void SoundSource::SetSoundType(const ea::string& type)
 {
     if (type == SOUND_MASTER)
         return;
@@ -483,7 +483,7 @@ void SoundSource::SetPlayingAttr(bool value)
     if (value)
     {
         if (!IsPlaying())
-            Play(sound_);
+            Play(sound_.Get());
     }
     else
         Stop();
@@ -556,7 +556,7 @@ void SoundSource::PlayLockless(const SharedPtr<SoundStream>& stream)
         unsigned sampleSize = stream->GetSampleSize();
         unsigned streamBufferSize = sampleSize * stream->GetIntFrequency() * STREAM_BUFFER_LENGTH / 1000;
 
-        streamBuffer_ = new Sound(context_);
+        streamBuffer_ = context_->CreateObject<Sound>();
         streamBuffer_->SetSize(streamBufferSize);
         streamBuffer_->SetFormat(stream->GetIntFrequency(), stream->IsSixteenBit(), stream->IsStereo());
         streamBuffer_->SetLooped(true);

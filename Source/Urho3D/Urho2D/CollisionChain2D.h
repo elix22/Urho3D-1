@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -46,24 +46,24 @@ public:
     /// Set vertex.
     void SetVertex(unsigned index, const Vector2& vertex);
     /// Set vertices.
-    void SetVertices(const PODVector<Vector2>& vertices);
+    void SetVertices(const ea::vector<Vector2>& vertices);
     /// Set vertices attribute.
-    void SetVerticesAttr(const PODVector<unsigned char>& value);
+    void SetVerticesAttr(const ea::vector<unsigned char>& value);
 
     /// Return loop.
     bool GetLoop() const { return loop_; }
 
     /// Return vertex count.
-    unsigned GetVertexCount() const { return vertices_.Size(); }
+    unsigned GetVertexCount() const { return vertices_.size(); }
 
     /// Return vertex.
-    const Vector2& GetVertex(unsigned index) const { return (index < vertices_.Size()) ? vertices_[index] : Vector2::ZERO; }
+    const Vector2& GetVertex(unsigned index) const { return (index < vertices_.size()) ? vertices_[index] : Vector2::ZERO; }
 
     /// Return vertices.
-    const PODVector<Vector2>& GetVertices() const { return vertices_; }
+    const ea::vector<Vector2>& GetVertices() const { return vertices_; }
 
     /// Return vertices attribute.
-    PODVector<unsigned char> GetVerticesAttr() const;
+    ea::vector<unsigned char> GetVerticesAttr() const;
 
 private:
     /// Apply node world scale.
@@ -76,7 +76,7 @@ private:
     /// Loop.
     bool loop_;
     /// Vertices.
-    PODVector<Vector2> vertices_;
+    ea::vector<Vector2> vertices_;
 };
 
 }

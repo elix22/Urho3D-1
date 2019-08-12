@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -42,45 +42,56 @@ URHO3D_EVENT(E_EDITORSELECTIONCHANGED, EditorSelectionChanged)
     URHO3D_PARAM(P_SCENE, Scene);                     // Scene pointer.
 }
 
-/// Event sent when scene has it's rendering settings modified.
-URHO3D_EVENT(E_EDITORSCENEEFFECTSCHANGED, EditorSceneEffectsChanged)
-{
-    URHO3D_PARAM(P_SCENE, Scene);                     // Scene pointer.
-}
-
 /// Event sent when rendering top menu bar of editor.
 URHO3D_EVENT(E_EDITORAPPLICATIONMENU, EditorApplicationMenu)
 {
 }
 
-/// Event sent when editor is about to save a project.
+/// Event sent when editor is about to save a Project.json file.
 URHO3D_EVENT(E_EDITORPROJECTSAVING, EditorProjectSaving)
 {
     URHO3D_PARAM(P_ROOT, Root);                      // Raw pointer to JSONValue.
 }
 
-/// Event sent when editor is about to load a new project.
+/// Event sent when editor is about to load a Project.json file.
 URHO3D_EVENT(E_EDITORPROJECTLOADING, EditorProjectLoading)
 {
     URHO3D_PARAM(P_ROOT, Root);                      // Raw pointer to JSONValue.
 }
 
-/// Notify inspector window that this instance would like to render inspector content.
-URHO3D_EVENT(E_EDITORRENDERINSPECTOR, EditorRenderInspector)
+/// Event sent when editor is about to load a Project.json file.
+URHO3D_EVENT(E_EDITORPROJECTCLOSING, EditorProjectClosing)
 {
-    URHO3D_PARAM(P_INSPECTABLE, Inspectable);         // RefCounted pointer.
-}
-
-/// Notify inspector window that this instance would like to render hierarchy content.
-URHO3D_EVENT(E_EDITORRENDERHIERARCHY, EditorRenderHierarchy)
-{
-    URHO3D_PARAM(P_INSPECTABLE, Inspectable);         // RefCounted pointer.
 }
 
 /// Notify subsystems about closed editor tab.
 URHO3D_EVENT(E_EDITORTABCLOSED, EditorTabClosed)
 {
     URHO3D_PARAM(P_TAB, Tab);                         // RefCounted pointer.
+}
+
+/// Sent when scene is played. Not sent when scene is resumed from paused state.
+URHO3D_EVENT(E_SIMULATIONSTART, SimulationStart)
+{
+}
+
+/// Sent when scene is stopped. Not sent when scene is paused.
+URHO3D_EVENT(E_SIMULATIONSTOP, SimulationStop)
+{
+}
+
+/// Sent when user selects a resource in resource browser.
+URHO3D_EVENT(E_EDITORRESOURCESELECTED, EditorResourceSelected)
+{
+    URHO3D_PARAM(P_CTYPE, CType);                       // ContentType
+    URHO3D_PARAM(P_RESOURCENAME, ResourceName);         // String
+}
+
+/// Sent when user right-clicks a resource in resource browser. Use for extending context menu.
+URHO3D_EVENT(E_EDITORRESOURCECONTEXTMENU, EditorResourceContextMenu)
+{
+    URHO3D_PARAM(P_CTYPE, CType);                       // ContentType
+    URHO3D_PARAM(P_RESOURCENAME, ResourceName);         // String
 }
 
 }

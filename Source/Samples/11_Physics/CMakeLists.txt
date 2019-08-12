@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2018 the Urho3D project.
+# Copyright (c) 2008-2019 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,4 +24,6 @@ if (NOT URHO3D_PHYSICS)
     return ()
 endif ()
 
-add_sample (11_Physics)
+file (GLOB SAMPLE_CODE *.h *.cpp)
+list (APPEND SOURCE_CODE ${SAMPLE_CODE})
+set (SOURCE_CODE "${SOURCE_CODE}" PARENT_SCOPE)

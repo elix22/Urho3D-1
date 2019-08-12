@@ -11,14 +11,12 @@
 namespace tracy
 {
 
-extern std::atomic<uint32_t> s_lockCounter;
-
 template<class T>
 class Lockable
 {
 public:
     tracy_force_inline Lockable( const SourceLocationData* srcloc )
-        : m_id( s_lockCounter.fetch_add( 1, std::memory_order_relaxed ) )
+        : m_id( GetLockCounter().fetch_add( 1, std::memory_order_relaxed ) )
 #ifdef TRACY_ON_DEMAND
         , m_lockCount( 0 )
         , m_active( false )
@@ -27,16 +25,17 @@ public:
         assert( m_id != std::numeric_limits<uint32_t>::max() );
 
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::LockAnnounce );
         MemWrite( &item->lockAnnounce.id, m_id );
+        MemWrite( &item->lockAnnounce.time, Profiler::GetTime() );
         MemWrite( &item->lockAnnounce.lckloc, (uint64_t)srcloc );
         MemWrite( &item->lockAnnounce.type, LockType::Lockable );
 
 #ifdef TRACY_ON_DEMAND
-        s_profiler.DeferItem( *item );
+        GetProfiler().DeferItem( *item );
 #endif
 
         tail.store( magic + 1, std::memory_order_release );
@@ -44,6 +43,24 @@ public:
 
     Lockable( const Lockable& ) = delete;
     Lockable& operator=( const Lockable& ) = delete;
+
+    ~Lockable()
+    {
+        Magic magic;
+        auto token = GetToken();
+        auto& tail = token->get_tail_index();
+        auto item = token->enqueue_begin( magic );
+        MemWrite( &item->hdr.type, QueueType::LockTerminate );
+        MemWrite( &item->lockTerminate.id, m_id );
+        MemWrite( &item->lockTerminate.time, Profiler::GetTime() );
+        MemWrite( &item->lockTerminate.type, LockType::Lockable );
+
+#ifdef TRACY_ON_DEMAND
+        GetProfiler().DeferItem( *item );
+#endif
+
+        tail.store( magic + 1, std::memory_order_release );
+    }
 
     tracy_force_inline void lock()
     {
@@ -53,7 +70,7 @@ public:
         const auto active = m_active.load( std::memory_order_relaxed );
         if( locks == 0 || active )
         {
-            const bool connected = s_profiler.IsConnected();
+            const bool connected = GetProfiler().IsConnected();
             if( active != connected ) m_active.store( connected, std::memory_order_relaxed );
             if( connected ) queue = true;
         }
@@ -63,15 +80,13 @@ public:
             return;
         }
 #endif
-        const auto thread = GetThreadHandle();
         {
             Magic magic;
-            auto& token = s_token.ptr;
+            auto token = GetToken();
             auto& tail = token->get_tail_index();
-            auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+            auto item = token->enqueue_begin( magic );
             MemWrite( &item->hdr.type, QueueType::LockWait );
             MemWrite( &item->lockWait.id, m_id );
-            MemWrite( &item->lockWait.thread, thread );
             MemWrite( &item->lockWait.time, Profiler::GetTime() );
             MemWrite( &item->lockWait.type, LockType::Lockable );
             tail.store( magic + 1, std::memory_order_release );
@@ -81,12 +96,11 @@ public:
 
         {
             Magic magic;
-            auto& token = s_token.ptr;
+            auto token = GetToken();
             auto& tail = token->get_tail_index();
-            auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+            auto item = token->enqueue_begin( magic );
             MemWrite( &item->hdr.type, QueueType::LockObtain );
             MemWrite( &item->lockObtain.id, m_id );
-            MemWrite( &item->lockObtain.thread, thread );
             MemWrite( &item->lockObtain.time, Profiler::GetTime() );
             tail.store( magic + 1, std::memory_order_release );
         }
@@ -99,7 +113,7 @@ public:
 #ifdef TRACY_ON_DEMAND
         m_lockCount.fetch_sub( 1, std::memory_order_relaxed );
         if( !m_active.load( std::memory_order_relaxed ) ) return;
-        if( !s_profiler.IsConnected() )
+        if( !GetProfiler().IsConnected() )
         {
             m_active.store( false, std::memory_order_relaxed );
             return;
@@ -107,12 +121,11 @@ public:
 #endif
 
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::LockRelease );
         MemWrite( &item->lockRelease.id, m_id );
-        MemWrite( &item->lockRelease.thread, GetThreadHandle() );
         MemWrite( &item->lockRelease.time, Profiler::GetTime() );
         tail.store( magic + 1, std::memory_order_release );
     }
@@ -129,7 +142,7 @@ public:
         const auto active = m_active.load( std::memory_order_relaxed );
         if( locks == 0 || active )
         {
-            const bool connected = s_profiler.IsConnected();
+            const bool connected = GetProfiler().IsConnected();
             if( active != connected ) m_active.store( connected, std::memory_order_relaxed );
             if( connected ) queue = true;
         }
@@ -139,12 +152,11 @@ public:
         if( ret )
         {
             Magic magic;
-            auto& token = s_token.ptr;
+            auto token = GetToken();
             auto& tail = token->get_tail_index();
-            auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+            auto item = token->enqueue_begin( magic );
             MemWrite( &item->hdr.type, QueueType::LockObtain );
             MemWrite( &item->lockObtain.id, m_id );
-            MemWrite( &item->lockObtain.thread, GetThreadHandle() );
             MemWrite( &item->lockObtain.time, Profiler::GetTime() );
             tail.store( magic + 1, std::memory_order_release );
         }
@@ -157,7 +169,7 @@ public:
 #ifdef TRACY_ON_DEMAND
         const auto active = m_active.load( std::memory_order_relaxed );
         if( !active ) return;
-        const auto connected = s_profiler.IsConnected();
+        const auto connected = GetProfiler().IsConnected();
         if( !connected )
         {
             if( active ) m_active.store( false, std::memory_order_relaxed );
@@ -166,12 +178,11 @@ public:
 #endif
 
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::LockMark );
         MemWrite( &item->lockMark.id, m_id );
-        MemWrite( &item->lockMark.thread, GetThreadHandle() );
         MemWrite( &item->lockMark.srcloc, (uint64_t)srcloc );
         tail.store( magic + 1, std::memory_order_release );
     }
@@ -192,7 +203,7 @@ class SharedLockable
 {
 public:
     tracy_force_inline SharedLockable( const SourceLocationData* srcloc )
-        : m_id( s_lockCounter.fetch_add( 1, std::memory_order_relaxed ) )
+        : m_id( GetLockCounter().fetch_add( 1, std::memory_order_relaxed ) )
 #ifdef TRACY_ON_DEMAND
         , m_lockCount( 0 )
         , m_active( false )
@@ -201,16 +212,17 @@ public:
         assert( m_id != std::numeric_limits<uint32_t>::max() );
 
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::LockAnnounce );
         MemWrite( &item->lockAnnounce.id, m_id );
+        MemWrite( &item->lockAnnounce.time, Profiler::GetTime() );
         MemWrite( &item->lockAnnounce.lckloc, (uint64_t)srcloc );
         MemWrite( &item->lockAnnounce.type, LockType::SharedLockable );
 
 #ifdef TRACY_ON_DEMAND
-        s_profiler.DeferItem( *item );
+        GetProfiler().DeferItem( *item );
 #endif
 
         tail.store( magic + 1, std::memory_order_release );
@@ -218,6 +230,24 @@ public:
 
     SharedLockable( const SharedLockable& ) = delete;
     SharedLockable& operator=( const SharedLockable& ) = delete;
+
+    ~SharedLockable()
+    {
+        Magic magic;
+        auto token = GetToken();
+        auto& tail = token->get_tail_index();
+        auto item = token->enqueue_begin( magic );
+        MemWrite( &item->hdr.type, QueueType::LockTerminate );
+        MemWrite( &item->lockTerminate.id, m_id );
+        MemWrite( &item->lockTerminate.time, Profiler::GetTime() );
+        MemWrite( &item->lockTerminate.type, LockType::SharedLockable );
+
+#ifdef TRACY_ON_DEMAND
+        GetProfiler().DeferItem( *item );
+#endif
+
+        tail.store( magic + 1, std::memory_order_release );
+    }
 
     tracy_force_inline void lock()
     {
@@ -227,7 +257,7 @@ public:
         const auto active = m_active.load( std::memory_order_relaxed );
         if( locks == 0 || active )
         {
-            const bool connected = s_profiler.IsConnected();
+            const bool connected = GetProfiler().IsConnected();
             if( active != connected ) m_active.store( connected, std::memory_order_relaxed );
             if( connected ) queue = true;
         }
@@ -237,15 +267,13 @@ public:
             return;
         }
 #endif
-        const auto thread = GetThreadHandle();
         {
             Magic magic;
-            auto& token = s_token.ptr;
+            auto token = GetToken();
             auto& tail = token->get_tail_index();
-            auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+            auto item = token->enqueue_begin( magic );
             MemWrite( &item->hdr.type, QueueType::LockWait );
             MemWrite( &item->lockWait.id, m_id );
-            MemWrite( &item->lockWait.thread, thread );
             MemWrite( &item->lockWait.time, Profiler::GetTime() );
             MemWrite( &item->lockWait.type, LockType::SharedLockable );
             tail.store( magic + 1, std::memory_order_release );
@@ -255,12 +283,11 @@ public:
 
         {
             Magic magic;
-            auto& token = s_token.ptr;
+            auto token = GetToken();
             auto& tail = token->get_tail_index();
-            auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+            auto item = token->enqueue_begin( magic );
             MemWrite( &item->hdr.type, QueueType::LockObtain );
             MemWrite( &item->lockObtain.id, m_id );
-            MemWrite( &item->lockObtain.thread, thread );
             MemWrite( &item->lockObtain.time, Profiler::GetTime() );
             tail.store( magic + 1, std::memory_order_release );
         }
@@ -273,7 +300,7 @@ public:
 #ifdef TRACY_ON_DEMAND
         m_lockCount.fetch_sub( 1, std::memory_order_relaxed );
         if( !m_active.load( std::memory_order_relaxed ) ) return;
-        if( !s_profiler.IsConnected() )
+        if( !GetProfiler().IsConnected() )
         {
             m_active.store( false, std::memory_order_relaxed );
             return;
@@ -281,12 +308,11 @@ public:
 #endif
 
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::LockRelease );
         MemWrite( &item->lockRelease.id, m_id );
-        MemWrite( &item->lockRelease.thread, GetThreadHandle() );
         MemWrite( &item->lockRelease.time, Profiler::GetTime() );
         tail.store( magic + 1, std::memory_order_release );
     }
@@ -303,7 +329,7 @@ public:
         const auto active = m_active.load( std::memory_order_relaxed );
         if( locks == 0 || active )
         {
-            const bool connected = s_profiler.IsConnected();
+            const bool connected = GetProfiler().IsConnected();
             if( active != connected ) m_active.store( connected, std::memory_order_relaxed );
             if( connected ) queue = true;
         }
@@ -313,12 +339,11 @@ public:
         if( ret )
         {
             Magic magic;
-            auto& token = s_token.ptr;
+            auto token = GetToken();
             auto& tail = token->get_tail_index();
-            auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+            auto item = token->enqueue_begin( magic );
             MemWrite( &item->hdr.type, QueueType::LockObtain );
             MemWrite( &item->lockObtain.id, m_id );
-            MemWrite( &item->lockObtain.thread, GetThreadHandle() );
             MemWrite( &item->lockObtain.time, Profiler::GetTime() );
             tail.store( magic + 1, std::memory_order_release );
         }
@@ -334,7 +359,7 @@ public:
         const auto active = m_active.load( std::memory_order_relaxed );
         if( locks == 0 || active )
         {
-            const bool connected = s_profiler.IsConnected();
+            const bool connected = GetProfiler().IsConnected();
             if( active != connected ) m_active.store( connected, std::memory_order_relaxed );
             if( connected ) queue = true;
         }
@@ -344,15 +369,13 @@ public:
             return;
         }
 #endif
-        const auto thread = GetThreadHandle();
         {
             Magic magic;
-            auto& token = s_token.ptr;
+            auto token = GetToken();
             auto& tail = token->get_tail_index();
-            auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+            auto item = token->enqueue_begin( magic );
             MemWrite( &item->hdr.type, QueueType::LockSharedWait );
             MemWrite( &item->lockWait.id, m_id );
-            MemWrite( &item->lockWait.thread, thread );
             MemWrite( &item->lockWait.time, Profiler::GetTime() );
             MemWrite( &item->lockWait.type, LockType::SharedLockable );
             tail.store( magic + 1, std::memory_order_release );
@@ -362,12 +385,11 @@ public:
 
         {
             Magic magic;
-            auto& token = s_token.ptr;
+            auto token = GetToken();
             auto& tail = token->get_tail_index();
-            auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+            auto item = token->enqueue_begin( magic );
             MemWrite( &item->hdr.type, QueueType::LockSharedObtain );
             MemWrite( &item->lockObtain.id, m_id );
-            MemWrite( &item->lockObtain.thread, thread );
             MemWrite( &item->lockObtain.time, Profiler::GetTime() );
             tail.store( magic + 1, std::memory_order_release );
         }
@@ -380,7 +402,7 @@ public:
 #ifdef TRACY_ON_DEMAND
         m_lockCount.fetch_sub( 1, std::memory_order_relaxed );
         if( !m_active.load( std::memory_order_relaxed ) ) return;
-        if( !s_profiler.IsConnected() )
+        if( !GetProfiler().IsConnected() )
         {
             m_active.store( false, std::memory_order_relaxed );
             return;
@@ -388,12 +410,11 @@ public:
 #endif
 
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::LockSharedRelease );
         MemWrite( &item->lockRelease.id, m_id );
-        MemWrite( &item->lockRelease.thread, GetThreadHandle() );
         MemWrite( &item->lockRelease.time, Profiler::GetTime() );
         tail.store( magic + 1, std::memory_order_release );
     }
@@ -410,7 +431,7 @@ public:
         const auto active = m_active.load( std::memory_order_relaxed );
         if( locks == 0 || active )
         {
-            const bool connected = s_profiler.IsConnected();
+            const bool connected = GetProfiler().IsConnected();
             if( active != connected ) m_active.store( connected, std::memory_order_relaxed );
             if( connected ) queue = true;
         }
@@ -420,12 +441,11 @@ public:
         if( ret )
         {
             Magic magic;
-            auto& token = s_token.ptr;
+            auto token = GetToken();
             auto& tail = token->get_tail_index();
-            auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+            auto item = token->enqueue_begin( magic );
             MemWrite( &item->hdr.type, QueueType::LockSharedObtain );
             MemWrite( &item->lockObtain.id, m_id );
-            MemWrite( &item->lockObtain.thread, GetThreadHandle() );
             MemWrite( &item->lockObtain.time, Profiler::GetTime() );
             tail.store( magic + 1, std::memory_order_release );
         }
@@ -438,7 +458,7 @@ public:
 #ifdef TRACY_ON_DEMAND
         const auto active = m_active.load( std::memory_order_relaxed );
         if( !active ) return;
-        const auto connected = s_profiler.IsConnected();
+        const auto connected = GetProfiler().IsConnected();
         if( !connected )
         {
             if( active ) m_active.store( false, std::memory_order_relaxed );
@@ -447,12 +467,11 @@ public:
 #endif
 
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::LockMark );
         MemWrite( &item->lockMark.id, m_id );
-        MemWrite( &item->lockMark.thread, GetThreadHandle() );
         MemWrite( &item->lockMark.srcloc, (uint64_t)srcloc );
         tail.store( magic + 1, std::memory_order_release );
     }

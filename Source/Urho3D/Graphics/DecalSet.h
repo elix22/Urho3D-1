@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/List.h"
+#include <EASTL/list.h>
+
 #include "../Graphics/Drawable.h"
 #include "../Graphics/Skeleton.h"
 #include "../Math/Frustum.h"
@@ -106,9 +107,9 @@ struct URHO3D_API Decal
     /// Local-space bounding box.
     BoundingBox boundingBox_;
     /// Decal vertices.
-    PODVector<DecalVertex> vertices_;
+    ea::vector<DecalVertex> vertices_;
     /// Decal indices.
-    PODVector<unsigned short> indices_;
+    ea::vector<unsigned short> indices_;
 };
 
 /// %Decal renderer component.
@@ -129,7 +130,7 @@ public:
     /// Handle enabled/disabled state change.
     void OnSetEnabled() override;
     /// Process octree raycast. May be called from a worker thread.
-    void ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryResult>& results) override;
+    void ProcessRayQuery(const RayOctreeQuery& query, ea::vector<RayQueryResult>& results) override;
     /// Calculate distance and prepare batches for rendering. May be called from worker thread(s), possibly re-entrantly.
     void UpdateBatches(const FrameInfo& frame) override;
     /// Prepare geometry for rendering. Called from a worker thread if possible (no GPU update.)
@@ -158,7 +159,7 @@ public:
     Material* GetMaterial() const;
 
     /// Return number of decals.
-    unsigned GetNumDecals() const { return decals_.Size(); }
+    unsigned GetNumDecals() const { return decals_.size(); }
 
     /// Retur number of vertices in the decals.
     unsigned GetNumVertices() const { return numVertices_; }
@@ -178,11 +179,11 @@ public:
     /// Set material attribute.
     void SetMaterialAttr(const ResourceRef& value);
     /// Set decals attribute.
-    void SetDecalsAttr(const PODVector<unsigned char>& value);
+    void SetDecalsAttr(const ea::vector<unsigned char>& value);
     /// Return material attribute.
     ResourceRef GetMaterialAttr() const;
     /// Return decals attribute.
-    PODVector<unsigned char> GetDecalsAttr() const;
+    ea::vector<unsigned char> GetDecalsAttr() const;
 
 protected:
     /// Recalculate the world-space bounding box.
@@ -192,11 +193,11 @@ protected:
 
 private:
     /// Get triangle faces from the target geometry.
-    void GetFaces(Vector<PODVector<DecalVertex> >& faces, Drawable* target, unsigned batchIndex, const Frustum& frustum,
+    void GetFaces(ea::vector<ea::vector<DecalVertex> >& faces, Drawable* target, unsigned batchIndex, const Frustum& frustum,
         const Vector3& decalNormal, float normalCutoff);
     /// Get triangle face from the target geometry.
     void GetFace
-        (Vector<PODVector<DecalVertex> >& faces, Drawable* target, unsigned batchIndex, unsigned i0, unsigned i1, unsigned i2,
+        (ea::vector<ea::vector<DecalVertex> >& faces, Drawable* target, unsigned batchIndex, unsigned i0, unsigned i1, unsigned i2,
             const unsigned char* positionData, const unsigned char* normalData, const unsigned char* skinningData,
             unsigned positionStride, unsigned normalStride, unsigned skinningStride, const Frustum& frustum,
             const Vector3& decalNormal, float normalCutoff);
@@ -209,7 +210,7 @@ private:
     /// Transform decal's vertices from the target geometry to the decal set local space.
     void TransformVertices(Decal& decal, const Matrix3x4& transform);
     /// Remove a decal by iterator and return iterator to the next decal.
-    List<Decal>::Iterator RemoveDecal(List<Decal>::Iterator i);
+    ea::list<Decal>::iterator RemoveDecal(ea::list<Decal>::iterator i);
     /// Mark decals and the bounding box dirty.
     void MarkDecalsDirty();
     /// Recalculate the local-space bounding box.
@@ -234,11 +235,11 @@ private:
     /// Index buffer.
     SharedPtr<IndexBuffer> indexBuffer_;
     /// Decals.
-    List<Decal> decals_;
+    ea::list<Decal> decals_;
     /// Bones used for skinned decals.
-    Vector<Bone> bones_;
+    ea::vector<Bone> bones_;
     /// Skinning matrices.
-    PODVector<Matrix3x4> skinMatrices_;
+    ea::vector<Matrix3x4> skinMatrices_;
     /// Vertices in the current decals.
     unsigned numVertices_;
     /// Indices in the current decals.

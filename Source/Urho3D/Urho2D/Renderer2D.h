@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,7 @@
 #pragma once
 
 #include "../Graphics/Drawable.h"
+#include "../Graphics/Texture2D.h"
 #include "../Math/Frustum.h"
 
 namespace Urho3D
@@ -53,15 +54,15 @@ struct ViewBatchInfo2D
     /// Batch updated frame number.
     unsigned batchUpdatedFrameNumber_;
     /// Source batches.
-    PODVector<const SourceBatch2D*> sourceBatches_;
+    ea::vector<const SourceBatch2D*> sourceBatches_;
     /// Batch count;
     unsigned batchCount_;
     /// Distances.
-    PODVector<float> distances_;
+    ea::vector<float> distances_;
     /// Materials.
-    Vector<SharedPtr<Material> > materials_;
+    ea::vector<SharedPtr<Material> > materials_;
     /// Geometries.
-    Vector<SharedPtr<Geometry> > geometries_;
+    ea::vector<SharedPtr<Geometry> > geometries_;
 };
 
 /// 2D renderer component.
@@ -80,7 +81,7 @@ public:
     static void RegisterObject(Context* context);
 
     /// Process octree raycast. May be called from a worker thread.
-    void ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryResult>& results) override;
+    void ProcessRayQuery(const RayOctreeQuery& query, ea::vector<RayQueryResult>& results) override;
     /// Calculate distance and prepare batches for rendering. May be called from worker thread(s), possibly re-entrantly.
     void UpdateBatches(const FrameInfo& frame) override;
     /// Prepare geometry for rendering. Called from a worker thread if possible (no GPU update.)
@@ -106,7 +107,7 @@ private:
     /// Handle view update begin event. Determine Drawable2D's and their batches here.
     void HandleBeginViewUpdate(StringHash eventType, VariantMap& eventData);
     /// Get all drawables in node.
-    void GetDrawables(PODVector<Drawable2D*>& drawables, Node* node);
+    void GetDrawables(ea::vector<Drawable2D*>& drawables, Node* node);
     /// Update view batch info.
     void UpdateViewBatchInfo(ViewBatchInfo2D& viewBatchInfo, Camera* camera);
     /// Add view batch.
@@ -118,19 +119,19 @@ private:
     /// Material.
     SharedPtr<Material> material_;
     /// Drawables.
-    PODVector<Drawable2D*> drawables_;
+    ea::vector<Drawable2D*> drawables_;
     /// View frame info for current frame.
     FrameInfo frame_;
     /// View batch info.
-    HashMap<Camera*, ViewBatchInfo2D> viewBatchInfos_;
+    ea::unordered_map<Camera*, ViewBatchInfo2D> viewBatchInfos_;
     /// Frustum for current frame.
     Frustum frustum_;
     /// View mask of current camera for visibility checking.
     unsigned viewMask_;
     /// Cached materials.
-    HashMap<Texture2D*, HashMap<int, SharedPtr<Material> > > cachedMaterials_;
+    ea::unordered_map<Texture2D*, ea::unordered_map<int, SharedPtr<Material> > > cachedMaterials_;
     /// Cached techniques per blend mode.
-    HashMap<int, SharedPtr<Technique> > cachedTechniques_;
+    ea::unordered_map<int, SharedPtr<Technique> > cachedTechniques_;
 };
 
 }

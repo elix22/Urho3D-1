@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@
 
 #include "../Precompiled.h"
 
+#include "../Core/Context.h"
 #include "../Graphics/Graphics.h"
 #include "../Graphics/VertexBuffer.h"
 #include "../Math/MathDefs.h"
@@ -32,6 +33,8 @@
 
 namespace Urho3D
 {
+
+extern const char* GEOMETRY_CATEGORY;
 
 VertexBuffer::VertexBuffer(Context* context, bool forceHeadless) :
     Object(context),
@@ -49,6 +52,11 @@ VertexBuffer::~VertexBuffer()
     Release();
 }
 
+void VertexBuffer::RegisterObject(Context* context)
+{
+    context->RegisterFactory<VertexBuffer>();
+}
+
 void VertexBuffer::SetShadowed(bool enable)
 {
     // If no graphics subsystem, can not disable shadowing
@@ -60,7 +68,7 @@ void VertexBuffer::SetShadowed(bool enable)
         if (enable && vertexSize_ && vertexCount_)
             shadowData_ = new unsigned char[vertexCount_ * vertexSize_];
         else
-            shadowData_.Reset();
+            shadowData_.reset();
 
         shadowed_ = enable;
     }
@@ -71,7 +79,7 @@ bool VertexBuffer::SetSize(unsigned vertexCount, unsigned elementMask, bool dyna
     return SetSize(vertexCount, GetElements(elementMask), dynamic);
 }
 
-bool VertexBuffer::SetSize(unsigned vertexCount, const PODVector<VertexElement>& elements, bool dynamic)
+bool VertexBuffer::SetSize(unsigned vertexCount, const ea::vector<VertexElement>& elements, bool dynamic)
 {
     Unlock();
 
@@ -84,7 +92,7 @@ bool VertexBuffer::SetSize(unsigned vertexCount, const PODVector<VertexElement>&
     if (shadowed_ && vertexCount_ && vertexSize_)
         shadowData_ = new unsigned char[vertexCount_ * vertexSize_];
     else
-        shadowData_.Reset();
+        shadowData_.reset();
 
     return Create();
 }
@@ -95,7 +103,7 @@ void VertexBuffer::UpdateOffsets()
     elementHash_ = 0;
     elementMask_ = MASK_NONE;
 
-    for (PODVector<VertexElement>::Iterator i = elements_.Begin(); i != elements_.End(); ++i)
+    for (auto i = elements_.begin(); i != elements_.end(); ++i)
     {
         i->offset_ = elementOffset;
         elementOffset += ELEMENT_TYPESIZES[i->type_];
@@ -115,7 +123,7 @@ void VertexBuffer::UpdateOffsets()
 
 const VertexElement* VertexBuffer::GetElement(VertexElementSemantic semantic, unsigned char index) const
 {
-    for (PODVector<VertexElement>::ConstIterator i = elements_.Begin(); i != elements_.End(); ++i)
+    for (auto i = elements_.begin(); i != elements_.end(); ++i)
     {
         if (i->semantic_ == semantic && i->index_ == index)
             return &(*i);
@@ -126,7 +134,7 @@ const VertexElement* VertexBuffer::GetElement(VertexElementSemantic semantic, un
 
 const VertexElement* VertexBuffer::GetElement(VertexElementType type, VertexElementSemantic semantic, unsigned char index) const
 {
-    for (PODVector<VertexElement>::ConstIterator i = elements_.Begin(); i != elements_.End(); ++i)
+    for (auto i = elements_.begin(); i != elements_.end(); ++i)
     {
         if (i->type_ == type && i->semantic_ == semantic && i->index_ == index)
             return &(*i);
@@ -135,9 +143,9 @@ const VertexElement* VertexBuffer::GetElement(VertexElementType type, VertexElem
     return nullptr;
 }
 
-const VertexElement* VertexBuffer::GetElement(const PODVector<VertexElement>& elements, VertexElementType type, VertexElementSemantic semantic, unsigned char index)
+const VertexElement* VertexBuffer::GetElement(const ea::vector<VertexElement>& elements, VertexElementType type, VertexElementSemantic semantic, unsigned char index)
 {
-    for (PODVector<VertexElement>::ConstIterator i = elements.Begin(); i != elements.End(); ++i)
+    for (auto i = elements.begin(); i != elements.end(); ++i)
     {
         if (i->type_ == type && i->semantic_ == semantic && i->index_ == index)
             return &(*i);
@@ -146,35 +154,35 @@ const VertexElement* VertexBuffer::GetElement(const PODVector<VertexElement>& el
     return nullptr;
 }
 
-bool VertexBuffer::HasElement(const PODVector<VertexElement>& elements, VertexElementType type, VertexElementSemantic semantic, unsigned char index)
+bool VertexBuffer::HasElement(const ea::vector<VertexElement>& elements, VertexElementType type, VertexElementSemantic semantic, unsigned char index)
 {
     return GetElement(elements, type, semantic, index) != nullptr;
 }
 
-unsigned VertexBuffer::GetElementOffset(const PODVector<VertexElement>& elements, VertexElementType type, VertexElementSemantic semantic, unsigned char index)
+unsigned VertexBuffer::GetElementOffset(const ea::vector<VertexElement>& elements, VertexElementType type, VertexElementSemantic semantic, unsigned char index)
 {
     const VertexElement* element = GetElement(elements, type, semantic, index);
     return element ? element->offset_ : M_MAX_UNSIGNED;
 }
 
-PODVector<VertexElement> VertexBuffer::GetElements(unsigned elementMask)
+ea::vector<VertexElement> VertexBuffer::GetElements(unsigned elementMask)
 {
-    PODVector<VertexElement> ret;
+    ea::vector<VertexElement> ret;
 
     for (unsigned i = 0; i < MAX_LEGACY_VERTEX_ELEMENTS; ++i)
     {
         if (elementMask & (1u << i))
-            ret.Push(LEGACY_VERTEXELEMENTS[i]);
+            ret.push_back(LEGACY_VERTEXELEMENTS[i]);
     }
 
     return ret;
 }
 
-unsigned VertexBuffer::GetVertexSize(const PODVector<VertexElement>& elements)
+unsigned VertexBuffer::GetVertexSize(const ea::vector<VertexElement>& elements)
 {
     unsigned size = 0;
 
-    for (unsigned i = 0; i < elements.Size(); ++i)
+    for (unsigned i = 0; i < elements.size(); ++i)
         size += ELEMENT_TYPESIZES[elements[i].type_];
 
     return size;
@@ -193,11 +201,11 @@ unsigned VertexBuffer::GetVertexSize(unsigned elementMask)
     return size;
 }
 
-void VertexBuffer::UpdateOffsets(PODVector<VertexElement>& elements)
+void VertexBuffer::UpdateOffsets(ea::vector<VertexElement>& elements)
 {
     unsigned elementOffset = 0;
 
-    for (PODVector<VertexElement>::Iterator i = elements.Begin(); i != elements.End(); ++i)
+    for (auto i = elements.begin(); i != elements.end(); ++i)
     {
         i->offset_ = elementOffset;
         elementOffset += ELEMENT_TYPESIZES[i->type_];

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -56,9 +56,9 @@ public:
     /// Handle attribute read access. Default implementation reads the variable at offset, or invokes the get accessor.
     virtual void OnGetAttribute(const AttributeInfo& attr, Variant& dest) const;
     /// Return attribute descriptions, or null if none defined.
-    virtual const Vector<AttributeInfo>* GetAttributes() const;
+    virtual const ea::vector<AttributeInfo>* GetAttributes() const;
     /// Return network replication attribute descriptions, or null if none defined.
-    virtual const Vector<AttributeInfo>* GetNetworkAttributes() const;
+    virtual const ea::vector<AttributeInfo>* GetNetworkAttributes() const;
     /// Load from binary data. Return true if successful.
     virtual bool Load(Deserializer& source);
     /// Save as binary data. Return true if successful.
@@ -71,12 +71,20 @@ public:
     virtual bool LoadJSON(const JSONValue& source);
     /// Save as JSON data. Return true if successful.
     virtual bool SaveJSON(JSONValue& dest) const;
+    /// Load from binary resource.
+    virtual bool Load(const ea::string& resourceName);
+    /// Load from XML resource.
+    virtual bool LoadXML(const ea::string& resourceName);
+    /// Load from JSON resource.
+    virtual bool LoadJSON(const ea::string& resourceName);
+    /// Load from resource of automatically detected type.
+    virtual bool LoadFile(const ea::string& resourceName);
 
     /// Apply attribute changes that can not be applied immediately. Called after scene load or a network update.
     virtual void ApplyAttributes() { }
 
     /// Return whether should save default-valued attributes into XML. Default false.
-    virtual bool SaveDefaultAttributes() const { return false; }
+    virtual bool SaveDefaultAttributes(const AttributeInfo& attr) const { return false; }
 
     /// Mark for attribute check on the next network update.
     virtual void MarkNetworkUpdate() { }
@@ -84,9 +92,13 @@ public:
     /// Set attribute by index. Return true if successfully set.
     bool SetAttribute(unsigned index, const Variant& value);
     /// Set attribute by name. Return true if successfully set.
-    bool SetAttribute(const String& name, const Variant& value);
-    /// Set instance-level default flag.
+    bool SetAttribute(const ea::string& name, const Variant& value);
+    /// (Internal use) Set instance-level default flag.
     void SetInstanceDefault(bool enable) { setInstanceDefault_ = enable; }
+    /// (Internal use) Set instance-level default value. Allocate the internal data structure as necessary.
+    void SetInstanceDefault(const ea::string& name, const Variant& defaultValue);
+    /// (Internal use) Get instance-level default value.
+    Variant GetInstanceDefault(const ea::string& name) const;
     /// Reset all editable attributes to their default values.
     void ResetToDefault();
     /// Remove instance's default values if they are set previously.
@@ -94,7 +106,7 @@ public:
     /// Set temporary flag. Temporary objects will not be saved.
     void SetTemporary(bool enable);
     /// Enable interception of an attribute from network updates. Intercepted attributes are sent as events instead of applying directly. This can be used to implement client side prediction.
-    void SetInterceptNetworkUpdate(const String& attributeName, bool enable);
+    void SetInterceptNetworkUpdate(const ea::string& attributeName, bool enable);
     /// Allocate network attribute state.
     void AllocateNetworkState();
     /// Write initial delta network update.
@@ -111,11 +123,11 @@ public:
     /// Return attribute value by index. Return empty if illegal index.
     Variant GetAttribute(unsigned index) const;
     /// Return attribute value by name. Return empty if not found.
-    Variant GetAttribute(const String& name) const;
+    Variant GetAttribute(const ea::string& name) const;
     /// Return attribute default value by index. Return empty if illegal index.
     Variant GetAttributeDefault(unsigned index) const;
     /// Return attribute default value by name. Return empty if not found.
-    Variant GetAttributeDefault(const String& name) const;
+    Variant GetAttributeDefault(const ea::string& name) const;
     /// Return number of attributes.
     unsigned GetNumAttributes() const;
     /// Return number of network replication attributes.
@@ -125,23 +137,17 @@ public:
     bool IsTemporary() const { return temporary_; }
 
     /// Return whether an attribute's network updates are being intercepted.
-    bool GetInterceptNetworkUpdate(const String& attributeName) const;
+    bool GetInterceptNetworkUpdate(const ea::string& attributeName) const;
 
     /// Return the network attribute state, if allocated.
-    NetworkState* GetNetworkState() const { return networkState_.Get(); }
+    NetworkState* GetNetworkState() const { return networkState_.get(); }
 
 protected:
     /// Network attribute state.
-    UniquePtr<NetworkState> networkState_;
-
-private:
-    /// Set instance-level default value. Allocate the internal data structure as necessary.
-    void SetInstanceDefault(const String& name, const Variant& defaultValue);
-    /// Get instance-level default value.
-    Variant GetInstanceDefault(const String& name) const;
+    ea::unique_ptr<NetworkState> networkState_;
 
     /// Attribute default value at each instance level.
-    UniquePtr<VariantMap> instanceDefaultValues_;
+    ea::unique_ptr<VariantMap> instanceDefaultValues_;
     /// When true, store the attribute value as instance's default value (internal use only).
     bool setInstanceDefault_;
     /// Temporary flag.
@@ -219,6 +225,11 @@ SharedPtr<AttributeAccessor> MakeVariantAttributeAccessor(TGetFunction getFuncti
     [](const ClassName& self, Urho3D::Variant& value) { value = static_cast<int>(self.getFunction()); }, \
     [](ClassName& self, const Urho3D::Variant& value) { self.setFunction(static_cast<typeName>(value.Get<int>())); })
 
+/// Make get/set object attribute accessor.
+#define URHO3D_MAKE_MEMBER_OBJECT_ATTRIBUTE_ACCESSOR(variable) Urho3D::MakeVariantAttributeAccessor<ClassName>( \
+    [](const ClassName& self, Urho3D::Variant& value) { value.SetCustom(Urho3D::SharedPtr<Urho3D::Serializable>(static_cast<Urho3D::Serializable*>(self.variable.Get()))); }, \
+    [](ClassName& self, const Urho3D::Variant& value) { self.variable.StaticCast(value.GetCustom<Urho3D::SharedPtr<Urho3D::Serializable>>()); })
+
 /// Attribute metadata.
 namespace AttributeMetadata
 {
@@ -262,6 +273,9 @@ namespace AttributeMetadata
 /// Define an enum attribute with custom setter and getter. Zero-based enum values are mapped to names through an array of C string pointers.
 #define URHO3D_CUSTOM_ENUM_ATTRIBUTE(name, getFunction, setFunction, enumNames, defaultValue, mode) context->RegisterAttribute<ClassName>(Urho3D::AttributeInfo( \
     Urho3D::VAR_INT, name, Urho3D::MakeVariantAttributeAccessor<ClassName>(getFunction, setFunction), enumNames, static_cast<int>(defaultValue), mode))
+/// Define an object attribute. Object must be SharedPtr<> of Serializable or it's subclass.
+#define URHO3D_OBJECT_ATTRIBUTE(name, variable, mode) context->RegisterAttribute<ClassName>(Urho3D::AttributeInfo( \
+    Urho3D::VAR_CUSTOM, name, URHO3D_MAKE_MEMBER_OBJECT_ATTRIBUTE_ACCESSOR(variable), nullptr, Urho3D::MakeCustomValue(Urho3D::SharedPtr<Urho3D::Serializable>()), mode))
 
 /// Deprecated. Use URHO3D_ACCESSOR_ATTRIBUTE instead.
 #define URHO3D_MIXED_ACCESSOR_ATTRIBUTE(name, getFunction, setFunction, typeName, defaultValue, mode) URHO3D_ACCESSOR_ATTRIBUTE(name, getFunction, setFunction, typeName, defaultValue, mode)

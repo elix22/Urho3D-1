@@ -17,18 +17,17 @@ class ScopedZone
 public:
     tracy_force_inline ScopedZone( const SourceLocationData* srcloc, bool is_active = true )
 #ifdef TRACY_ON_DEMAND
-        : m_active( s_profiler.IsConnected() )
+        : m_active( is_active && GetProfiler().IsConnected() )
+        , m_connectionId( GetProfiler().ConnectionId() )
 #else
         : m_active( is_active )
 #endif
     {
         if( !m_active ) return;
-        const auto thread = GetThreadHandle();
-        m_thread = thread;
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::ZoneBegin );
 #ifdef TRACY_RDTSCP_OPT
         MemWrite( &item->zoneBegin.time, Profiler::GetTime( item->zoneBegin.cpu ) );
@@ -37,25 +36,23 @@ public:
         MemWrite( &item->zoneBegin.time, Profiler::GetTime( cpu ) );
         MemWrite( &item->zoneBegin.cpu, cpu );
 #endif
-        MemWrite( &item->zoneBegin.thread, thread );
         MemWrite( &item->zoneBegin.srcloc, (uint64_t)srcloc );
         tail.store( magic + 1, std::memory_order_release );
     }
 
     tracy_force_inline ScopedZone( const SourceLocationData* srcloc, int depth, bool is_active = true )
 #ifdef TRACY_ON_DEMAND
-        : m_active( s_profiler.IsConnected() )
+        : m_active( is_active && GetProfiler().IsConnected() )
+        , m_connectionId( GetProfiler().ConnectionId() )
 #else
         : m_active( is_active )
 #endif
     {
         if( !m_active ) return;
-        const auto thread = GetThreadHandle();
-        m_thread = thread;
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::ZoneBeginCallstack );
 #ifdef TRACY_RDTSCP_OPT
         MemWrite( &item->zoneBegin.time, Profiler::GetTime( item->zoneBegin.cpu ) );
@@ -64,20 +61,22 @@ public:
         MemWrite( &item->zoneBegin.time, Profiler::GetTime( cpu ) );
         MemWrite( &item->zoneBegin.cpu, cpu );
 #endif
-        MemWrite( &item->zoneBegin.thread, thread );
         MemWrite( &item->zoneBegin.srcloc, (uint64_t)srcloc );
         tail.store( magic + 1, std::memory_order_release );
 
-        s_profiler.SendCallstack( depth, thread );
+        GetProfiler().SendCallstack( depth );
     }
 
     tracy_force_inline ~ScopedZone()
     {
         if( !m_active ) return;
+#ifdef TRACY_ON_DEMAND
+        if( GetProfiler().ConnectionId() != m_connectionId ) return;
+#endif
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::ZoneEnd );
 #ifdef TRACY_RDTSCP_OPT
         MemWrite( &item->zoneEnd.time, Profiler::GetTime( item->zoneEnd.cpu ) );
@@ -86,22 +85,23 @@ public:
         MemWrite( &item->zoneEnd.time, Profiler::GetTime( cpu ) );
         MemWrite( &item->zoneEnd.cpu, cpu );
 #endif
-        MemWrite( &item->zoneEnd.thread, m_thread );
         tail.store( magic + 1, std::memory_order_release );
     }
 
     tracy_force_inline void Text( const char* txt, size_t size )
     {
         if( !m_active ) return;
+#ifdef TRACY_ON_DEMAND
+        if( GetProfiler().ConnectionId() != m_connectionId ) return;
+#endif
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto ptr = (char*)tracy_malloc( size+1 );
         memcpy( ptr, txt, size );
         ptr[size] = '\0';
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::ZoneText );
-        MemWrite( &item->zoneText.thread, m_thread );
         MemWrite( &item->zoneText.text, (uint64_t)ptr );
         tail.store( magic + 1, std::memory_order_release );
     }
@@ -109,22 +109,27 @@ public:
     tracy_force_inline void Name( const char* txt, size_t size )
     {
         if( !m_active ) return;
+#ifdef TRACY_ON_DEMAND
+        if( GetProfiler().ConnectionId() != m_connectionId ) return;
+#endif
         Magic magic;
-        auto& token = s_token.ptr;
+        auto token = GetToken();
         auto ptr = (char*)tracy_malloc( size+1 );
         memcpy( ptr, txt, size );
         ptr[size] = '\0';
         auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin<tracy::moodycamel::CanAlloc>( magic );
+        auto item = token->enqueue_begin( magic );
         MemWrite( &item->hdr.type, QueueType::ZoneName );
-        MemWrite( &item->zoneText.thread, m_thread );
         MemWrite( &item->zoneText.text, (uint64_t)ptr );
         tail.store( magic + 1, std::memory_order_release );
     }
 
 private:
-    uint64_t m_thread;
     const bool m_active;
+
+#ifdef TRACY_ON_DEMAND
+    uint64_t m_connectionId;
+#endif
 };
 
 }

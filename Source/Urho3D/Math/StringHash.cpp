@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,9 +22,11 @@
 
 #include "../Precompiled.h"
 
+#ifdef URHO3D_HASH_DEBUG
+#include "../Core/StringHashRegister.h"
+#endif
 #include "../Math/MathDefs.h"
 #include "../Math/StringHash.h"
-#include "../Container/HashMap.h"
 #include "../IO/Log.h"
 
 #include <cstdio>
@@ -51,15 +53,35 @@ static StringHashRegister& GetGlobalStringHashRegister()
 
 const StringHash StringHash::ZERO;
 
-StringHash::StringHash(const String& str) noexcept :
-    value_(Calculate(str.CString()))
+#ifdef URHO3D_HASH_DEBUG
+StringHash::StringHash(const char* str) noexcept :      // NOLINT(google-explicit-constructor)
+    value_(Calculate(str))
+{
+    GetGlobalStringHashRegister()->RegisterString(*this, str);
+}
+#endif
+StringHash::StringHash(const ea::string& str) noexcept :
+    value_(Calculate(str.c_str()))
 {
 #ifdef URHO3D_HASH_DEBUG
-    Urho3D::GetGlobalStringHashRegister().RegisterString(*this, str.CString());
+    Urho3D::GetGlobalStringHashRegister().RegisterString(*this, str.c_str());
 #endif
 }
 
-unsigned int StringHash::Calculate(void* data, unsigned int length, unsigned int hash)
+#ifdef URHO3D_HASH_DEBUG
+unsigned StringHash::Calculate(const char* str, unsigned hash)
+{
+    if (!str)
+        return hash;
+
+    while (*str)
+        hash = SDBMHash(hash, (unsigned char)*str++);
+
+    return hash;
+}
+#endif
+
+unsigned StringHash::Calculate(void* data, unsigned int length, unsigned int hash)
 {
     if (!data)
         return hash;
@@ -67,10 +89,7 @@ unsigned int StringHash::Calculate(void* data, unsigned int length, unsigned int
     auto* bytes = static_cast<unsigned char*>(data);
     auto* end = bytes + length;
     while (bytes < end)
-    {
-        hash = SDBMHash(hash, *bytes);
-        ++bytes;
-    }
+        hash = SDBMHash(hash, (unsigned char)*bytes++);
 
     return hash;
 }
@@ -84,19 +103,19 @@ StringHashRegister* StringHash::GetGlobalStringHashRegister()
 #endif
 }
 
-String StringHash::ToString() const
+ea::string StringHash::ToString() const
 {
     char tempBuffer[CONVERSION_BUFFER_LENGTH];
     sprintf(tempBuffer, "%08X", value_);
-    return String(tempBuffer);
+    return ea::string(tempBuffer);
 }
 
-String StringHash::Reverse() const
+ea::string StringHash::Reverse() const
 {
 #ifdef URHO3D_HASH_DEBUG
     return Urho3D::GetGlobalStringHashRegister().GetStringCopy(*this);
 #else
-    return String::EMPTY;
+    return EMPTY_STRING;
 #endif
 }
 

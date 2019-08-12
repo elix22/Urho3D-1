@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -51,7 +51,6 @@
 
 const float CAMERA_DISTANCE = 10.0f;
 
-URHO3D_DEFINE_APPLICATION_MAIN(VehicleDemo)
 
 VehicleDemo::VehicleDemo(Context* context) :
     Sample(context)

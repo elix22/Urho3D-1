@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -67,7 +67,7 @@ struct Bone
     }
 
     /// Bone name.
-    String name_;
+    ea::string name_;
     /// Bone name hash.
     StringHash nameHash_;
     /// Parent bone index.
@@ -115,18 +115,18 @@ public:
     void Reset();
 
     /// Return all bones.
-    const Vector<Bone>& GetBones() const { return bones_; }
+    const ea::vector<Bone>& GetBones() const { return bones_; }
 
     /// Return modifiable bones.
-    Vector<Bone>& GetModifiableBones() { return bones_; }
+    ea::vector<Bone>& GetModifiableBones() { return bones_; }
 
     /// Return number of bones.
-    unsigned GetNumBones() const { return bones_.Size(); }
+    unsigned GetNumBones() const { return bones_.size(); }
 
     /// Return root bone.
     Bone* GetRootBone();
     /// Return index of the bone by name. Return M_MAX_UNSIGNED if not found.
-    unsigned GetBoneIndex(const String& boneName) const;
+    unsigned GetBoneIndex(const ea::string& boneName) const;
     /// Return index of the bone by name hash. Return M_MAX_UNSIGNED if not found.
     unsigned GetBoneIndex(const StringHash& boneNameHash) const;
     /// Return index of the bone by the bone pointer. Return M_MAX_UNSIGNED if not found.
@@ -136,7 +136,7 @@ public:
     /// Return bone by index.
     Bone* GetBone(unsigned index);
     /// Return bone by name.
-    Bone* GetBone(const String& name);
+    Bone* GetBone(const ea::string& name);
     /// Return bone by name.
     Bone* GetBone(const char* name);
     /// Return bone by name hash.
@@ -147,7 +147,7 @@ public:
 
 private:
     /// Bones.
-    Vector<Bone> bones_;
+    ea::vector<Bone> bones_;
     /// Root bone index.
     unsigned rootBoneIndex_;
 };

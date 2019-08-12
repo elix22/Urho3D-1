@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -42,15 +42,15 @@ using namespace Urho3D;
 
 const float CHASSIS_WIDTH = 2.6f;
 
-void Vehicle::RegisterObject(Context* context)
+void Vehicle2::RegisterObject(Context* context)
 {
-    context->RegisterFactory<Vehicle>();
+    context->RegisterFactory<Vehicle2>();
     URHO3D_ATTRIBUTE("Steering", float, steering_, 0.0f, AM_DEFAULT);
     URHO3D_ATTRIBUTE("Controls Yaw", float, controls_.yaw_, 0.0f, AM_DEFAULT);
     URHO3D_ATTRIBUTE("Controls Pitch", float, controls_.pitch_, 0.0f, AM_DEFAULT);
 }
 
-Vehicle::Vehicle(Urho3D::Context* context)
+Vehicle2::Vehicle2(Urho3D::Context* context)
     : LogicComponent(context),
       steering_(0.0f)
 {
@@ -70,9 +70,9 @@ Vehicle::Vehicle(Urho3D::Context* context)
     emittersCreated = false;
 }
 
-Vehicle::~Vehicle() = default;
+Vehicle2::~Vehicle2() = default;
 
-void Vehicle::Init()
+void Vehicle2::Init()
 {
     auto* vehicle = node_->CreateComponent<RaycastVehicle>();
     vehicle->Init();
@@ -136,7 +136,7 @@ void Vehicle::Init()
     vehicle->ResetWheels();
 }
 
-void Vehicle::CreateEmitter(Vector3 place)
+void Vehicle2::CreateEmitter(Vector3 place)
 {
     auto* cache = GetSubsystem<ResourceCache>();
     Node* emitter = GetScene()->CreateChild();
@@ -144,12 +144,12 @@ void Vehicle::CreateEmitter(Vector3 place)
     auto* particleEmitter = emitter->CreateComponent<ParticleEmitter>();
     particleEmitter->SetEffect(cache->GetResource<ParticleEffect>("Particle/Dust.xml"));
     particleEmitter->SetEmitting(false);
-    particleEmitterNodeList_.Push(emitter);
+    particleEmitterNodeList_.push_back(emitter);
     emitter->SetTemporary(true);
 }
 
 /// Applying attributes
-void Vehicle::ApplyAttributes()
+void Vehicle2::ApplyAttributes()
 {
     auto* vehicle = node_->GetOrCreateComponent<RaycastVehicle>();
     if (emittersCreated)
@@ -161,7 +161,7 @@ void Vehicle::ApplyAttributes()
     emittersCreated = true;
 }
 
-void Vehicle::FixedUpdate(float timeStep)
+void Vehicle2::FixedUpdate(float timeStep)
 {
     float newSteering = 0.0f;
     float accelerator = 0.0f;
@@ -221,7 +221,7 @@ void Vehicle::FixedUpdate(float timeStep)
     }
 }
 
-void Vehicle::PostUpdate(float timeStep)
+void Vehicle2::PostUpdate(float timeStep)
 {
     auto* vehicle = node_->GetComponent<RaycastVehicle>();
     auto* vehicleBody = node_->GetComponent<RigidBody>();
@@ -241,8 +241,8 @@ void Vehicle::PostUpdate(float timeStep)
                 particleEmitter->SetEmitting(true);
             }
             URHO3D_LOGDEBUG("GetWheelSkidInfoCumulative() = " +
-                            String(vehicle->GetWheelSkidInfoCumulative(i)) + " " +
-                            String(vehicle->GetMaxSideSlipSpeed()));
+                            ea::to_string(vehicle->GetWheelSkidInfoCumulative(i)) + " " +
+                            ea::to_string(vehicle->GetMaxSideSlipSpeed()));
             /* TODO: Add skid marks here */
         }
         else if (particleEmitter->IsEmitting())

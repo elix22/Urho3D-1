@@ -1,5 +1,6 @@
 //
 // Copyright (c) 2008-2017 the Urho3D project.
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,9 +23,10 @@
 #pragma once
 
 
+#include <EASTL/unordered_map.h>
+
 #include "Urho3D/Core/Object.h"
 #include "Urho3D/Math/StringHash.h"
-#include "Urho3D/Container/HashMap.h"
 #include "Urho3D/Graphics/VertexBuffer.h"
 #include "Urho3D/Graphics/IndexBuffer.h"
 #include "Urho3D/Math/Matrix4.h"
@@ -62,11 +64,12 @@ public:
     /// Add font to imgui subsystem.
     /// \param fontPath a string pointing to TTF font resource.
     /// \param size a font size. If 0 then size of last font is used.
-    /// \param ranges optional ranges of font that should be used. Parameter is std::initializer_list of {start1, stop1, ..., startN, stopN, 0}.
+    /// \param ranges optional ranges of font that should be used. Parameter is ImWchar[] of {start1, stop1, ..., startN, stopN, 0}.
     /// \param merge set to true if new font should be merged to last active font.
     /// \return ImFont instance that may be used for setting current font when drawing GUI.
-    ImFont* AddFont(const String& fontPath, const PODVector<unsigned short>& ranges = {}, float size = 0,
-        bool merge = false);
+    ImFont* AddFont(const ea::string& fontPath, const ImWchar* ranges = nullptr, float size = 0, bool merge = false);
+    ImFont* AddFont(const void* data, unsigned dsize, const ImWchar* ranges = nullptr, float size = 0, bool merge = false);
+    ImFont* AddFontCompressed(const void* data, unsigned dsize, const ImWchar* ranges = nullptr, float size = 0, bool merge = false);
     /// Apply built-in system ui style.
     /// \param darkStyle enables dark style, otherwise it is a light style.
     /// \param alpha value between 0.0f - 1.0f
@@ -77,6 +80,8 @@ public:
     bool IsAnyItemHovered() const;
     /// Return font scale.
     float GetFontScale() const { return fontScale_; }
+    /// Prepares font textures, updates projection matrix and does other things that are required to start this subsystem.
+    void Start();
 
 protected:
     float uiZoom_ = 1.f;
@@ -85,7 +90,8 @@ protected:
     VertexBuffer vertexBuffer_;
     IndexBuffer indexBuffer_;
     SharedPtr<Texture2D> fontTexture_;
-    PODVector<float> fontSizes_;
+    ea::vector<float> fontSizes_;
+    ImGuiContext* imContext_;
 
     void ReallocateFontTexture();
     void UpdateProjectionMatrix();

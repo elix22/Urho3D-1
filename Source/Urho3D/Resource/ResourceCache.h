@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,10 @@
 
 #pragma once
 
-#include "../Container/HashSet.h"
-#include "../Container/List.h"
+#include <EASTL/unique_ptr.h>
+#include <EASTL/hash_set.h>
+
+#include "../Container/Ptr.h"
 #include "../Core/Mutex.h"
 #include "../IO/File.h"
 #include "../Resource/Resource.h"
@@ -53,7 +55,7 @@ struct ResourceGroup
     /// Current memory use.
     unsigned long long memoryUse_;
     /// Resources.
-    HashMap<StringHash, SharedPtr<Resource> > resources_;
+    ea::unordered_map<StringHash, SharedPtr<Resource> > resources_;
 };
 
 /// Resource request types.
@@ -74,7 +76,7 @@ public:
     }
 
     /// Process the resource request and optionally modify the resource name string. Empty name string means the resource is not found or not allowed.
-    virtual void Route(String& name, ResourceRequest requestType) = 0;
+    virtual void Route(ea::string& name, ResourceRequest requestType) = 0;
 };
 
 /// %Resource cache subsystem. Loads resources on demand and stores them for later access.
@@ -89,33 +91,33 @@ public:
     ~ResourceCache() override;
 
     /// Add a resource load directory. Optional priority parameter which will control search order.
-    bool AddResourceDir(const String& pathName, unsigned priority = PRIORITY_LAST);
+    bool AddResourceDir(const ea::string& pathName, unsigned priority = PRIORITY_LAST);
     /// Add a package file for loading resources from. Optional priority parameter which will control search order.
     bool AddPackageFile(PackageFile* package, unsigned priority = PRIORITY_LAST);
     /// Add a package file for loading resources from by name. Optional priority parameter which will control search order.
-    bool AddPackageFile(const String& fileName, unsigned priority = PRIORITY_LAST);
+    bool AddPackageFile(const ea::string& fileName, unsigned priority = PRIORITY_LAST);
     /// Add a manually created resource. Must be uniquely named within its type.
     bool AddManualResource(Resource* resource);
     /// Remove a resource load directory.
-    void RemoveResourceDir(const String& pathName);
+    void RemoveResourceDir(const ea::string& pathName);
     /// Remove a package file. Optionally release the resources loaded from it.
     void RemovePackageFile(PackageFile* package, bool releaseResources = true, bool forceRelease = false);
     /// Remove a package file by name. Optionally release the resources loaded from it.
-    void RemovePackageFile(const String& fileName, bool releaseResources = true, bool forceRelease = false);
+    void RemovePackageFile(const ea::string& fileName, bool releaseResources = true, bool forceRelease = false);
     /// Release a resource by name.
-    void ReleaseResource(StringHash type, const String& name, bool force = false);
+    void ReleaseResource(StringHash type, const ea::string& name, bool force = false);
     /// Release all resources of a specific type.
     void ReleaseResources(StringHash type, bool force = false);
     /// Release resources of a specific type and partial name.
-    void ReleaseResources(StringHash type, const String& partialName, bool force = false);
+    void ReleaseResources(StringHash type, const ea::string& partialName, bool force = false);
     /// Release resources of all types by partial name.
-    void ReleaseResources(const String& partialName, bool force = false);
+    void ReleaseResources(const ea::string& partialName, bool force = false);
     /// Release all resources. When called with the force flag false, releases all currently unused resources.
     void ReleaseAllResources(bool force = false);
     /// Reload a resource. Return true on success. The resource will not be removed from the cache in case of failure.
     bool ReloadResource(Resource* resource);
     /// Reload a resource based on filename. Causes also reload of dependent resources if necessary.
-    void ReloadResourceWithDependencies(const String& fileName);
+    void ReloadResourceWithDependencies(const ea::string& fileName);
     /// Set memory budget for a specific resource type, default 0 is unlimited.
     void SetMemoryBudget(StringHash type, unsigned long long budget);
     /// Enable or disable automatic reloading of resources as files are modified. Default false.
@@ -135,43 +137,43 @@ public:
     void RemoveResourceRouter(ResourceRouter* router);
 
     /// Open and return a file from the resource load paths or from inside a package file. If not found, use a fallback search with absolute path. Return null if fails. Can be called from outside the main thread.
-    SharedPtr<File> GetFile(const String& name, bool sendEventOnFailure = true);
+    SharedPtr<File> GetFile(const ea::string& name, bool sendEventOnFailure = true);
     /// Return a resource by type and name. Load if not loaded yet. Return null if not found or if fails, unless SetReturnFailedResources(true) has been called. Can be called only from the main thread.
-    Resource* GetResource(StringHash type, const String& name, bool sendEventOnFailure = true);
+    Resource* GetResource(StringHash type, const ea::string& name, bool sendEventOnFailure = true);
     /// Load a resource without storing it in the resource cache. Return null if not found or if fails. Can be called from outside the main thread if the resource itself is safe to load completely (it does not possess for example GPU data.)
-    SharedPtr<Resource> GetTempResource(StringHash type, const String& name, bool sendEventOnFailure = true);
+    SharedPtr<Resource> GetTempResource(StringHash type, const ea::string& name, bool sendEventOnFailure = true);
     /// Background load a resource. An event will be sent when complete. Return true if successfully stored to the load queue, false if eg. already exists. Can be called from outside the main thread.
-    bool BackgroundLoadResource(StringHash type, const String& name, bool sendEventOnFailure = true, Resource* caller = nullptr);
+    bool BackgroundLoadResource(StringHash type, const ea::string& name, bool sendEventOnFailure = true, Resource* caller = nullptr);
     /// Return number of pending background-loaded resources.
     unsigned GetNumBackgroundLoadResources() const;
     /// Return all loaded resources of a specific type.
-    void GetResources(PODVector<Resource*>& result, StringHash type) const;
+    void GetResources(ea::vector<Resource*>& result, StringHash type) const;
     /// Return an already loaded resource of specific type & name, or null if not found. Will not load if does not exist.
-    Resource* GetExistingResource(StringHash type, const String& name);
+    Resource* GetExistingResource(StringHash type, const ea::string& name);
 
     /// Return all loaded resources.
-    const HashMap<StringHash, ResourceGroup>& GetAllResources() const { return resourceGroups_; }
+    const ea::unordered_map<StringHash, ResourceGroup>& GetAllResources() const { return resourceGroups_; }
 
     /// Return added resource load directories.
-    const Vector<String>& GetResourceDirs() const { return resourceDirs_; }
+    const ea::vector<ea::string>& GetResourceDirs() const { return resourceDirs_; }
 
     /// Return added package files.
-    const Vector<SharedPtr<PackageFile> >& GetPackageFiles() const { return packages_; }
+    const ea::vector<SharedPtr<PackageFile> >& GetPackageFiles() const { return packages_; }
 
     /// Template version of returning a resource by name.
-    template <class T> T* GetResource(const String& name, bool sendEventOnFailure = true);
+    template <class T> T* GetResource(const ea::string& name, bool sendEventOnFailure = true);
     /// Template version of returning an existing resource by name.
-    template <class T> T* GetExistingResource(const String& name);
+    template <class T> T* GetExistingResource(const ea::string& name);
     /// Template version of loading a resource without storing it to the cache.
-    template <class T> SharedPtr<T> GetTempResource(const String& name, bool sendEventOnFailure = true);
+    template <class T> SharedPtr<T> GetTempResource(const ea::string& name, bool sendEventOnFailure = true);
     /// Template version of releasing a resource by name.
-    template <class T> void ReleaseResource(const String& name, bool force = false);
+    template <class T> void ReleaseResource(const ea::string& name, bool force = false);
     /// Template version of queueing a resource background load.
-    template <class T> bool BackgroundLoadResource(const String& name, bool sendEventOnFailure = true, Resource* caller = nullptr);
+    template <class T> bool BackgroundLoadResource(const ea::string& name, bool sendEventOnFailure = true, Resource* caller = nullptr);
     /// Template version of returning loaded resources of a specific type.
-    template <class T> void GetResources(PODVector<T*>& result) const;
+    template <class T> void GetResources(ea::vector<T*>& result) const;
     /// Return whether a file exists in the resource directories or package files. Does not check manually added in-memory resources.
-    bool Exists(const String& name) const;
+    bool Exists(const ea::string& name) const;
     /// Return memory budget for a resource type.
     unsigned long long GetMemoryBudget(StringHash type) const;
     /// Return total memory use for a resource type.
@@ -179,7 +181,7 @@ public:
     /// Return total memory use for all resources.
     unsigned long long GetTotalMemoryUse() const;
     /// Return full absolute file name of resource if possible, or empty if not found.
-    String GetResourceFileName(const String& name) const;
+    ea::string GetResourceFileName(const ea::string& name) const;
 
     /// Return whether automatic resource reloading is enabled.
     bool GetAutoReloadResources() const { return autoReloadResources_; }
@@ -197,32 +199,38 @@ public:
     ResourceRouter* GetResourceRouter(unsigned index) const;
 
     /// Return either the path itself or its parent, based on which of them has recognized resource subdirectories.
-    String GetPreferredResourceDir(const String& path) const;
+    ea::string GetPreferredResourceDir(const ea::string& path) const;
     /// Remove unsupported constructs from the resource name to prevent ambiguity, and normalize absolute filename to resource path relative if possible.
-    String SanitateResourceName(const String& name) const;
+    ea::string SanitateResourceName(const ea::string& name) const;
     /// Remove unnecessary constructs from a resource directory name and ensure it to be an absolute path.
-    String SanitateResourceDirName(const String& name) const;
+    ea::string SanitateResourceDirName(const ea::string& name) const;
     /// Store a dependency for a resource. If a dependency file changes, the resource will be reloaded.
-    void StoreResourceDependency(Resource* resource, const String& dependency);
+    void StoreResourceDependency(Resource* resource, const ea::string& dependency);
     /// Reset dependencies for a resource.
     void ResetDependencies(Resource* resource);
 
     /// Returns a formatted string containing the memory actively used.
-    String PrintMemoryUsage() const;
+    ea::string PrintMemoryUsage() const;
     /// Get the number of resource directories
-    unsigned GetNumResourceDirs() const { return resourceDirs_.Size(); }
+    unsigned GetNumResourceDirs() const { return resourceDirs_.size(); }
     /// Get resource directory at a given index
-    const String& GetResourceDir(unsigned index) const { return index < resourceDirs_.Size() ? resourceDirs_[index] : String::EMPTY; }
+    const ea::string& GetResourceDir(unsigned index) const { return index < resourceDirs_.size() ? resourceDirs_[index] : EMPTY_STRING; }
     
     /// Scan for specified files.
-    void Scan(Vector<String>& result, const String& pathName, const String& filter, unsigned flags, bool recursive) const;
+    void Scan(ea::vector<ea::string>& result, const ea::string& pathName, const ea::string& filter, unsigned flags, bool recursive) const;
     /// Returns a formatted string containing the currently loaded resources with optional type name filter.
-    String PrintResources(const String& typeName = String::EMPTY) const;
+    ea::string PrintResources(const ea::string& typeName = EMPTY_STRING) const;
     /// Renames resource without deleting it from cache. `source` and `destination` may be resource names or absolute
     /// paths to files in resource directories. If destination is a resource name then source file is renamed within same data directory.
-    bool RenameResource(String source, String destination);
+    bool RenameResource(const ea::string& source, const ea::string& destination);
     /// When resource auto-reloading is enabled ignore reloading resource once.
-    void IgnoreResourceReload(const String& name);
+    void IgnoreResourceReload(const ea::string& name);
+    /// When resource auto-reloading is enabled ignore reloading resource once.
+    void IgnoreResourceReload(const Resource* resource);
+    /// Pass name through resource routers and return final resource name.
+    void RouteResourceName(ea::string& name, ResourceRequest requestType) const;
+    /// Clear all resources from resource cache.
+    void Clear();
 
 private:
     /// Find a resource.
@@ -236,26 +244,26 @@ private:
     /// Handle begin frame event. Automatic resource reloads and the finalization of background loaded resources are processed here.
     void HandleBeginFrame(StringHash eventType, VariantMap& eventData);
     /// Search FileSystem for file.
-    File* SearchResourceDirs(const String& name);
+    File* SearchResourceDirs(const ea::string& name);
     /// Search resource packages for file.
-    File* SearchPackages(const String& name);
+    File* SearchPackages(const ea::string& name);
 
     /// Mutex for thread-safe access to the resource directories, resource packages and resource dependencies.
     mutable Mutex resourceMutex_;
     /// Resources by type.
-    HashMap<StringHash, ResourceGroup> resourceGroups_;
+    ea::unordered_map<StringHash, ResourceGroup> resourceGroups_;
     /// Resource load directories.
-    Vector<String> resourceDirs_;
+    ea::vector<ea::string> resourceDirs_;
     /// File watchers for resource directories, if automatic reloading enabled.
-    Vector<SharedPtr<FileWatcher> > fileWatchers_;
+    ea::vector<SharedPtr<FileWatcher> > fileWatchers_;
     /// Package files.
-    Vector<SharedPtr<PackageFile> > packages_;
+    ea::vector<SharedPtr<PackageFile> > packages_;
     /// Dependent resources. Only used with automatic reload to eg. trigger reload of a cube texture when any of its faces change.
-    HashMap<StringHash, HashSet<StringHash> > dependentResources_;
+    ea::unordered_map<StringHash, ea::hash_set<StringHash> > dependentResources_;
     /// Resource background loader.
     SharedPtr<BackgroundLoader> backgroundLoader_;
     /// Resource routers.
-    Vector<SharedPtr<ResourceRouter> > resourceRouters_;
+    ea::vector<SharedPtr<ResourceRouter> > resourceRouters_;
     /// Automatic resource reloading flag.
     bool autoReloadResources_;
     /// Return failed resources flag.
@@ -267,47 +275,47 @@ private:
     /// How many milliseconds maximum per frame to spend on finishing background loaded resources.
     int finishBackgroundResourcesMs_;
     /// List of resources that will not be auto-reloaded if reloading event triggers.
-    Vector<String> ignoreResourceAutoReload_;
+    ea::vector<ea::string> ignoreResourceAutoReload_;
 };
 
-template <class T> T* ResourceCache::GetExistingResource(const String& name)
+template <class T> T* ResourceCache::GetExistingResource(const ea::string& name)
 {
     StringHash type = T::GetTypeStatic();
     return static_cast<T*>(GetExistingResource(type, name));
 }
 
-template <class T> T* ResourceCache::GetResource(const String& name, bool sendEventOnFailure)
+template <class T> T* ResourceCache::GetResource(const ea::string& name, bool sendEventOnFailure)
 {
     StringHash type = T::GetTypeStatic();
     return static_cast<T*>(GetResource(type, name, sendEventOnFailure));
 }
 
-template <class T> void ResourceCache::ReleaseResource(const String& name, bool force)
+template <class T> void ResourceCache::ReleaseResource(const ea::string& name, bool force)
 {
     StringHash type = T::GetTypeStatic();
     ReleaseResource(type, name, force);
 }
 
-template <class T> SharedPtr<T> ResourceCache::GetTempResource(const String& name, bool sendEventOnFailure)
+template <class T> SharedPtr<T> ResourceCache::GetTempResource(const ea::string& name, bool sendEventOnFailure)
 {
     StringHash type = T::GetTypeStatic();
     return StaticCast<T>(GetTempResource(type, name, sendEventOnFailure));
 }
 
-template <class T> bool ResourceCache::BackgroundLoadResource(const String& name, bool sendEventOnFailure, Resource* caller)
+template <class T> bool ResourceCache::BackgroundLoadResource(const ea::string& name, bool sendEventOnFailure, Resource* caller)
 {
     StringHash type = T::GetTypeStatic();
     return BackgroundLoadResource(type, name, sendEventOnFailure, caller);
 }
 
-template <class T> void ResourceCache::GetResources(PODVector<T*>& result) const
+template <class T> void ResourceCache::GetResources(ea::vector<T*>& result) const
 {
-    auto& resources = reinterpret_cast<PODVector<Resource*>&>(result);
+    auto& resources = reinterpret_cast<ea::vector<Resource*>&>(result);
     StringHash type = T::GetTypeStatic();
     GetResources(resources, type);
 
     // Perform conversion of the returned pointers
-    for (unsigned i = 0; i < result.Size(); ++i)
+    for (unsigned i = 0; i < result.size(); ++i)
     {
         Resource* resource = resources[i];
         result[i] = static_cast<T*>(resource);

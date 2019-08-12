@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -145,7 +145,7 @@ void Vehicle::Init()
     GetWheelComponents();
 }
 
-void Vehicle::InitWheel(const String& name, const Vector3& offset, WeakPtr<Node>& wheelNode, unsigned& wheelNodeID)
+void Vehicle::InitWheel(const ea::string& name, const Vector3& offset, WeakPtr<Node>& wheelNode, unsigned& wheelNodeID)
 {
     auto* cache = GetSubsystem<ResourceCache>();
 

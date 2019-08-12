@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,17 +20,23 @@
 // THE SOFTWARE.
 //
 
+#include <EASTL/sort.h>
+
 #include <Urho3D/Resource/XMLFile.h>
+#include <Urho3D/Core/CoreEvents.h>
 #include <Urho3D/Core/StringUtils.h>
 #include <Urho3D/Graphics/Graphics.h>
+#include <Urho3D/IO/FileSystem.h>
 #include <Urho3D/IO/Log.h>
 #include <Urho3D/Resource/ResourceCache.h>
+#include <Urho3D/Resource/ResourceEvents.h>
 #include <Urho3D/SystemUI/SystemUI.h>
-#include <Toolbox/SystemUI/ImGuiDock.h>
 #include <Tabs/ConsoleTab.h>
 #include <Tabs/ResourceTab.h>
 #include <Tabs/HierarchyTab.h>
 #include <Tabs/InspectorTab.h>
+#include <Toolbox/SystemUI/Widgets.h>
+#include <ThirdParty/tracy/server/IconsFontAwesome5.h>
 
 #include "Editor.h"
 #include "EditorEvents.h"
@@ -44,13 +50,39 @@ namespace Urho3D
 
 Project::Project(Context* context)
     : Object(context)
-    , assetConverter_(context)
+    , pipeline_(context)
+#if URHO3D_PLUGINS
+    , plugins_(context)
+#endif
 {
     SubscribeToEvent(E_EDITORRESOURCESAVED, std::bind(&Project::SaveProject, this));
+    SubscribeToEvent(E_RESOURCERENAMED, [this](StringHash, VariantMap& args) {
+        using namespace ResourceRenamed;
+        if (args[P_FROM].GetString() == defaultScene_)
+            defaultScene_ = args[P_TO].GetString();
+    });
+    SubscribeToEvent(E_RESOURCEBROWSERDELETE, [this](StringHash, VariantMap& args) {
+        using namespace ResourceBrowserDelete;
+        if (args[P_NAME].GetString() == defaultScene_)
+            defaultScene_ = EMPTY_STRING;
+    });
+
+    SubscribeToEvent(E_ENDFRAME, [this](StringHash, VariantMap&) {
+        // Save project every minute.
+        // TODO: Make save time configurable.
+        if (saveProjectTimer_.GetMSec(false) >= 60000)
+        {
+            SaveProject();
+            saveProjectTimer_.Reset();
+        }
+    });
 }
 
 Project::~Project()
 {
+    if (GetSystemUI())
+        ui::GetIO().IniFilename = nullptr;
+
     if (auto* cache = GetCache())
     {
         cache->RemoveResourceDir(GetCachePath());
@@ -60,21 +92,20 @@ Project::~Project()
             GetCache()->AddResourceDir(path);
     }
 
-    // Clear dock state
-    ui::LoadDock(JSONValue::EMPTY);
+    if (auto* editor = GetSubsystem<Editor>())
+        editor->UpdateWindowTitle();
 }
 
-bool Project::LoadProject(const String& projectPath)
+bool Project::LoadProject(const ea::string& projectPath)
 {
-    if (!projectFilePath_.Empty())
+    if (!projectFileDir_.empty())
         // Project is already loaded.
         return false;
 
-    if (projectPath.Empty())
+    if (projectPath.empty())
         return false;
 
     projectFileDir_ = AddTrailingSlash(projectPath);
-    projectFilePath_ = projectFileDir_ + "project.yml";
 
     if (!GetFileSystem()->Exists(GetCachePath()))
         GetFileSystem()->CreateDirsRecursive(GetCachePath());
@@ -86,12 +117,12 @@ bool Project::LoadProject(const String& projectPath)
 
         for (const auto& path : GetCache()->GetResourceDirs())
         {
-            if (path.EndsWith("/EditorData/") || path.Contains("/Autoload/"))
+            if (path.ends_with("/EditorData/") || path.contains("/Autoload/"))
                 continue;
 
             StringVector names;
 
-            URHO3D_LOGINFOF("Importing resources from '%s'", path.CString());
+            URHO3D_LOGINFOF("Importing resources from '%s'", path.c_str());
 
             // Copy default resources to the project.
             GetFileSystem()->ScanDir(names, path, "*", SCAN_FILES, false);
@@ -108,132 +139,301 @@ bool Project::LoadProject(const String& projectPath)
         }
     }
 
-    // Register asset dirs
-    GetCache()->AddResourceDir(GetCachePath(), 0);
-    GetCache()->AddResourceDir(GetResourcePath(), 1);
-    assetConverter_.SetCachePath(GetCachePath());
-    assetConverter_.AddAssetDirectory(GetResourcePath());
-    assetConverter_.VerifyCacheAsync();
-
     // Unregister engine dirs
     auto enginePrefixPath = GetSubsystem<Editor>()->GetCoreResourcePrefixPath();
     auto pathsCopy = GetCache()->GetResourceDirs();
-    cachedEngineResourcePaths_.Clear();
+    cachedEngineResourcePaths_.clear();
     for (const auto& path : pathsCopy)
     {
-        if (path.StartsWith(enginePrefixPath) && !path.EndsWith("/EditorData/"))
+        if (path.starts_with(enginePrefixPath) && !path.ends_with("/EditorData/"))
         {
-            cachedEngineResourcePaths_.EmplaceBack(path);
+            cachedEngineResourcePaths_.emplace_back(path);
             GetCache()->RemoveResourceDir(path);
         }
     }
 
-    // Load default layout if no user config exists
-    if (!GetFileSystem()->Exists(projectFilePath_))
+    if (GetSystemUI())
     {
-        GetSubsystem<Editor>()->LoadDefaultLayout();
-        return true;
+        uiConfigPath_ = projectFileDir_ + ".ui.ini";
+        isNewProject_ = !GetFileSystem()->FileExists(uiConfigPath_);
+
+        ui::GetIO().IniFilename = uiConfigPath_.c_str();
+
+        ImGuiSettingsHandler handler;
+        handler.TypeName = "Project";
+        handler.TypeHash = ImHashStr(handler.TypeName, 0, 0);
+        handler.ReadOpenFn = [](ImGuiContext* context, ImGuiSettingsHandler* handler, const char* name) -> void*
+        {
+            return (void*) name;
+        };
+        handler.ReadLineFn = [](ImGuiContext*, ImGuiSettingsHandler*, void* entry, const char* line)
+        {
+            SystemUI* systemUI = ui::GetSystemUI();
+            auto* editor = systemUI->GetSubsystem<Editor>();
+
+            const char* name = static_cast<const char*>(entry);
+            if (strcmp(name, "Window") == 0)
+            {
+                editor->CreateDefaultTabs();
+
+                // int x, y, w, h;
+                // if (sscanf(line, "Rect=%d,%d,%d,%d", &x, &y, &w, &h) == 4)
+                // {
+                //     w = Max(w, 100);            // Foot-shooting prevention
+                //     h = Max(h, 100);
+                //     systemUI->GetGraphics()->SetWindowPosition(x, y);
+                //     systemUI->GetGraphics()->SetMode(w, h);
+                // }
+                // else
+                //     return;
+            }
+            else
+            {
+
+                Tab* tab = editor->GetTabByName(name);
+                if (tab == nullptr)
+                {
+                    StringVector parts = ea::string(name).split('#');
+                    tab = editor->CreateTab(parts.front());
+                }
+                tab->OnLoadUISettings(name, line);
+            }
+        };
+        handler.WriteAllFn = [](ImGuiContext* imgui_ctx, ImGuiSettingsHandler* handler, ImGuiTextBuffer* buf)
+        {
+            auto* systemUI = ui::GetSystemUI();
+            auto* editor = systemUI->GetSubsystem<Editor>();
+            buf->appendf("[Project][Window]\n");
+            // IntVector2
+            // wSize = systemUI->GetGraphics()->GetSize();
+            // IntVector2
+            // wPos = systemUI->GetGraphics()->GetWindowPosition();
+            // buf->appendf("Rect=%d,%d,%d,%d\n", wPos.x_, wPos.y_, wSize.x_, wSize.y_);
+
+            // Save tabs
+            for (auto& tab : editor->GetContentTabs())
+                tab->OnSaveUISettings(buf);
+        };
+        ui::GetCurrentContext()->SettingsHandlers.push_back(handler);
     }
 
-    // Load user config
-    YAMLFile file(context_);
-    if (!file.LoadFile(projectFilePath_))
-        return false;
-
-    const auto& root = file.GetRoot();
-    if (root.IsObject())
+#if URHO3D_HASH_DEBUG
+    // StringHashNames.json
     {
-        SendEvent(E_EDITORPROJECTLOADINGSTART);
-
-        const auto& window = root["window"];
-        if (window.IsObject())
+        ea::string filePath(projectFileDir_ + "StringHashNames.json");
+        if (GetFileSystem()->Exists(filePath))
         {
-            auto size = window["size"].GetVariant().GetIntVector2();
-            GetGraphics()->SetMode(size.x_, size.y_);
-            GetGraphics()->SetWindowPosition(window["position"].GetVariant().GetIntVector2());
-        }
+            JSONFile file(context_);
+            if (!file.LoadFile(filePath))
+                return false;
 
-        const auto& tabs = root["tabs"];
-        if (tabs.IsArray())
-        {
-            auto* editor = GetSubsystem<Editor>();
-            for (auto i = 0; i < tabs.Size(); i++)
+            for (const auto& value : file.GetRoot().GetArray())
             {
-                const auto& tab = tabs[i];
-
-                auto tabType = tab["type"].GetString();
-                auto* runtimeTab = editor->CreateTab(tabType);
-
-                if (runtimeTab == nullptr)
-                    URHO3D_LOGERRORF("Unknown tab type '%s'", tabType.CString());
-                else
-                    runtimeTab->OnLoadProject(tab);
+                // Seed global string hash to name map.
+                StringHash hash(value.GetString());
+                (void) (hash);
             }
         }
+    }
+#endif
 
-        ui::LoadDock(root["docks"]);
+    // Settings.json
+    {
+        ea::string filePath(projectFileDir_ + "Settings.json");
+        if (GetFileSystem()->Exists(filePath))
+        {
+            JSONFile file(context_);
+            if (!file.LoadFile(filePath))
+                return false;
 
-        // Plugins may load state by subscribing to this event
-        using namespace EditorProjectLoading;
-        SendEvent(E_EDITORPROJECTLOADING, P_ROOT, (void*)&root);
-
-        return true;
+            for (auto& pair : file.GetRoot().GetObject())
+                engineParameters_[pair.first] = pair.second.GetVariant();
+        }
     }
 
-    return false;
+    // Register asset dirs
+    GetCache()->AddResourceDir(GetCachePath(), 0);
+    GetCache()->AddResourceDir(GetResourcePath(), 1);
+
+    // Project.json
+    {
+        using namespace EditorProjectLoading;
+        ea::string filePath(projectFileDir_ + "Project.json");
+        if (GetFileSystem()->Exists(filePath))
+        {
+            JSONFile file(context_);
+            if (!file.LoadFile(filePath))
+                return false;
+
+            const auto& root = file.GetRoot().GetObject();
+#if URHO3D_PLUGINS
+            auto pluginsIt = root.find("plugins");
+            if (pluginsIt != root.end())
+            {
+                const auto& plugins = pluginsIt->second.GetArray();
+                for (const auto& pluginInfoValue : plugins)
+                {
+                    const JSONObject& pluginInfo = pluginInfoValue.GetObject();
+                    auto nameIt = pluginInfo.find("name");
+                    if (nameIt == pluginInfo.end())
+                    {
+                        URHO3D_LOGERRORF("Loading plugin failed: 'name' is missing.");
+                        continue;
+                    }
+
+                    const ea::string& pluginName = nameIt->second.GetString();
+                    if (Plugin* plugin = plugins_.Load(pluginName))
+                    {
+                        auto privateIt = pluginInfo.find("private");
+                        if (privateIt != pluginInfo.end() && privateIt->second.GetBool())
+                            plugin->SetFlags(plugin->GetFlags() | PLUGIN_PRIVATE);
+                    }
+                    else
+                        URHO3D_LOGERRORF("Loading plugin '%s' failed.", pluginName.c_str());
+                }
+                // Tick plugins once to ensure plugins are loaded before loading any possibly open scenes. This makes
+                // plugins register themselves with the engine so that loaded scenes can properly load components
+                // provided by plugins. Not doing this would cause scenes to load these components as UnknownComponent.
+                plugins_.OnEndFrame();
+            }
+#endif
+            auto defaultSceneIt = root.find("default-scene");
+            if (defaultSceneIt != root.end())
+                defaultScene_ = defaultSceneIt->second.GetString();
+
+            auto flavorsIt = root.find("flavors");
+            if (flavorsIt != root.end())
+            {
+                const JSONValue& flavors = flavorsIt->second;
+                for (int i = 0; i < flavors.Size(); i++)
+                    pipeline_.AddFlavor(flavors[i].GetString());
+            }
+            SendEvent(E_EDITORPROJECTLOADING, P_ROOT, (void*)&root);
+        }
+        else
+            SendEvent(E_EDITORPROJECTLOADING, P_ROOT, (void*)nullptr);
+    }
+
+    return true;
 }
 
 bool Project::SaveProject()
 {
+    if (GetEngine()->IsHeadless())
+    {
+        URHO3D_LOGERROR("Headless instance is supposed to use project as read-only.");
+        return false;
+    }
+
     // Saving project data of tabs may trigger saving resources, which in turn triggers saving editor project. Avoid
     // that loop.
     UnsubscribeFromEvent(E_EDITORRESOURCESAVED);
 
-    if (projectFilePath_.Empty())
+    if (projectFileDir_.empty())
     {
         URHO3D_LOGERROR("Unable to save project. Project path is empty.");
         return false;
     }
 
-    YAMLFile file(context_);
-    JSONValue& root = file.GetRoot();
-    root["version"] = 0;
-
-    JSONValue& window = root["window"];
+    // Project.json
     {
-        window["size"].SetVariant(GetGraphics()->GetSize());
-        window["position"].SetVariant(GetGraphics()->GetWindowPosition());
+        JSONFile file(context_);
+        JSONValue& root = file.GetRoot();
+
+        root["version"] = 0;
+
+        // Plugins
+#if URHO3D_PLUGINS
+        {
+            JSONArray plugins{};
+            for (const auto& plugin : plugins_.GetPlugins())
+            {
+                plugins.push_back(JSONObject{{"name",    plugin->GetName()},
+                                             {"private", plugin->GetFlags() & PLUGIN_PRIVATE ? true : false}});
+            }
+            ea::quick_sort(plugins.begin(), plugins.end(), [](const JSONValue& a, const JSONValue& b) {
+                auto aNameIt = a.GetObject().find("name");
+                auto bNameIt = b.GetObject().find("name");
+                const ea::string& nameA = aNameIt != a.GetObject().end() ? aNameIt->second.GetString() : EMPTY_STRING;
+                const ea::string& nameB = bNameIt != b.GetObject().end() ? bNameIt->second.GetString() : EMPTY_STRING;
+                return nameA.compare(nameB);
+            });
+            root["plugins"] = plugins;
+        }
+#endif
+        root["default-scene"] = defaultScene_;
+
+        for (const ea::string& flavor : pipeline_.GetFlavors())
+            root["flavors"].Push(flavor);
+
+        ea::string filePath(projectFileDir_ + "Project.json");
+        if (!file.SaveFile(filePath))
+        {
+            projectFileDir_.clear();
+            URHO3D_LOGERRORF("Saving project to '%s' failed", filePath.c_str());
+            return false;
+        }
+
+        using namespace EditorProjectSaving;
+        SendEvent(E_EDITORPROJECTSAVING, P_ROOT, (void*)&root);
     }
 
-    // Plugins may save state by subscribing to this event
-    using namespace EditorProjectSaving;
-    SendEvent(E_EDITORPROJECTSAVING, P_ROOT, (void*)&root);
-
-    ui::SaveDock(root["docks"]);
-
-    auto success = file.SaveFile(projectFilePath_);
-    if (!success)
+    // Settings.json
     {
-        projectFilePath_.Clear();
-        URHO3D_LOGERRORF("Saving project to '%s' failed", projectFilePath_.CString());
+        JSONFile file(context_);
+        JSONValue& root = file.GetRoot();
+
+        for (const auto& pair : engineParameters_)
+            root[pair.first].SetVariant(pair.second, context_);
+
+        ea::string filePath(projectFileDir_ + "Settings.json");
+        if (!file.SaveFile(filePath))
+        {
+            projectFileDir_.clear();
+            URHO3D_LOGERRORF("Saving project to '%s' failed", filePath.c_str());
+            return false;
+        }
     }
+
+#if URHO3D_HASH_DEBUG
+    // StringHashNames.json
+    {
+        auto hashNames = StringHash::GetGlobalStringHashRegister()->GetInternalMap().values();
+        ea::quick_sort(hashNames.begin(), hashNames.end());
+        JSONFile file(context_);
+        JSONArray names;
+        for (const auto& string : hashNames)
+            names.push_back(string);
+        file.GetRoot() = names;
+
+        ea::string filePath(projectFileDir_ + "StringHashNames.json");
+        if (!file.SaveFile(filePath))
+        {
+            projectFileDir_.clear();
+            URHO3D_LOGERRORF("Saving StringHash names to '%s' failed", filePath.c_str());
+            return false;
+        }
+    }
+#endif
+
+    ui::SaveIniSettingsToDisk(uiConfigPath_.c_str());
 
     SubscribeToEvent(E_EDITORRESOURCESAVED, std::bind(&Project::SaveProject, this));
 
-    return success;
+    return true;
 }
 
-String Project::GetCachePath() const
+ea::string Project::GetCachePath() const
 {
-    if (projectFileDir_.Empty())
-        return String::EMPTY;
+    if (projectFileDir_.empty())
+        return EMPTY_STRING;
     return projectFileDir_ + "Cache/";
 }
 
-String Project::GetResourcePath() const
+ea::string Project::GetResourcePath() const
 {
-    if (projectFileDir_.Empty())
-        return String::EMPTY;
+    if (projectFileDir_.empty())
+        return EMPTY_STRING;
     return projectFileDir_ + "Resources/";
 }
 

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,6 @@
 #include "../Resource/ResourceCache.h"
 #include "../Resource/ResourceEvents.h"
 #include "../Resource/XMLFile.h"
-#include "../Resource/YAMLFile.h"
 
 #include "../DebugNew.h"
 
@@ -96,7 +95,7 @@ ResourceCache::~ResourceCache()
 #endif
 }
 
-bool ResourceCache::AddResourceDir(const String& pathName, unsigned priority)
+bool ResourceCache::AddResourceDir(const ea::string& pathName, unsigned priority)
 {
     MutexLock lock(resourceMutex_);
 
@@ -108,26 +107,26 @@ bool ResourceCache::AddResourceDir(const String& pathName, unsigned priority)
     }
 
     // Convert path to absolute
-    String fixedPath = SanitateResourceDirName(pathName);
+    ea::string fixedPath = SanitateResourceDirName(pathName);
 
     // Check that the same path does not already exist
-    for (unsigned i = 0; i < resourceDirs_.Size(); ++i)
+    for (unsigned i = 0; i < resourceDirs_.size(); ++i)
     {
-        if (!resourceDirs_[i].Compare(fixedPath, false))
+        if (!resourceDirs_[i].comparei(fixedPath))
             return true;
     }
 
-    if (priority < resourceDirs_.Size())
-        resourceDirs_.Insert(priority, fixedPath);
+    if (priority < resourceDirs_.size())
+        resourceDirs_.insert_at(priority, fixedPath);
     else
-        resourceDirs_.Push(fixedPath);
+        resourceDirs_.push_back(fixedPath);
 
     // If resource auto-reloading active, create a file watcher for the directory
     if (autoReloadResources_)
     {
         SharedPtr<FileWatcher> watcher(new FileWatcher(context_));
         watcher->StartWatching(fixedPath, true);
-        fileWatchers_.Push(watcher);
+        fileWatchers_.push_back(watcher);
     }
 
     URHO3D_LOGINFO("Added resource path " + fixedPath);
@@ -141,20 +140,20 @@ bool ResourceCache::AddPackageFile(PackageFile* package, unsigned priority)
     // Do not add packages that failed to load
     if (!package || !package->GetNumFiles())
     {
-        URHO3D_LOGERRORF("Could not add package file %s due to load failure", package->GetName().CString());
+        URHO3D_LOGERRORF("Could not add package file %s due to load failure", package->GetName().c_str());
         return false;
     }
 
-    if (priority < packages_.Size())
-        packages_.Insert(priority, SharedPtr<PackageFile>(package));
+    if (priority < packages_.size())
+        packages_.insert_at(priority, SharedPtr<PackageFile>(package));
     else
-        packages_.Push(SharedPtr<PackageFile>(package));
+        packages_.push_back(SharedPtr<PackageFile>(package));
 
     URHO3D_LOGINFO("Added resource package " + package->GetName());
     return true;
 }
 
-bool ResourceCache::AddPackageFile(const String& fileName, unsigned priority)
+bool ResourceCache::AddPackageFile(const ea::string& fileName, unsigned priority)
 {
     SharedPtr<PackageFile> package(new PackageFile(context_));
     return package->Open(fileName) && AddPackageFile(package, priority);
@@ -168,8 +167,8 @@ bool ResourceCache::AddManualResource(Resource* resource)
         return false;
     }
 
-    const String& name = resource->GetName();
-    if (name.Empty())
+    const ea::string& name = resource->GetName();
+    if (name.empty())
     {
         URHO3D_LOGERROR("Manual resource with empty name, can not add");
         return false;
@@ -181,23 +180,23 @@ bool ResourceCache::AddManualResource(Resource* resource)
     return true;
 }
 
-void ResourceCache::RemoveResourceDir(const String& pathName)
+void ResourceCache::RemoveResourceDir(const ea::string& pathName)
 {
     MutexLock lock(resourceMutex_);
 
-    String fixedPath = SanitateResourceDirName(pathName);
+    ea::string fixedPath = SanitateResourceDirName(pathName);
 
-    for (unsigned i = 0; i < resourceDirs_.Size(); ++i)
+    for (unsigned i = 0; i < resourceDirs_.size(); ++i)
     {
-        if (!resourceDirs_[i].Compare(fixedPath, false))
+        if (!resourceDirs_[i].comparei(fixedPath))
         {
-            resourceDirs_.Erase(i);
+            resourceDirs_.erase_at(i);
             // Remove the filewatcher with the matching path
-            for (unsigned j = 0; j < fileWatchers_.Size(); ++j)
+            for (unsigned j = 0; j < fileWatchers_.size(); ++j)
             {
-                if (!fileWatchers_[j]->GetPath().Compare(fixedPath, false))
+                if (!fileWatchers_[j]->GetPath().comparei(fixedPath))
                 {
-                    fileWatchers_.Erase(j);
+                    fileWatchers_.erase_at(j);
                     break;
                 }
             }
@@ -211,40 +210,40 @@ void ResourceCache::RemovePackageFile(PackageFile* package, bool releaseResource
 {
     MutexLock lock(resourceMutex_);
 
-    for (Vector<SharedPtr<PackageFile> >::Iterator i = packages_.Begin(); i != packages_.End(); ++i)
+    for (auto i = packages_.begin(); i != packages_.end(); ++i)
     {
-        if (*i == package)
+        if (i->Get() == package)
         {
             if (releaseResources)
-                ReleasePackageResources(*i, forceRelease);
+                ReleasePackageResources(i->Get(), forceRelease);
             URHO3D_LOGINFO("Removed resource package " + (*i)->GetName());
-            packages_.Erase(i);
+            packages_.erase(i);
             return;
         }
     }
 }
 
-void ResourceCache::RemovePackageFile(const String& fileName, bool releaseResources, bool forceRelease)
+void ResourceCache::RemovePackageFile(const ea::string& fileName, bool releaseResources, bool forceRelease)
 {
     MutexLock lock(resourceMutex_);
 
     // Compare the name and extension only, not the path
-    String fileNameNoPath = GetFileNameAndExtension(fileName);
+    ea::string fileNameNoPath = GetFileNameAndExtension(fileName);
 
-    for (Vector<SharedPtr<PackageFile> >::Iterator i = packages_.Begin(); i != packages_.End(); ++i)
+    for (auto i = packages_.begin(); i != packages_.end(); ++i)
     {
-        if (!GetFileNameAndExtension((*i)->GetName()).Compare(fileNameNoPath, false))
+        if (!GetFileNameAndExtension((*i)->GetName()).comparei(fileNameNoPath))
         {
             if (releaseResources)
-                ReleasePackageResources(*i, forceRelease);
+                ReleasePackageResources(i->Get(), forceRelease);
             URHO3D_LOGINFO("Removed resource package " + (*i)->GetName());
-            packages_.Erase(i);
+            packages_.erase(i);
             return;
         }
     }
 }
 
-void ResourceCache::ReleaseResource(StringHash type, const String& name, bool force)
+void ResourceCache::ReleaseResource(StringHash type, const ea::string& name, bool force)
 {
     StringHash nameHash(name);
     const SharedPtr<Resource>& existingRes = FindResource(type, nameHash);
@@ -254,7 +253,7 @@ void ResourceCache::ReleaseResource(StringHash type, const String& name, bool fo
     // If other references exist, do not release, unless forced
     if ((existingRes.Refs() == 1 && existingRes.WeakRefs() == 0) || force)
     {
-        resourceGroups_[type].resources_.Erase(nameHash);
+        resourceGroups_[type].resources_.erase(nameHash);
         UpdateResourceGroup(type);
     }
 }
@@ -263,17 +262,17 @@ void ResourceCache::ReleaseResources(StringHash type, bool force)
 {
     bool released = false;
 
-    HashMap<StringHash, ResourceGroup>::Iterator i = resourceGroups_.Find(type);
-    if (i != resourceGroups_.End())
+    auto i = resourceGroups_.find(type);
+    if (i != resourceGroups_.end())
     {
-        for (HashMap<StringHash, SharedPtr<Resource> >::Iterator j = i->second_.resources_.Begin();
-             j != i->second_.resources_.End();)
+        for (auto j = i->second.resources_.begin();
+             j != i->second.resources_.end();)
         {
-            HashMap<StringHash, SharedPtr<Resource> >::Iterator current = j++;
+            auto current = j++;
             // If other references exist, do not release, unless forced
-            if ((current->second_.Refs() == 1 && current->second_.WeakRefs() == 0) || force)
+            if ((current->second.Refs() == 1 && current->second.WeakRefs() == 0) || force)
             {
-                i->second_.resources_.Erase(current);
+                i->second.resources_.erase(current);
                 released = true;
             }
         }
@@ -283,23 +282,23 @@ void ResourceCache::ReleaseResources(StringHash type, bool force)
         UpdateResourceGroup(type);
 }
 
-void ResourceCache::ReleaseResources(StringHash type, const String& partialName, bool force)
+void ResourceCache::ReleaseResources(StringHash type, const ea::string& partialName, bool force)
 {
     bool released = false;
 
-    HashMap<StringHash, ResourceGroup>::Iterator i = resourceGroups_.Find(type);
-    if (i != resourceGroups_.End())
+    auto i = resourceGroups_.find(type);
+    if (i != resourceGroups_.end())
     {
-        for (HashMap<StringHash, SharedPtr<Resource> >::Iterator j = i->second_.resources_.Begin();
-             j != i->second_.resources_.End();)
+        for (auto j = i->second.resources_.begin();
+             j != i->second.resources_.end();)
         {
-            HashMap<StringHash, SharedPtr<Resource> >::Iterator current = j++;
-            if (current->second_->GetName().Contains(partialName))
+            auto current = j++;
+            if (current->second->GetName().contains(partialName))
             {
                 // If other references exist, do not release, unless forced
-                if ((current->second_.Refs() == 1 && current->second_.WeakRefs() == 0) || force)
+                if ((current->second.Refs() == 1 && current->second.WeakRefs() == 0) || force)
                 {
-                    i->second_.resources_.Erase(current);
+                    i->second.resources_.erase(current);
                     released = true;
                 }
             }
@@ -310,7 +309,7 @@ void ResourceCache::ReleaseResources(StringHash type, const String& partialName,
         UpdateResourceGroup(type);
 }
 
-void ResourceCache::ReleaseResources(const String& partialName, bool force)
+void ResourceCache::ReleaseResources(const ea::string& partialName, bool force)
 {
     // Some resources refer to others, like materials to textures. Repeat the release logic as many times as necessary to ensure
     // these get released. This is not necessary if forcing release
@@ -319,24 +318,25 @@ void ResourceCache::ReleaseResources(const String& partialName, bool force)
     {
         released = false;
 
-        for (HashMap<StringHash, ResourceGroup>::Iterator i = resourceGroups_.Begin(); i != resourceGroups_.End(); ++i)
+        for (auto i = resourceGroups_.begin(); i !=
+            resourceGroups_.end(); ++i)
         {
-            for (HashMap<StringHash, SharedPtr<Resource> >::Iterator j = i->second_.resources_.Begin();
-                 j != i->second_.resources_.End();)
+            for (auto j = i->second.resources_.begin();
+                 j != i->second.resources_.end();)
             {
-                HashMap<StringHash, SharedPtr<Resource> >::Iterator current = j++;
-                if (current->second_->GetName().Contains(partialName))
+                auto current = j++;
+                if (current->second->GetName().contains(partialName))
                 {
                     // If other references exist, do not release, unless forced
-                    if ((current->second_.Refs() == 1 && current->second_.WeakRefs() == 0) || force)
+                    if ((current->second.Refs() == 1 && current->second.WeakRefs() == 0) || force)
                     {
-                        i->second_.resources_.Erase(current);
+                        i->second.resources_.erase(current);
                         released = true;
                     }
                 }
             }
             if (released)
-                UpdateResourceGroup(i->first_);
+                UpdateResourceGroup(i->first);
         }
 
     } while (released && !force);
@@ -349,22 +349,22 @@ void ResourceCache::ReleaseAllResources(bool force)
     {
         released = false;
 
-        for (HashMap<StringHash, ResourceGroup>::Iterator i = resourceGroups_.Begin();
-             i != resourceGroups_.End(); ++i)
+        for (auto i = resourceGroups_.begin();
+             i != resourceGroups_.end(); ++i)
         {
-            for (HashMap<StringHash, SharedPtr<Resource> >::Iterator j = i->second_.resources_.Begin();
-                 j != i->second_.resources_.End();)
+            for (auto j = i->second.resources_.begin();
+                 j != i->second.resources_.end();)
             {
-                HashMap<StringHash, SharedPtr<Resource> >::Iterator current = j++;
+                auto current = j++;
                 // If other references exist, do not release, unless forced
-                if ((current->second_.Refs() == 1 && current->second_.WeakRefs() == 0) || force)
+                if ((current->second.Refs() == 1 && current->second.WeakRefs() == 0) || force)
                 {
-                    i->second_.resources_.Erase(current);
+                    i->second.resources_.erase(current);
                     released = true;
                 }
             }
             if (released)
-                UpdateResourceGroup(i->first_);
+                UpdateResourceGroup(i->first);
         }
 
     } while (released && !force);
@@ -396,7 +396,7 @@ bool ResourceCache::ReloadResource(Resource* resource)
     return false;
 }
 
-void ResourceCache::ReloadResourceWithDependencies(const String& fileName)
+void ResourceCache::ReloadResourceWithDependencies(const ea::string& fileName)
 {
     StringHash fileNameHash(fileName);
     // If the filename is a resource we keep track of, reload it
@@ -404,31 +404,32 @@ void ResourceCache::ReloadResourceWithDependencies(const String& fileName)
     if (resource)
     {
         URHO3D_LOGDEBUG("Reloading changed resource " + fileName);
-        ReloadResource(resource);
+        ReloadResource(resource.Get());
     }
     // Always perform dependency resource check for resource loaded from XML file as it could be used in inheritance
     if (!resource || GetExtension(resource->GetName()) == ".xml")
     {
         // Check if this is a dependency resource, reload dependents
-        HashMap<StringHash, HashSet<StringHash> >::ConstIterator j = dependentResources_.Find(fileNameHash);
-        if (j != dependentResources_.End())
+        auto j = dependentResources_.find(
+            fileNameHash);
+        if (j != dependentResources_.end())
         {
             // Reloading a resource may modify the dependency tracking structure. Therefore collect the
             // resources we need to reload first
-            Vector<SharedPtr<Resource> > dependents;
-            dependents.Reserve(j->second_.Size());
+            ea::vector<SharedPtr<Resource> > dependents;
+            dependents.reserve(j->second.size());
 
-            for (HashSet<StringHash>::ConstIterator k = j->second_.Begin(); k != j->second_.End(); ++k)
+            for (auto k = j->second.begin(); k != j->second.end(); ++k)
             {
                 const SharedPtr<Resource>& dependent = FindResource(*k);
                 if (dependent)
-                    dependents.Push(dependent);
+                    dependents.push_back(dependent);
             }
 
-            for (unsigned k = 0; k < dependents.Size(); ++k)
+            for (unsigned k = 0; k < dependents.size(); ++k)
             {
                 URHO3D_LOGDEBUG("Reloading resource " + dependents[k]->GetName() + " depending on " + fileName);
-                ReloadResource(dependents[k]);
+                ReloadResource(dependents[k].Get());
             }
         }
     }
@@ -445,15 +446,15 @@ void ResourceCache::SetAutoReloadResources(bool enable)
     {
         if (enable)
         {
-            for (unsigned i = 0; i < resourceDirs_.Size(); ++i)
+            for (unsigned i = 0; i < resourceDirs_.size(); ++i)
             {
                 SharedPtr<FileWatcher> watcher(new FileWatcher(context_));
                 watcher->StartWatching(resourceDirs_[i], true);
-                fileWatchers_.Push(watcher);
+                fileWatchers_.push_back(watcher);
             }
         }
         else
-            fileWatchers_.Clear();
+            fileWatchers_.clear();
 
         autoReloadResources_ = enable;
     }
@@ -462,44 +463,38 @@ void ResourceCache::SetAutoReloadResources(bool enable)
 void ResourceCache::AddResourceRouter(ResourceRouter* router, bool addAsFirst)
 {
     // Check for duplicate
-    for (unsigned i = 0; i < resourceRouters_.Size(); ++i)
+    for (unsigned i = 0; i < resourceRouters_.size(); ++i)
     {
         if (resourceRouters_[i] == router)
             return;
     }
 
     if (addAsFirst)
-        resourceRouters_.Insert(0, SharedPtr<ResourceRouter>(router));
+        resourceRouters_.push_front(SharedPtr<ResourceRouter>(router));
     else
-        resourceRouters_.Push(SharedPtr<ResourceRouter>(router));
+        resourceRouters_.push_back(SharedPtr<ResourceRouter>(router));
 }
 
 void ResourceCache::RemoveResourceRouter(ResourceRouter* router)
 {
-    for (unsigned i = 0; i < resourceRouters_.Size(); ++i)
+    for (unsigned i = 0; i < resourceRouters_.size(); ++i)
     {
         if (resourceRouters_[i] == router)
         {
-            resourceRouters_.Erase(i);
+            resourceRouters_.erase_at(i);
             return;
         }
     }
 }
 
-SharedPtr<File> ResourceCache::GetFile(const String& name, bool sendEventOnFailure)
+SharedPtr<File> ResourceCache::GetFile(const ea::string& name, bool sendEventOnFailure)
 {
     MutexLock lock(resourceMutex_);
 
-    String sanitatedName = SanitateResourceName(name);
-    if (!isRouting_)
-    {
-        isRouting_ = true;
-        for (unsigned i = 0; i < resourceRouters_.Size(); ++i)
-            resourceRouters_[i]->Route(sanitatedName, RESOURCE_GETFILE);
-        isRouting_ = false;
-    }
+    ea::string sanitatedName = SanitateResourceName(name);
+    RouteResourceName(sanitatedName, RESOURCE_GETFILE);
 
-    if (sanitatedName.Length())
+    if (sanitatedName.length())
     {
         File* file = nullptr;
 
@@ -522,7 +517,7 @@ SharedPtr<File> ResourceCache::GetFile(const String& name, bool sendEventOnFailu
 
     if (sendEventOnFailure)
     {
-        if (resourceRouters_.Size() && sanitatedName.Empty() && !name.Empty())
+        if (resourceRouters_.size() && sanitatedName.empty() && !name.empty())
             URHO3D_LOGERROR("Resource request " + name + " was blocked");
         else
             URHO3D_LOGERROR("Could not find resource " + sanitatedName);
@@ -532,7 +527,7 @@ SharedPtr<File> ResourceCache::GetFile(const String& name, bool sendEventOnFailu
             using namespace ResourceNotFound;
 
             VariantMap& eventData = GetEventDataMap();
-            eventData[P_RESOURCENAME] = sanitatedName.Length() ? sanitatedName : name;
+            eventData[P_RESOURCENAME] = sanitatedName.length() ? sanitatedName : name;
             SendEvent(E_RESOURCENOTFOUND, eventData);
         }
     }
@@ -540,9 +535,9 @@ SharedPtr<File> ResourceCache::GetFile(const String& name, bool sendEventOnFailu
     return SharedPtr<File>();
 }
 
-Resource* ResourceCache::GetExistingResource(StringHash type, const String& name)
+Resource* ResourceCache::GetExistingResource(StringHash type, const ea::string& name)
 {
-    String sanitatedName = SanitateResourceName(name);
+    ea::string sanitatedName = SanitateResourceName(name);
 
     if (!Thread::IsMainThread())
     {
@@ -551,7 +546,7 @@ Resource* ResourceCache::GetExistingResource(StringHash type, const String& name
     }
 
     // If empty name, return null pointer immediately
-    if (sanitatedName.Empty())
+    if (sanitatedName.empty())
         return nullptr;
 
     StringHash nameHash(sanitatedName);
@@ -560,9 +555,9 @@ Resource* ResourceCache::GetExistingResource(StringHash type, const String& name
     return existing;
 }
 
-Resource* ResourceCache::GetResource(StringHash type, const String& name, bool sendEventOnFailure)
+Resource* ResourceCache::GetResource(StringHash type, const ea::string& name, bool sendEventOnFailure)
 {
-    String sanitatedName = SanitateResourceName(name);
+    ea::string sanitatedName = SanitateResourceName(name);
 
     if (!Thread::IsMainThread())
     {
@@ -571,7 +566,7 @@ Resource* ResourceCache::GetResource(StringHash type, const String& name, bool s
     }
 
     // If empty name, return null pointer immediately
-    if (sanitatedName.Empty())
+    if (sanitatedName.empty())
         return nullptr;
 
     StringHash nameHash(sanitatedName);
@@ -590,7 +585,7 @@ Resource* ResourceCache::GetResource(StringHash type, const String& name, bool s
     resource = DynamicCast<Resource>(context_->CreateObject(type));
     if (!resource)
     {
-        URHO3D_LOGERROR("Could not load unknown resource type " + String(type));
+        URHO3D_LOGERROR("Could not load unknown resource type " + type.ToString());
 
         if (sendEventOnFailure)
         {
@@ -636,12 +631,12 @@ Resource* ResourceCache::GetResource(StringHash type, const String& name, bool s
     return resource;
 }
 
-bool ResourceCache::BackgroundLoadResource(StringHash type, const String& name, bool sendEventOnFailure, Resource* caller)
+bool ResourceCache::BackgroundLoadResource(StringHash type, const ea::string& name, bool sendEventOnFailure, Resource* caller)
 {
 #ifdef URHO3D_THREADING
     // If empty name, fail immediately
-    String sanitatedName = SanitateResourceName(name);
-    if (sanitatedName.Empty())
+    ea::string sanitatedName = SanitateResourceName(name);
+    if (sanitatedName.empty())
         return false;
 
     // First check if already exists as a loaded resource
@@ -656,12 +651,12 @@ bool ResourceCache::BackgroundLoadResource(StringHash type, const String& name, 
 #endif
 }
 
-SharedPtr<Resource> ResourceCache::GetTempResource(StringHash type, const String& name, bool sendEventOnFailure)
+SharedPtr<Resource> ResourceCache::GetTempResource(StringHash type, const ea::string& name, bool sendEventOnFailure)
 {
-    String sanitatedName = SanitateResourceName(name);
+    ea::string sanitatedName = SanitateResourceName(name);
 
     // If empty name, return null pointer immediately
-    if (sanitatedName.Empty())
+    if (sanitatedName.empty())
         return SharedPtr<Resource>();
 
     SharedPtr<Resource> resource;
@@ -669,7 +664,7 @@ SharedPtr<Resource> ResourceCache::GetTempResource(StringHash type, const String
     resource = DynamicCast<Resource>(context_->CreateObject(type));
     if (!resource)
     {
-        URHO3D_LOGERROR("Could not load unknown resource type " + String(type));
+        URHO3D_LOGERROR("Could not load unknown resource type " + type.ToString());
 
         if (sendEventOnFailure)
         {
@@ -718,42 +713,36 @@ unsigned ResourceCache::GetNumBackgroundLoadResources() const
 #endif
 }
 
-void ResourceCache::GetResources(PODVector<Resource*>& result, StringHash type) const
+void ResourceCache::GetResources(ea::vector<Resource*>& result, StringHash type) const
 {
-    result.Clear();
-    HashMap<StringHash, ResourceGroup>::ConstIterator i = resourceGroups_.Find(type);
-    if (i != resourceGroups_.End())
+    result.clear();
+    auto i = resourceGroups_.find(type);
+    if (i != resourceGroups_.end())
     {
-        for (HashMap<StringHash, SharedPtr<Resource> >::ConstIterator j = i->second_.resources_.Begin();
-             j != i->second_.resources_.End(); ++j)
-            result.Push(j->second_);
+        for (auto j = i->second.resources_.begin();
+             j != i->second.resources_.end(); ++j)
+            result.push_back(j->second.Get());
     }
 }
 
-bool ResourceCache::Exists(const String& name) const
+bool ResourceCache::Exists(const ea::string& name) const
 {
     MutexLock lock(resourceMutex_);
 
-    String sanitatedName = SanitateResourceName(name);
-    if (!isRouting_)
-    {
-        isRouting_ = true;
-        for (unsigned i = 0; i < resourceRouters_.Size(); ++i)
-            resourceRouters_[i]->Route(sanitatedName, RESOURCE_CHECKEXISTS);
-        isRouting_ = false;
-    }
+    ea::string sanitatedName = SanitateResourceName(name);
+    RouteResourceName(sanitatedName, RESOURCE_CHECKEXISTS);
 
-    if (sanitatedName.Empty())
+    if (sanitatedName.empty())
         return false;
 
-    for (unsigned i = 0; i < packages_.Size(); ++i)
+    for (unsigned i = 0; i < packages_.size(); ++i)
     {
         if (packages_[i]->Exists(sanitatedName))
             return true;
     }
 
     auto* fileSystem = GetSubsystem<FileSystem>();
-    for (unsigned i = 0; i < resourceDirs_.Size(); ++i)
+    for (unsigned i = 0; i < resourceDirs_.size(); ++i)
     {
         if (fileSystem->FileExists(resourceDirs_[i] + sanitatedName))
             return true;
@@ -765,30 +754,31 @@ bool ResourceCache::Exists(const String& name) const
 
 unsigned long long ResourceCache::GetMemoryBudget(StringHash type) const
 {
-    HashMap<StringHash, ResourceGroup>::ConstIterator i = resourceGroups_.Find(type);
-    return i != resourceGroups_.End() ? i->second_.memoryBudget_ : 0;
+    auto i = resourceGroups_.find(type);
+    return i != resourceGroups_.end() ? i->second.memoryBudget_ : 0;
 }
 
 unsigned long long ResourceCache::GetMemoryUse(StringHash type) const
 {
-    HashMap<StringHash, ResourceGroup>::ConstIterator i = resourceGroups_.Find(type);
-    return i != resourceGroups_.End() ? i->second_.memoryUse_ : 0;
+    auto i = resourceGroups_.find(type);
+    return i != resourceGroups_.end() ? i->second.memoryUse_ : 0;
 }
 
 unsigned long long ResourceCache::GetTotalMemoryUse() const
 {
     unsigned long long total = 0;
-    for (HashMap<StringHash, ResourceGroup>::ConstIterator i = resourceGroups_.Begin(); i != resourceGroups_.End(); ++i)
-        total += i->second_.memoryUse_;
+    for (auto i = resourceGroups_.begin(); i !=
+        resourceGroups_.end(); ++i)
+        total += i->second.memoryUse_;
     return total;
 }
 
-String ResourceCache::GetResourceFileName(const String& name) const
+ea::string ResourceCache::GetResourceFileName(const ea::string& name) const
 {
     MutexLock lock(resourceMutex_);
 
     auto* fileSystem = GetSubsystem<FileSystem>();
-    for (unsigned i = 0; i < resourceDirs_.Size(); ++i)
+    for (unsigned i = 0; i < resourceDirs_.size(); ++i)
     {
         if (fileSystem->FileExists(resourceDirs_[i] + name))
             return resourceDirs_[i] + name;
@@ -797,17 +787,17 @@ String ResourceCache::GetResourceFileName(const String& name) const
     if (IsAbsolutePath(name) && fileSystem->FileExists(name))
         return name;
     else
-        return String();
+        return ea::string();
 }
 
 ResourceRouter* ResourceCache::GetResourceRouter(unsigned index) const
 {
-    return index < resourceRouters_.Size() ? resourceRouters_[index] : nullptr;
+    return index < resourceRouters_.size() ? resourceRouters_[index] : nullptr;
 }
 
-String ResourceCache::GetPreferredResourceDir(const String& path) const
+ea::string ResourceCache::GetPreferredResourceDir(const ea::string& path) const
 {
-    String fixedPath = AddTrailingSlash(path);
+    ea::string fixedPath = AddTrailingSlash(path);
 
     bool pathHasKnownDirs = false;
     bool parentHasKnownDirs = false;
@@ -824,7 +814,7 @@ String ResourceCache::GetPreferredResourceDir(const String& path) const
     }
     if (!pathHasKnownDirs)
     {
-        String parentPath = GetParentPath(fixedPath);
+        ea::string parentPath = GetParentPath(fixedPath);
         for (unsigned i = 0; checkDirs[i] != nullptr; ++i)
         {
             if (fileSystem->DirExists(parentPath + checkDirs[i]))
@@ -841,50 +831,52 @@ String ResourceCache::GetPreferredResourceDir(const String& path) const
     return fixedPath;
 }
 
-String ResourceCache::SanitateResourceName(const String& name) const
+ea::string ResourceCache::SanitateResourceName(const ea::string& name) const
 {
     // Sanitate unsupported constructs from the resource name
-    String sanitatedName = GetInternalPath(name);
-    sanitatedName.Replace("../", "");
-    sanitatedName.Replace("./", "");
+    ea::string sanitatedName = GetInternalPath(name);
+    sanitatedName.replace("../", "");
+    sanitatedName.replace("./", "");
 
     // If the path refers to one of the resource directories, normalize the resource name
     auto* fileSystem = GetSubsystem<FileSystem>();
-    if (resourceDirs_.Size())
+    if (resourceDirs_.size())
     {
-        String namePath = GetPath(sanitatedName);
-        String exePath = fileSystem->GetProgramDir().Replaced("/./", "/");
-        for (unsigned i = 0; i < resourceDirs_.Size(); ++i)
+        ea::string namePath = GetPath(sanitatedName);
+        ea::string exePath = fileSystem->GetProgramDir().replaced("/./", "/");
+        for (unsigned i = 0; i < resourceDirs_.size(); ++i)
         {
-            String relativeResourcePath = resourceDirs_[i];
-            if (relativeResourcePath.StartsWith(exePath))
-                relativeResourcePath = relativeResourcePath.Substring(exePath.Length());
+            ea::string relativeResourcePath = resourceDirs_[i];
+            if (relativeResourcePath.starts_with(exePath))
+                relativeResourcePath = relativeResourcePath.substr(exePath.length());
 
-            if (namePath.StartsWith(resourceDirs_[i], false))
-                namePath = namePath.Substring(resourceDirs_[i].Length());
-            else if (namePath.StartsWith(relativeResourcePath, false))
-                namePath = namePath.Substring(relativeResourcePath.Length());
+            if (namePath.starts_with(resourceDirs_[i], false))
+                namePath = namePath.substr(resourceDirs_[i].length());
+            else if (namePath.starts_with(relativeResourcePath, false))
+                namePath = namePath.substr(relativeResourcePath.length());
         }
 
         sanitatedName = namePath + GetFileNameAndExtension(sanitatedName);
     }
 
-    return sanitatedName.Trimmed();
+    sanitatedName.trim();
+    return sanitatedName;
 }
 
-String ResourceCache::SanitateResourceDirName(const String& name) const
+ea::string ResourceCache::SanitateResourceDirName(const ea::string& name) const
 {
-    String fixedPath = AddTrailingSlash(name);
+    ea::string fixedPath = AddTrailingSlash(name);
     if (!IsAbsolutePath(fixedPath))
         fixedPath = GetSubsystem<FileSystem>()->GetCurrentDir() + fixedPath;
 
     // Sanitate away /./ construct
-    fixedPath.Replace("/./", "/");
+    fixedPath.replace("/./", "/");
 
-    return fixedPath.Trimmed();
+    fixedPath.trim();
+    return fixedPath;
 }
 
-void ResourceCache::StoreResourceDependency(Resource* resource, const String& dependency)
+void ResourceCache::StoreResourceDependency(Resource* resource, const ea::string& dependency)
 {
     if (!resource)
         return;
@@ -892,8 +884,8 @@ void ResourceCache::StoreResourceDependency(Resource* resource, const String& de
     MutexLock lock(resourceMutex_);
 
     StringHash nameHash(resource->GetName());
-    HashSet<StringHash>& dependents = dependentResources_[dependency];
-    dependents.Insert(nameHash);
+    ea::hash_set<StringHash>& dependents = dependentResources_[dependency];
+    dependents.insert(nameHash);
 }
 
 void ResourceCache::ResetDependencies(Resource* resource)
@@ -905,20 +897,21 @@ void ResourceCache::ResetDependencies(Resource* resource)
 
     StringHash nameHash(resource->GetName());
 
-    for (HashMap<StringHash, HashSet<StringHash> >::Iterator i = dependentResources_.Begin(); i != dependentResources_.End();)
+    for (auto i = dependentResources_.begin(); i !=
+        dependentResources_.end();)
     {
-        HashSet<StringHash>& dependents = i->second_;
-        dependents.Erase(nameHash);
-        if (dependents.Empty())
-            i = dependentResources_.Erase(i);
+        ea::hash_set<StringHash>& dependents = i->second;
+        dependents.erase(nameHash);
+        if (dependents.empty())
+            i = dependentResources_.erase(i);
         else
             ++i;
     }
 }
 
-String ResourceCache::PrintMemoryUsage() const
+ea::string ResourceCache::PrintMemoryUsage() const
 {
-    String output = "Resource Type                 Cnt       Avg       Max    Budget     Total\n\n";
+    ea::string output = "Resource Type                 Cnt       Avg       Max    Budget     Total\n\n";
     char outputLine[256];
 
     unsigned totalResourceCt = 0;
@@ -926,35 +919,36 @@ String ResourceCache::PrintMemoryUsage() const
     unsigned long long totalAverage = 0;
     unsigned long long totalUse = GetTotalMemoryUse();
 
-    for (HashMap<StringHash, ResourceGroup>::ConstIterator cit = resourceGroups_.Begin(); cit != resourceGroups_.End(); ++cit)
+    for (auto cit = resourceGroups_.begin(); cit !=
+        resourceGroups_.end(); ++cit)
     {
-        const unsigned resourceCt = cit->second_.resources_.Size();
+        const unsigned resourceCt = cit->second.resources_.size();
         unsigned long long average = 0;
         if (resourceCt > 0)
-            average = cit->second_.memoryUse_ / resourceCt;
+            average = cit->second.memoryUse_ / resourceCt;
         else
             average = 0;
         unsigned long long largest = 0;
-        for (HashMap<StringHash, SharedPtr<Resource> >::ConstIterator resIt = cit->second_.resources_.Begin(); resIt != cit->second_.resources_.End(); ++resIt)
+        for (auto resIt = cit->second.resources_.begin(); resIt != cit->second.resources_.end(); ++resIt)
         {
-            if (resIt->second_->GetMemoryUse() > largest)
-                largest = resIt->second_->GetMemoryUse();
+            if (resIt->second->GetMemoryUse() > largest)
+                largest = resIt->second->GetMemoryUse();
             if (largest > totalLargest)
                 totalLargest = largest;
         }
 
         totalResourceCt += resourceCt;
 
-        const String countString(cit->second_.resources_.Size());
-        const String memUseString = GetFileSizeString(average);
-        const String memMaxString = GetFileSizeString(largest);
-        const String memBudgetString = GetFileSizeString(cit->second_.memoryBudget_);
-        const String memTotalString = GetFileSizeString(cit->second_.memoryUse_);
-        const String resTypeName = context_->GetTypeName(cit->first_);
+        const ea::string countString = ea::to_string(cit->second.resources_.size());
+        const ea::string memUseString = GetFileSizeString(average);
+        const ea::string memMaxString = GetFileSizeString(largest);
+        const ea::string memBudgetString = GetFileSizeString(cit->second.memoryBudget_);
+        const ea::string memTotalString = GetFileSizeString(cit->second.memoryUse_);
+        const ea::string resTypeName = context_->GetTypeName(cit->first);
 
         memset(outputLine, ' ', 256);
         outputLine[255] = 0;
-        sprintf(outputLine, "%-28s %4s %9s %9s %9s %9s\n", resTypeName.CString(), countString.CString(), memUseString.CString(), memMaxString.CString(), memBudgetString.CString(), memTotalString.CString());
+        sprintf(outputLine, "%-28s %4s %9s %9s %9s %9s\n", resTypeName.c_str(), countString.c_str(), memUseString.c_str(), memMaxString.c_str(), memBudgetString.c_str(), memTotalString.c_str());
 
         output += ((const char*)outputLine);
     }
@@ -962,14 +956,14 @@ String ResourceCache::PrintMemoryUsage() const
     if (totalResourceCt > 0)
         totalAverage = totalUse / totalResourceCt;
 
-    const String countString(totalResourceCt);
-    const String memUseString = GetFileSizeString(totalAverage);
-    const String memMaxString = GetFileSizeString(totalLargest);
-    const String memTotalString = GetFileSizeString(totalUse);
+    const ea::string countString = ea::to_string(totalResourceCt);
+    const ea::string memUseString = GetFileSizeString(totalAverage);
+    const ea::string memMaxString = GetFileSizeString(totalLargest);
+    const ea::string memTotalString = GetFileSizeString(totalUse);
 
     memset(outputLine, ' ', 256);
     outputLine[255] = 0;
-    sprintf(outputLine, "%-28s %4s %9s %9s %9s %9s\n", "All", countString.CString(), memUseString.CString(), memMaxString.CString(), "-", memTotalString.CString());
+    sprintf(outputLine, "%-28s %4s %9s %9s %9s %9s\n", "All", countString.c_str(), memUseString.c_str(), memMaxString.c_str(), "-", memTotalString.c_str());
     output += ((const char*)outputLine);
 
     return output;
@@ -979,25 +973,26 @@ const SharedPtr<Resource>& ResourceCache::FindResource(StringHash type, StringHa
 {
     MutexLock lock(resourceMutex_);
 
-    HashMap<StringHash, ResourceGroup>::Iterator i = resourceGroups_.Find(type);
-    if (i == resourceGroups_.End())
+    auto i = resourceGroups_.find(type);
+    if (i == resourceGroups_.end())
         return noResource;
-    HashMap<StringHash, SharedPtr<Resource> >::Iterator j = i->second_.resources_.Find(nameHash);
-    if (j == i->second_.resources_.End())
+    auto j = i->second.resources_.find(nameHash);
+    if (j == i->second.resources_.end())
         return noResource;
 
-    return j->second_;
+    return j->second;
 }
 
 const SharedPtr<Resource>& ResourceCache::FindResource(StringHash nameHash)
 {
     MutexLock lock(resourceMutex_);
 
-    for (HashMap<StringHash, ResourceGroup>::Iterator i = resourceGroups_.Begin(); i != resourceGroups_.End(); ++i)
+    for (auto i = resourceGroups_.begin(); i !=
+        resourceGroups_.end(); ++i)
     {
-        HashMap<StringHash, SharedPtr<Resource> >::Iterator j = i->second_.resources_.Find(nameHash);
-        if (j != i->second_.resources_.End())
-            return j->second_;
+        auto j = i->second.resources_.find(nameHash);
+        if (j != i->second.resources_.end())
+            return j->second;
     }
 
     return noResource;
@@ -1005,51 +1000,52 @@ const SharedPtr<Resource>& ResourceCache::FindResource(StringHash nameHash)
 
 void ResourceCache::ReleasePackageResources(PackageFile* package, bool force)
 {
-    HashSet<StringHash> affectedGroups;
+    ea::hash_set<StringHash> affectedGroups;
 
-    const HashMap<String, PackageEntry>& entries = package->GetEntries();
-    for (HashMap<String, PackageEntry>::ConstIterator i = entries.Begin(); i != entries.End(); ++i)
+    const ea::unordered_map<ea::string, PackageEntry>& entries = package->GetEntries();
+    for (auto i = entries.begin(); i != entries.end(); ++i)
     {
-        StringHash nameHash(i->first_);
+        StringHash nameHash(i->first);
 
         // We do not know the actual resource type, so search all type containers
-        for (HashMap<StringHash, ResourceGroup>::Iterator j = resourceGroups_.Begin(); j != resourceGroups_.End(); ++j)
+        for (auto j = resourceGroups_.begin(); j !=
+            resourceGroups_.end(); ++j)
         {
-            HashMap<StringHash, SharedPtr<Resource> >::Iterator k = j->second_.resources_.Find(nameHash);
-            if (k != j->second_.resources_.End())
+            auto k = j->second.resources_.find(nameHash);
+            if (k != j->second.resources_.end())
             {
                 // If other references exist, do not release, unless forced
-                if ((k->second_.Refs() == 1 && k->second_.WeakRefs() == 0) || force)
+                if ((k->second.Refs() == 1 && k->second.WeakRefs() == 0) || force)
                 {
-                    j->second_.resources_.Erase(k);
-                    affectedGroups.Insert(j->first_);
+                    j->second.resources_.erase(k);
+                    affectedGroups.insert(j->first);
                 }
                 break;
             }
         }
     }
 
-    for (HashSet<StringHash>::Iterator i = affectedGroups.Begin(); i != affectedGroups.End(); ++i)
+    for (auto i = affectedGroups.begin(); i != affectedGroups.end(); ++i)
         UpdateResourceGroup(*i);
 }
 
 void ResourceCache::UpdateResourceGroup(StringHash type)
 {
-    HashMap<StringHash, ResourceGroup>::Iterator i = resourceGroups_.Find(type);
-    if (i == resourceGroups_.End())
+    auto i = resourceGroups_.find(type);
+    if (i == resourceGroups_.end())
         return;
 
     for (;;)
     {
         unsigned totalSize = 0;
         unsigned oldestTimer = 0;
-        HashMap<StringHash, SharedPtr<Resource> >::Iterator oldestResource = i->second_.resources_.End();
+        auto oldestResource = i->second.resources_.end();
 
-        for (HashMap<StringHash, SharedPtr<Resource> >::Iterator j = i->second_.resources_.Begin();
-             j != i->second_.resources_.End(); ++j)
+        for (auto j = i->second.resources_.begin();
+             j != i->second.resources_.end(); ++j)
         {
-            totalSize += j->second_->GetMemoryUse();
-            unsigned useTimer = j->second_->GetUseTimer();
+            totalSize += j->second->GetMemoryUse();
+            unsigned useTimer = j->second->GetUseTimer();
             if (useTimer > oldestTimer)
             {
                 oldestTimer = useTimer;
@@ -1057,16 +1053,16 @@ void ResourceCache::UpdateResourceGroup(StringHash type)
             }
         }
 
-        i->second_.memoryUse_ = totalSize;
+        i->second.memoryUse_ = totalSize;
 
         // If memory budget defined and is exceeded, remove the oldest resource and loop again
         // (resources in use always return a zero timer and can not be removed)
-        if (i->second_.memoryBudget_ && i->second_.memoryUse_ > i->second_.memoryBudget_ &&
-            oldestResource != i->second_.resources_.End())
+        if (i->second.memoryBudget_ && i->second.memoryUse_ > i->second.memoryBudget_ &&
+            oldestResource != i->second.resources_.end())
         {
-            URHO3D_LOGDEBUG("Resource group " + oldestResource->second_->GetTypeName() + " over memory budget, releasing resource " +
-                     oldestResource->second_->GetName());
-            i->second_.resources_.Erase(oldestResource);
+            URHO3D_LOGDEBUG("Resource group " + oldestResource->second->GetTypeName() + " over memory budget, releasing resource " +
+                     oldestResource->second->GetName());
+            i->second.resources_.erase(oldestResource);
         }
         else
             break;
@@ -1075,26 +1071,26 @@ void ResourceCache::UpdateResourceGroup(StringHash type)
 
 void ResourceCache::HandleBeginFrame(StringHash eventType, VariantMap& eventData)
 {
-    for (unsigned i = 0; i < fileWatchers_.Size(); ++i)
+    for (unsigned i = 0; i < fileWatchers_.size(); ++i)
     {
-        String fileName;
-        while (fileWatchers_[i]->GetNextChange(fileName))
+        FileChange change;
+        while (fileWatchers_[i]->GetNextChange(change))
         {
-            auto it = ignoreResourceAutoReload_.Find(fileName);
-            if (it != ignoreResourceAutoReload_.End())
+            auto it = ignoreResourceAutoReload_.find(change.fileName_);
+            if (it != ignoreResourceAutoReload_.end())
             {
-                ignoreResourceAutoReload_.Erase(it);
+                ignoreResourceAutoReload_.erase(it);
                 continue;
             }
 
-            ReloadResourceWithDependencies(fileName);
+            ReloadResourceWithDependencies(change.fileName_);
 
             // Finally send a general file changed event even if the file was not a tracked resource
             using namespace FileChanged;
 
             VariantMap& eventData = GetEventDataMap();
-            eventData[P_FILENAME] = fileWatchers_[i]->GetPath() + fileName;
-            eventData[P_RESOURCENAME] = fileName;
+            eventData[P_FILENAME] = fileWatchers_[i]->GetPath() + change.fileName_;
+            eventData[P_RESOURCENAME] = change.fileName_;
             SendEvent(E_FILECHANGED, eventData);
         }
     }
@@ -1108,10 +1104,10 @@ void ResourceCache::HandleBeginFrame(StringHash eventType, VariantMap& eventData
 #endif
 }
 
-File* ResourceCache::SearchResourceDirs(const String& name)
+File* ResourceCache::SearchResourceDirs(const ea::string& name)
 {
     auto* fileSystem = GetSubsystem<FileSystem>();
-    for (unsigned i = 0; i < resourceDirs_.Size(); ++i)
+    for (unsigned i = 0; i < resourceDirs_.size(); ++i)
     {
         if (fileSystem->FileExists(resourceDirs_[i] + name))
         {
@@ -1130,9 +1126,9 @@ File* ResourceCache::SearchResourceDirs(const String& name)
     return nullptr;
 }
 
-File* ResourceCache::SearchPackages(const String& name)
+File* ResourceCache::SearchPackages(const ea::string& name)
 {
-    for (unsigned i = 0; i < packages_.Size(); ++i)
+    for (unsigned i = 0; i < packages_.size(); ++i)
     {
         if (packages_[i]->Exists(name))
             return new File(context_, packages_[i], name);
@@ -1147,45 +1143,46 @@ void RegisterResourceLibrary(Context* context)
     JSONFile::RegisterObject(context);
     PListFile::RegisterObject(context);
     XMLFile::RegisterObject(context);
-    YAMLFile::RegisterObject(context);
 }
 
-void ResourceCache::Scan(Vector<String>& result, const String& pathName, const String& filter, unsigned flags, bool recursive) const
+void ResourceCache::Scan(ea::vector<ea::string>& result, const ea::string& pathName, const ea::string& filter, unsigned flags, bool recursive) const
 {
-    Vector<String> interimResult;
+    ea::vector<ea::string> interimResult;
 
-    for (unsigned i = 0; i < packages_.Size(); ++i)
+    for (unsigned i = 0; i < packages_.size(); ++i)
     {
         packages_[i]->Scan(interimResult, pathName, filter, recursive);
-        result.Insert(result.End(), interimResult);
+        result.insert(result.end(), interimResult.begin(), interimResult.end());
     }
 
     FileSystem* fileSystem = GetSubsystem<FileSystem>();
-    for (unsigned i = 0; i < resourceDirs_.Size(); ++i)
+    for (unsigned i = 0; i < resourceDirs_.size(); ++i)
     {
         fileSystem->ScanDir(interimResult, resourceDirs_[i] + pathName, filter, flags, recursive);
-        result.Insert(result.End(), interimResult);
+        result.insert(result.end(), interimResult.begin(), interimResult.end());
     }
 }
 
-String ResourceCache::PrintResources(const String& typeName) const
+ea::string ResourceCache::PrintResources(const ea::string& typeName) const
 {
 
     StringHash typeNameHash(typeName);
 
-    String output = "Resource Type         Refs   WeakRefs  Name\n\n";
+    ea::string output = "Resource Type         Refs   WeakRefs  Name\n\n";
 
-    for (HashMap<StringHash, ResourceGroup>::ConstIterator cit = resourceGroups_.Begin(); cit != resourceGroups_.End(); ++cit)
+    for (auto cit = resourceGroups_.begin(); cit !=
+        resourceGroups_.end(); ++cit)
     {
-        for (HashMap<StringHash, SharedPtr<Resource> >::ConstIterator resIt = cit->second_.resources_.Begin(); resIt != cit->second_.resources_.End(); ++resIt)
+        for (auto resIt = cit->second.resources_.begin(); resIt != cit->second.resources_.end(); ++resIt)
         {
-            Resource* resource = resIt->second_;
+            Resource* resource = resIt->second;
 
             // filter
-            if (typeName.Length() && resource->GetType() != typeNameHash)
+            if (typeName.length() && resource->GetType() != typeNameHash)
                 continue;
 
-            output.AppendWithFormat("%s     %i     %i     %s\n",resource->GetTypeName().CString(), resource->Refs(), resource->WeakRefs(), resource->GetName().CString());
+            output.append_sprintf("%s     %i     %i     %s\n", resource->GetTypeName().c_str(), resource->Refs(),
+                resource->WeakRefs(), resource->GetName().c_str());
         }
 
     }
@@ -1193,9 +1190,9 @@ String ResourceCache::PrintResources(const String& typeName) const
     return output;
 }
 
-bool ResourceCache::RenameResource(String source, String destination)
+bool ResourceCache::RenameResource(const ea::string& source, const ea::string& destination)
 {
-    if (!packages_.Empty())
+    if (!packages_.empty())
     {
         URHO3D_LOGERROR("Renaming resources not supported while packages are in use.");
         return false;
@@ -1209,19 +1206,40 @@ bool ResourceCache::RenameResource(String source, String destination)
 
     auto* fileSystem = GetSubsystem<FileSystem>();
 
-    if (!fileSystem->FileExists(source) && !fileSystem->DirExists(source))
+    if (!fileSystem->Exists(source))
     {
         URHO3D_LOGERROR("Source path does not exist.");
         return false;
     }
 
-    if (fileSystem->FileExists(destination) || fileSystem->DirExists(destination))
+    if (fileSystem->Exists(destination))
     {
         URHO3D_LOGERROR("Destination path already exists.");
         return false;
     }
 
-    using namespace ResourceRenamed;
+    ea::string resourceName;
+    ea::string destinationName;
+    bool dirMode = fileSystem->DirExists(source);
+    for (const auto& dir : resourceDirs_)
+    {
+        if (source.starts_with(dir))
+            resourceName = source.substr(dir.length());
+        if (destination.starts_with(dir))
+            destinationName = destination.substr(dir.length());
+    }
+
+    if (dirMode)
+    {
+        resourceName = AddTrailingSlash(resourceName);
+        destinationName = AddTrailingSlash(destinationName);
+    }
+
+    if (resourceName.empty())
+    {
+        URHO3D_LOGERRORF("'%s' does not exist in resource path.", source.c_str());
+        return false;
+    }
 
     // Ensure parent path exists
     if (!fileSystem->CreateDirsRecursive(GetPath(destination)))
@@ -1229,23 +1247,7 @@ bool ResourceCache::RenameResource(String source, String destination)
 
     if (!fileSystem->Rename(source, destination))
     {
-        URHO3D_LOGERRORF("Renaming '%s' to '%s' failed.", source.CString(), destination.CString());
-        return false;
-    }
-
-    String resourceName;
-    String destinationName;
-    for (const auto& dir : resourceDirs_)
-    {
-        if (source.StartsWith(dir))
-            resourceName = source.Substring(dir.Length());
-        if (destination.StartsWith(dir))
-            destinationName = destination.Substring(dir.Length());
-    }
-
-    if (resourceName.Empty())
-    {
-        URHO3D_LOGERRORF("'%s' does not exist in resource path.", source.CString());
+        URHO3D_LOGERRORF("Renaming '%s' to '%s' failed.", source.c_str(), destination.c_str());
         return false;
     }
 
@@ -1253,37 +1255,75 @@ bool ResourceCache::RenameResource(String source, String destination)
     for (auto& groupPair : resourceGroups_)
     {
         bool movedAny = false;
-        auto resourcesCopy = groupPair.second_.resources_;
+        auto resourcesCopy = groupPair.second.resources_;
         for (auto& resourcePair : resourcesCopy)
         {
-            SharedPtr<Resource> resource = resourcePair.second_;
-            if (resource->GetName().StartsWith(resourceName))
+            SharedPtr<Resource> resource = resourcePair.second;
+            ea::string newName;
+            if (dirMode)
             {
-                if (autoReloadResources_)
-                {
-                    ignoreResourceAutoReload_.EmplaceBack(destinationName);
-                    ignoreResourceAutoReload_.EmplaceBack(resourceName);
-                }
-
-                groupPair.second_.resources_.Erase(resource->GetNameHash());
-                resource->SetName(destinationName);
-                groupPair.second_.resources_[resource->GetNameHash()] = resource;
-                movedAny = true;
-
-                using namespace ResourceRenamed;
-                SendEvent(E_RESOURCERENAMED, P_FROM, resourceName, P_TO, destinationName);
+                if (!resource->GetName().starts_with(resourceName))
+                    continue;
+                newName = destinationName + resource->GetName().substr(resourceName.length());
             }
+            else if (resource->GetName() != resourceName)
+                continue;
+            else
+                newName = destinationName;
+
+            if (autoReloadResources_)
+            {
+                ignoreResourceAutoReload_.emplace_back(destinationName);
+                ignoreResourceAutoReload_.emplace_back(resource->GetName());
+            }
+
+            groupPair.second.resources_.erase(resource->GetNameHash());
+            resource->SetName(newName);
+            groupPair.second.resources_[resource->GetNameHash()] = resource;
+            movedAny = true;
+
+            using namespace ResourceRenamed;
+            SendEvent(E_RESOURCERENAMED, P_FROM, resourceName, P_TO, destinationName);
         }
         if (movedAny)
-            UpdateResourceGroup(groupPair.first_);
+            UpdateResourceGroup(groupPair.first);
+    }
+
+    if (dirMode)
+    {
+        using namespace ResourceRenamed;
+        SendEvent(E_RESOURCERENAMED, P_FROM, resourceName, P_TO, destinationName);
     }
 
     return true;
 }
 
-void ResourceCache::IgnoreResourceReload(const String& name)
+void ResourceCache::IgnoreResourceReload(const ea::string& name)
 {
-    ignoreResourceAutoReload_.EmplaceBack(name);
+    ignoreResourceAutoReload_.emplace_back(name);
+}
+
+void ResourceCache::IgnoreResourceReload(const Resource* resource)
+{
+    IgnoreResourceReload(resource->GetName());
+}
+
+void ResourceCache::RouteResourceName(ea::string& name, ResourceRequest requestType) const
+{
+    name = SanitateResourceName(name);
+    if (!isRouting_)
+    {
+        isRouting_ = true;
+        for (unsigned i = 0; i < resourceRouters_.size(); ++i)
+            resourceRouters_[i]->Route(name, requestType);
+        isRouting_ = false;
+    }
+}
+
+void ResourceCache::Clear()
+{
+    resourceGroups_.clear();
+    dependentResources_.clear();
 }
 
 }

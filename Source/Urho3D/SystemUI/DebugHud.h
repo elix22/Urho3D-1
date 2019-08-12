@@ -1,5 +1,6 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2017 the Urho3D project.
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +22,8 @@
 //
 
 #pragma once
+
+#include <EASTL/map.h>
 
 #include "../Container/FlagSet.h"
 #include "../Core/Object.h"
@@ -69,14 +72,14 @@ public:
     /// Set application-specific stats.
     /// \param label a title of stat to be displayed.
     /// \param stats a variant value to be displayed next to the specified label.
-    void SetAppStats(const String& label, const Variant& stats);
+    void SetAppStats(const ea::string& label, const Variant& stats);
     /// Set application-specific stats.
     /// \param label a title of stat to be displayed.
     /// \param stats a string value to be displayed next to the specified label.
-    void SetAppStats(const String& label, const String& stats);
+    void SetAppStats(const ea::string& label, const ea::string& stats);
     /// Reset application-specific stats. Return true if it was erased successfully.
     /// \param label a title of stat to be reset.
-    bool ResetAppStats(const String& label);
+    bool ResetAppStats(const ea::string& label);
     /// Clear all application-specific stats.
     void ClearAppStats();
     /// Limit rendering area of debug hud.
@@ -88,13 +91,9 @@ public:
 private:
     /// Render system ui.
     void RenderUi(VariantMap& eventData);
-    /// Update positions debug hud elements. Called on intializaton or when window size changes.
-    void RecalculateWindowPositions();
-    /// Snap position to the extents of debug hud rendering rect set by SetExtents().
-    Vector2 WithinExtents(Vector2 pos);
 
     /// Hashmap containing application specific stats.
-    HashMap<String, String> appStats_;
+    ea::map<ea::string, ea::string> appStats_;
     /// Profiler max block depth.
     unsigned profilerMaxDepth_;
     /// Profiler accumulation interval.
@@ -109,10 +108,6 @@ private:
     unsigned fps_;
     /// DebugHud extents that data will be rendered in.
     IntRect extents_;
-    /// Cached position (bottom-left corner) of mode information.
-    Vector2 posMode_;
-    /// Cached position (top-left corner) of stats.
-    Vector2 posStats_;
 };
 
 }

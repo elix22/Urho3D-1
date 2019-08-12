@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,7 +30,7 @@ namespace Urho3D
     class Scene;
 }
 
-class Vehicle;
+class Vehicle2;
 
 /// Vehicle example.
 /// This sample demonstrates:
@@ -70,5 +70,5 @@ private:
     void HandlePostUpdate(StringHash eventType, VariantMap& eventData);
 
     /// The controllable vehicle component.
-    WeakPtr<Vehicle> vehicle_;
+    WeakPtr<Vehicle2> vehicle_;
 };

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -38,8 +38,6 @@
 #include "HelloGUI.h"
 
 #include <Urho3D/DebugNew.h>
-
-URHO3D_DEFINE_APPLICATION_MAIN(HelloGUI)
 
 HelloGUI::HelloGUI(Context* context) :
     Sample(context),
@@ -201,8 +199,7 @@ void HelloGUI::HandleDragEnd(StringHash eventType, VariantMap& eventData) // For
 
 void HelloGUI::HandleClosePressed(StringHash eventType, VariantMap& eventData)
 {
-    if (GetPlatform() != "Web")
-        engine_->Exit();
+    CloseSample();
 }
 
 void HelloGUI::HandleControlClicked(StringHash eventType, VariantMap& eventData)
@@ -213,7 +210,7 @@ void HelloGUI::HandleControlClicked(StringHash eventType, VariantMap& eventData)
     // Get control that was clicked
     auto* clicked = static_cast<UIElement*>(eventData[UIMouseClick::P_ELEMENT].GetPtr());
 
-    String name = "...?";
+    ea::string name = "...?";
     if (clicked)
     {
         // Get the name of the control that was clicked

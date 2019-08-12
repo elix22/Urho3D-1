@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -92,10 +92,10 @@ void Character2D::Update(float timeStep)
     // Collision detection (AABB query)
     Vector2 characterHalfSize = Vector2(0.16f, 0.16f);
     auto* physicsWorld = GetScene()->GetComponent<PhysicsWorld2D>();
-    PODVector<RigidBody2D*> collidingBodies;
+    ea::vector<RigidBody2D*> collidingBodies;
     physicsWorld->GetRigidBodies(collidingBodies, Rect(node_->GetWorldPosition2D() - characterHalfSize - Vector2(0.0f, 0.1f), node_->GetWorldPosition2D() + characterHalfSize));
 
-    if (collidingBodies.Size() > 1 && !isClimbing_)
+    if (collidingBodies.size() > 1 && !isClimbing_)
         onGround = true;
 
     // Set direction
@@ -186,7 +186,7 @@ void Character2D::HandleWoundedState(float timeStep)
         remainingLifes_ -= 1;
         auto* ui = GetSubsystem<UI>();
         Text* lifeText = static_cast<Text*>(ui->GetRoot()->GetChild("LifeText", true));
-        lifeText->SetText(String(remainingLifes_)); // Update lifes UI counter
+        lifeText->SetText(ea::to_string(remainingLifes_)); // Update lifes UI counter
 
         // Reset wounded state
         wounded_ = false;

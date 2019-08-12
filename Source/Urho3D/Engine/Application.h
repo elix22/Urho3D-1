@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include "../Container/Ptr.h"
 #include "../Core/Context.h"
 #include "../Core/Main.h"
 #include "../Engine/Engine.h"
@@ -52,18 +53,20 @@ public:
     /// Initialize the engine and run the main loop, then return the application exit code. Catch out-of-memory exceptions while running.
     int Run();
     /// Show an error message (last log message if empty), terminate the main loop, and set failure exit code.
-    void ErrorExit(const String& message = String::EMPTY);
+    void ErrorExit(const ea::string& message = EMPTY_STRING);
 
 protected:
     /// Handle log message.
     void HandleLogMessage(StringHash eventType, VariantMap& eventData);
+    /// Return command line for registering custom parameters.
+    CLI::App& GetCommandLineParser();
 
     /// Urho3D engine.
     SharedPtr<Engine> engine_;
     /// Engine parameters map.
     VariantMap engineParameters_;
     /// Collected startup error log messages.
-    String startupErrors_;
+    ea::string startupErrors_;
     /// Application exit code.
     int exitCode_;
 };
@@ -77,7 +80,7 @@ int RunApplication() \
     Urho3D::SharedPtr<className> application(new className(context)); \
     return application->Run(); \
 } \
-URHO3D_DEFINE_MAIN(RunApplication());
+URHO3D_DEFINE_MAIN(RunApplication())
 #else
 // On iOS/tvOS we will let this function exit, so do not hold the context and application in SharedPtr's
 #define URHO3D_DEFINE_APPLICATION_MAIN(className) \

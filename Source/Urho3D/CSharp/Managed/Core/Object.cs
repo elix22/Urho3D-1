@@ -1,5 +1,5 @@
 ﻿//
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,7 +27,7 @@ namespace Urho3DNet
 {
     public partial class Object
     {
-        [DllImport("Urho3DCSharp", EntryPoint = "Urho3D_Object_SubscribeToEvent")]
+        [DllImport("Urho3D", EntryPoint = "Urho3D_Object_SubscribeToEvent")]
         private static extern void Urho3D_Object_SubscribeToEvent(HandleRef receiver, HandleRef sender, uint eventType,
             IntPtr callback, IntPtr callbackHandle);
 

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,8 @@
 //
 
 #include "../Precompiled.h"
+
+#include <EASTL/sort.h>
 
 #include "../Core/Context.h"
 #include "../Core/Mutex.h"
@@ -47,6 +49,7 @@
 #include <Bullet/BulletCollision/Gimpact/btGImpactCollisionAlgorithm.h>
 #include <Bullet/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.h>
 #include <Bullet/BulletDynamics/Dynamics/btDiscreteDynamicsWorld.h>
+
 
 extern ContactAddedCallback gContactAddedCallback;
 
@@ -97,21 +100,21 @@ static bool CustomMaterialCombinerCallback(btManifoldPoint& cp, const btCollisio
 
 void RemoveCachedGeometryImpl(CollisionGeometryDataCache& cache, Model* model)
 {
-    for (auto i = cache.Begin(); i != cache.End();)
+    for (auto i = cache.begin(); i != cache.end();)
     {
         auto current = i++;
-        if (current->first_.first_ == model)
-            cache.Erase(current);
+        if (current->first.first == model)
+            cache.erase(current);
     }
 }
 
 void CleanupGeometryCacheImpl(CollisionGeometryDataCache& cache)
 {
-    for (auto i = cache.Begin(); i != cache.End();)
+    for (auto i = cache.begin(); i != cache.end();)
     {
         auto current = i++;
-        if (current->second_.Refs() == 1)
-            cache.Erase(current);
+        if (current->second.Refs() == 1)
+            cache.erase(current);
     }
 }
 
@@ -119,7 +122,7 @@ void CleanupGeometryCacheImpl(CollisionGeometryDataCache& cache)
 struct PhysicsQueryCallback : public btCollisionWorld::ContactResultCallback
 {
     /// Construct.
-    PhysicsQueryCallback(PODVector<RigidBody*>& result, unsigned collisionMask) :
+    PhysicsQueryCallback(ea::vector<RigidBody*>& result, unsigned collisionMask) :
         result_(result),
         collisionMask_(collisionMask)
     {
@@ -130,16 +133,16 @@ struct PhysicsQueryCallback : public btCollisionWorld::ContactResultCallback
         const btCollisionObjectWrapper* colObj1Wrap, int, int) override
     {
         auto* body = reinterpret_cast<RigidBody*>(colObj0Wrap->getCollisionObject()->getUserPointer());
-        if (body && !result_.Contains(body) && (body->GetCollisionLayer() & collisionMask_))
-            result_.Push(body);
+        if (body && !result_.contains(body) && (body->GetCollisionLayer() & collisionMask_))
+            result_.push_back(body);
         body = reinterpret_cast<RigidBody*>(colObj1Wrap->getCollisionObject()->getUserPointer());
-        if (body && !result_.Contains(body) && (body->GetCollisionLayer() & collisionMask_))
-            result_.Push(body);
+        if (body && !result_.contains(body) && (body->GetCollisionLayer() & collisionMask_))
+            result_.push_back(body);
         return 0.0f;
     }
 
     /// Found rigid bodies.
-    PODVector<RigidBody*>& result_;
+    ea::vector<RigidBody*>& result_;
     /// Collision mask for the query.
     unsigned collisionMask_;
 };
@@ -156,12 +159,12 @@ PhysicsWorld::PhysicsWorld(Context* context) :
     else
         collisionConfiguration_ = new btDefaultCollisionConfiguration();
 
-    collisionDispatcher_ = new btCollisionDispatcher(collisionConfiguration_);
-    btGImpactCollisionAlgorithm::registerAlgorithm(static_cast<btCollisionDispatcher*>(collisionDispatcher_.Get()));
+    collisionDispatcher_ = ea::make_unique<btCollisionDispatcher>(collisionConfiguration_);
+    btGImpactCollisionAlgorithm::registerAlgorithm(static_cast<btCollisionDispatcher*>(collisionDispatcher_.get()));
 
-    broadphase_ = new btDbvtBroadphase();
-    solver_ = new btSequentialImpulseConstraintSolver();
-    world_ = new btDiscreteDynamicsWorld(collisionDispatcher_.Get(), broadphase_.Get(), solver_.Get(), collisionConfiguration_);
+    broadphase_ = ea::make_unique<btDbvtBroadphase>();
+    solver_ = ea::make_unique<btSequentialImpulseConstraintSolver>();
+    world_ = ea::make_unique<btDiscreteDynamicsWorld>(collisionDispatcher_.get(), broadphase_.get(), solver_.get(), collisionConfiguration_);
 
     world_->setGravity(ToBtVector3(DEFAULT_GRAVITY));
     world_->getDispatchInfo().m_useContinuous = true;
@@ -177,20 +180,20 @@ PhysicsWorld::~PhysicsWorld()
     if (scene_)
     {
         // Force all remaining constraints, rigid bodies and collision shapes to release themselves
-        for (PODVector<Constraint*>::Iterator i = constraints_.Begin(); i != constraints_.End(); ++i)
+        for (auto i = constraints_.begin(); i != constraints_.end(); ++i)
             (*i)->ReleaseConstraint();
 
-        for (PODVector<RigidBody*>::Iterator i = rigidBodies_.Begin(); i != rigidBodies_.End(); ++i)
+        for (auto i = rigidBodies_.begin(); i != rigidBodies_.end(); ++i)
             (*i)->ReleaseBody();
 
-        for (PODVector<CollisionShape*>::Iterator i = collisionShapes_.Begin(); i != collisionShapes_.End(); ++i)
+        for (auto i = collisionShapes_.begin(); i != collisionShapes_.end(); ++i)
             (*i)->ReleaseShape();
     }
 
-    world_.Reset();
-    solver_.Reset();
-    broadphase_.Reset();
-    collisionDispatcher_.Reset();
+    world_.reset();
+    solver_.reset();
+    broadphase_.reset();
+    collisionDispatcher_.reset();
 
     // Delete configuration only if it was the default created by PhysicsWorld
     if (!PhysicsWorld::config.collisionConfig_)
@@ -241,7 +244,7 @@ void PhysicsWorld::DrawDebugGeometry(DebugRenderer* debug, bool depthTest)
 
 void PhysicsWorld::reportErrorWarning(const char* warningString)
 {
-    URHO3D_LOGWARNING("Physics: " + String(warningString));
+    URHO3D_LOGWARNING("Physics: " + ea::string(warningString));
 }
 
 void PhysicsWorld::drawContactPoint(const btVector3& pointOnB, const btVector3& normalOnB, btScalar distance, int lifeTime,
@@ -267,7 +270,7 @@ void PhysicsWorld::Update(float timeStep)
     else if (maxSubSteps_ > 0)
         maxSubSteps = Min(maxSubSteps, maxSubSteps_);
 
-    delayedWorldTransforms_.Clear();
+    delayedWorldTransforms_.clear();
     simulating_ = true;
 
     if (interpolation_)
@@ -286,18 +289,18 @@ void PhysicsWorld::Update(float timeStep)
     simulating_ = false;
 
     // Apply delayed (parented) world transforms now
-    while (!delayedWorldTransforms_.Empty())
+    while (!delayedWorldTransforms_.empty())
     {
-        for (HashMap<RigidBody*, DelayedWorldTransform>::Iterator i = delayedWorldTransforms_.Begin();
-             i != delayedWorldTransforms_.End();)
+        for (auto i = delayedWorldTransforms_.begin();
+             i != delayedWorldTransforms_.end();)
         {
-            const DelayedWorldTransform& transform = i->second_;
+            const DelayedWorldTransform& transform = i->second;
 
             // If parent's transform has already been assigned, can proceed
-            if (!delayedWorldTransforms_.Contains(transform.parentRigidBody_))
+            if (!delayedWorldTransforms_.contains(transform.parentRigidBody_))
             {
                 transform.rigidBody_->ApplyWorldTransform(transform.worldPosition_, transform.worldRotation_);
-                i = delayedWorldTransforms_.Erase(i);
+                i = delayedWorldTransforms_.erase(i);
             }
             else
                 ++i;
@@ -369,7 +372,7 @@ void PhysicsWorld::SetMaxNetworkAngularVelocity(float velocity)
     MarkNetworkUpdate();
 }
 
-void PhysicsWorld::Raycast(PODVector<PhysicsRaycastResult>& result, const Ray& ray, float maxDistance, unsigned collisionMask)
+void PhysicsWorld::Raycast(ea::vector<PhysicsRaycastResult>& result, const Ray& ray, float maxDistance, unsigned collisionMask)
 {
     URHO3D_PROFILE("PhysicsRaycast");
 
@@ -391,10 +394,10 @@ void PhysicsWorld::Raycast(PODVector<PhysicsRaycastResult>& result, const Ray& r
         newResult.normal_ = ToVector3(rayCallback.m_hitNormalWorld[i]);
         newResult.distance_ = (newResult.position_ - ray.origin_).Length();
         newResult.hitFraction_ = rayCallback.m_closestHitFraction;
-        result.Push(newResult);
+        result.push_back(newResult);
     }
 
-    Sort(result.Begin(), result.End(), CompareRaycastResults);
+    ea::quick_sort(result.begin(), result.end(), CompareRaycastResults);
 }
 
 void PhysicsWorld::RaycastSingle(PhysicsRaycastResult& result, const Ray& ray, float maxDistance, unsigned collisionMask)
@@ -618,48 +621,48 @@ void PhysicsWorld::RemoveCachedGeometry(Model* model)
     RemoveCachedGeometryImpl(gimpactTrimeshCache_, model);
 }
 
-void PhysicsWorld::GetRigidBodies(PODVector<RigidBody*>& result, const Sphere& sphere, unsigned collisionMask)
+void PhysicsWorld::GetRigidBodies(ea::vector<RigidBody*>& result, const Sphere& sphere, unsigned collisionMask)
 {
     URHO3D_PROFILE("PhysicsSphereQuery");
 
-    result.Clear();
+    result.clear();
 
     btSphereShape sphereShape(sphere.radius_);
-    UniquePtr<btRigidBody> tempRigidBody(new btRigidBody(1.0f, nullptr, &sphereShape));
+    ea::unique_ptr<btRigidBody> tempRigidBody(new btRigidBody(1.0f, nullptr, &sphereShape));
     tempRigidBody->setWorldTransform(btTransform(btQuaternion::getIdentity(), ToBtVector3(sphere.center_)));
     // Need to activate the temporary rigid body to get reliable results from static, sleeping objects
     tempRigidBody->activate();
-    world_->addRigidBody(tempRigidBody.Get());
+    world_->addRigidBody(tempRigidBody.get());
 
     PhysicsQueryCallback callback(result, collisionMask);
-    world_->contactTest(tempRigidBody.Get(), callback);
+    world_->contactTest(tempRigidBody.get(), callback);
 
-    world_->removeRigidBody(tempRigidBody.Get());
+    world_->removeRigidBody(tempRigidBody.get());
 }
 
-void PhysicsWorld::GetRigidBodies(PODVector<RigidBody*>& result, const BoundingBox& box, unsigned collisionMask)
+void PhysicsWorld::GetRigidBodies(ea::vector<RigidBody*>& result, const BoundingBox& box, unsigned collisionMask)
 {
     URHO3D_PROFILE("PhysicsBoxQuery");
 
-    result.Clear();
+    result.clear();
 
     btBoxShape boxShape(ToBtVector3(box.HalfSize()));
-    UniquePtr<btRigidBody> tempRigidBody(new btRigidBody(1.0f, nullptr, &boxShape));
+    ea::unique_ptr<btRigidBody> tempRigidBody(new btRigidBody(1.0f, nullptr, &boxShape));
     tempRigidBody->setWorldTransform(btTransform(btQuaternion::getIdentity(), ToBtVector3(box.Center())));
     tempRigidBody->activate();
-    world_->addRigidBody(tempRigidBody.Get());
+    world_->addRigidBody(tempRigidBody.get());
 
     PhysicsQueryCallback callback(result, collisionMask);
-    world_->contactTest(tempRigidBody.Get(), callback);
+    world_->contactTest(tempRigidBody.get(), callback);
 
-    world_->removeRigidBody(tempRigidBody.Get());
+    world_->removeRigidBody(tempRigidBody.get());
 }
 
-void PhysicsWorld::GetRigidBodies(PODVector<RigidBody*>& result, const RigidBody* body)
+void PhysicsWorld::GetRigidBodies(ea::vector<RigidBody*>& result, const RigidBody* body)
 {
     URHO3D_PROFILE("PhysicsBodyQuery");
 
-    result.Clear();
+    result.clear();
 
     if (!body || !body->GetBody())
         return;
@@ -668,34 +671,34 @@ void PhysicsWorld::GetRigidBodies(PODVector<RigidBody*>& result, const RigidBody
     world_->contactTest(body->GetBody(), callback);
 
     // Remove the body itself from the returned list
-    for (unsigned i = 0; i < result.Size(); i++)
+    for (unsigned i = 0; i < result.size(); i++)
     {
         if (result[i] == body)
         {
-            result.Erase(i);
+            result.erase_at(i);
             break;
         }
     }
 }
 
-void PhysicsWorld::GetCollidingBodies(PODVector<RigidBody*>& result, const RigidBody* body)
+void PhysicsWorld::GetCollidingBodies(ea::vector<RigidBody*>& result, const RigidBody* body)
 {
     URHO3D_PROFILE("GetCollidingBodies");
 
-    result.Clear();
+    result.clear();
 
-    for (HashMap<Pair<WeakPtr<RigidBody>, WeakPtr<RigidBody> >, ManifoldPair>::Iterator i = currentCollisions_.Begin();
-         i != currentCollisions_.End(); ++i)
+    for (auto i = currentCollisions_.begin();
+         i != currentCollisions_.end(); ++i)
     {
-        if (i->first_.first_ == body)
+        if (i->first.first == body)
         {
-            if (i->first_.second_)
-                result.Push(i->first_.second_);
+            if (i->first.second)
+                result.push_back(i->first.second);
         }
-        else if (i->first_.second_ == body)
+        else if (i->first.second == body)
         {
-            if (i->first_.first_)
-                result.Push(i->first_.first_);
+            if (i->first.first)
+                result.push_back(i->first.first);
         }
     }
 }
@@ -717,34 +720,34 @@ bool PhysicsWorld::GetSplitImpulse() const
 
 void PhysicsWorld::AddRigidBody(RigidBody* body)
 {
-    rigidBodies_.Push(body);
+    rigidBodies_.push_back(body);
 }
 
 void PhysicsWorld::RemoveRigidBody(RigidBody* body)
 {
-    rigidBodies_.Remove(body);
+    rigidBodies_.erase_first(body);
     // Remove possible dangling pointer from the delayedWorldTransforms structure
-    delayedWorldTransforms_.Erase(body);
+    delayedWorldTransforms_.erase(body);
 }
 
 void PhysicsWorld::AddCollisionShape(CollisionShape* shape)
 {
-    collisionShapes_.Push(shape);
+    collisionShapes_.push_back(shape);
 }
 
 void PhysicsWorld::RemoveCollisionShape(CollisionShape* shape)
 {
-    collisionShapes_.Remove(shape);
+    collisionShapes_.erase_first(shape);
 }
 
 void PhysicsWorld::AddConstraint(Constraint* constraint)
 {
-    constraints_.Push(constraint);
+    constraints_.push_back(constraint);
 }
 
 void PhysicsWorld::RemoveConstraint(Constraint* constraint)
 {
-    constraints_.Remove(constraint);
+    constraints_.erase_first(constraint);
 }
 
 void PhysicsWorld::AddDelayedWorldTransform(const DelayedWorldTransform& transform)
@@ -830,9 +833,9 @@ void PhysicsWorld::SendCollisionEvents()
 {
     URHO3D_PROFILE("SendCollisionEvents");
 
-    currentCollisions_.Clear();
-    physicsCollisionData_.Clear();
-    nodeCollisionData_.Clear();
+    currentCollisions_.clear();
+    physicsCollisionData_.clear();
+    nodeCollisionData_.clear();
 
     int numManifolds = collisionDispatcher_->getNumManifolds();
 
@@ -870,24 +873,24 @@ void PhysicsWorld::SendCollisionEvents()
 
             // First only store the collision pair as weak pointers and the manifold pointer, so user code can safely destroy
             // objects during collision event handling
-            Pair<WeakPtr<RigidBody>, WeakPtr<RigidBody> > bodyPair;
+            ea::pair<WeakPtr<RigidBody>, WeakPtr<RigidBody> > bodyPair;
             if (bodyA < bodyB)
             {
-                bodyPair = MakePair(bodyWeakA, bodyWeakB);
+                bodyPair = ea::make_pair(bodyWeakA, bodyWeakB);
                 currentCollisions_[bodyPair].manifold_ = contactManifold;
             }
             else
             {
-                bodyPair = MakePair(bodyWeakB, bodyWeakA);
+                bodyPair = ea::make_pair(bodyWeakB, bodyWeakA);
                 currentCollisions_[bodyPair].flippedManifold_ = contactManifold;
             }
         }
 
-        for (HashMap<Pair<WeakPtr<RigidBody>, WeakPtr<RigidBody> >, ManifoldPair>::Iterator i = currentCollisions_.Begin();
-             i != currentCollisions_.End(); ++i)
+        for (auto i = currentCollisions_.begin();
+             i != currentCollisions_.end(); ++i)
         {
-            RigidBody* bodyA = i->first_.first_;
-            RigidBody* bodyB = i->first_.second_;
+            RigidBody* bodyA = i->first.first;
+            RigidBody* bodyB = i->first.second;
             if (!bodyA || !bodyB)
                 continue;
 
@@ -897,7 +900,7 @@ void PhysicsWorld::SendCollisionEvents()
             WeakPtr<Node> nodeWeakB(nodeB);
 
             bool trigger = bodyA->IsTrigger() || bodyB->IsTrigger();
-            bool newCollision = !previousCollisions_.Contains(i->first_);
+            bool newCollision = !previousCollisions_.contains(i->first);
 
             physicsCollisionData_[PhysicsCollision::P_NODEA] = nodeA;
             physicsCollisionData_[PhysicsCollision::P_NODEB] = nodeB;
@@ -908,7 +911,7 @@ void PhysicsWorld::SendCollisionEvents()
             contacts_.Clear();
 
             // "Pointers not flipped"-manifold, send unmodified normals
-            btPersistentManifold* contactManifold = i->second_.manifold_;
+            btPersistentManifold* contactManifold = i->second.manifold_;
             if (contactManifold)
             {
                 for (int j = 0; j < contactManifold->getNumContacts(); ++j)
@@ -921,7 +924,7 @@ void PhysicsWorld::SendCollisionEvents()
                 }
             }
             // "Pointers flipped"-manifold, flip normals also
-            contactManifold = i->second_.flippedManifold_;
+            contactManifold = i->second.flippedManifold_;
             if (contactManifold)
             {
                 for (int j = 0; j < contactManifold->getNumContacts(); ++j)
@@ -941,13 +944,13 @@ void PhysicsWorld::SendCollisionEvents()
             {
                 SendEvent(E_PHYSICSCOLLISIONSTART, physicsCollisionData_);
                 // Skip rest of processing if either of the nodes or bodies is removed as a response to the event
-                if (!nodeWeakA || !nodeWeakB || !i->first_.first_ || !i->first_.second_)
+                if (!nodeWeakA || !nodeWeakB || !i->first.first || !i->first.second)
                     continue;
             }
 
             // Then send the ongoing collision event
             SendEvent(E_PHYSICSCOLLISION, physicsCollisionData_);
-            if (!nodeWeakA || !nodeWeakB || !i->first_.first_ || !i->first_.second_)
+            if (!nodeWeakA || !nodeWeakB || !i->first.first || !i->first.second)
                 continue;
 
             nodeCollisionData_[NodeCollision::P_BODY] = bodyA;
@@ -959,17 +962,17 @@ void PhysicsWorld::SendCollisionEvents()
             if (newCollision)
             {
                 nodeA->SendEvent(E_NODECOLLISIONSTART, nodeCollisionData_);
-                if (!nodeWeakA || !nodeWeakB || !i->first_.first_ || !i->first_.second_)
+                if (!nodeWeakA || !nodeWeakB || !i->first.first || !i->first.second)
                     continue;
             }
 
             nodeA->SendEvent(E_NODECOLLISION, nodeCollisionData_);
-            if (!nodeWeakA || !nodeWeakB || !i->first_.first_ || !i->first_.second_)
+            if (!nodeWeakA || !nodeWeakB || !i->first.first || !i->first.second)
                 continue;
 
             // Flip perspective to body B
             contacts_.Clear();
-            contactManifold = i->second_.manifold_;
+            contactManifold = i->second.manifold_;
             if (contactManifold)
             {
                 for (int j = 0; j < contactManifold->getNumContacts(); ++j)
@@ -981,7 +984,7 @@ void PhysicsWorld::SendCollisionEvents()
                     contacts_.WriteFloat(point.m_appliedImpulse);
                 }
             }
-            contactManifold = i->second_.flippedManifold_;
+            contactManifold = i->second.flippedManifold_;
             if (contactManifold)
             {
                 for (int j = 0; j < contactManifold->getNumContacts(); ++j)
@@ -1002,7 +1005,7 @@ void PhysicsWorld::SendCollisionEvents()
             if (newCollision)
             {
                 nodeB->SendEvent(E_NODECOLLISIONSTART, nodeCollisionData_);
-                if (!nodeWeakA || !nodeWeakB || !i->first_.first_ || !i->first_.second_)
+                if (!nodeWeakA || !nodeWeakB || !i->first.first || !i->first.second)
                     continue;
             }
 
@@ -1014,13 +1017,13 @@ void PhysicsWorld::SendCollisionEvents()
     {
         physicsCollisionData_[PhysicsCollisionEnd::P_WORLD] = this;
 
-        for (HashMap<Pair<WeakPtr<RigidBody>, WeakPtr<RigidBody> >, ManifoldPair>::Iterator
-                 i = previousCollisions_.Begin(); i != previousCollisions_.End(); ++i)
+        for (auto
+                 i = previousCollisions_.begin(); i != previousCollisions_.end(); ++i)
         {
-            if (!currentCollisions_.Contains(i->first_))
+            if (!currentCollisions_.contains(i->first))
             {
-                RigidBody* bodyA = i->first_.first_;
-                RigidBody* bodyB = i->first_.second_;
+                RigidBody* bodyA = i->first.first;
+                RigidBody* bodyB = i->first.second;
                 if (!bodyA || !bodyB)
                     continue;
 
@@ -1048,7 +1051,7 @@ void PhysicsWorld::SendCollisionEvents()
 
                 SendEvent(E_PHYSICSCOLLISIONEND, physicsCollisionData_);
                 // Skip rest of processing if either of the nodes or bodies is removed as a response to the event
-                if (!nodeWeakA || !nodeWeakB || !i->first_.first_ || !i->first_.second_)
+                if (!nodeWeakA || !nodeWeakB || !i->first.first || !i->first.second)
                     continue;
 
                 nodeCollisionData_[NodeCollisionEnd::P_BODY] = bodyA;
@@ -1057,7 +1060,7 @@ void PhysicsWorld::SendCollisionEvents()
                 nodeCollisionData_[NodeCollisionEnd::P_TRIGGER] = trigger;
 
                 nodeA->SendEvent(E_NODECOLLISIONEND, nodeCollisionData_);
-                if (!nodeWeakA || !nodeWeakB || !i->first_.first_ || !i->first_.second_)
+                if (!nodeWeakA || !nodeWeakB || !i->first.first || !i->first.second)
                     continue;
 
                 nodeCollisionData_[NodeCollisionEnd::P_BODY] = bodyB;

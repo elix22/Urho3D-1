@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +48,7 @@ public:
     TileMapLayerType2D GetType() const { return type_; }
 
     /// Return name.
-    const String& GetName() const { return name_; }
+    const ea::string& GetName() const { return name_; }
 
     /// Return width.
     int GetWidth() const { return width_; }
@@ -60,9 +60,9 @@ public:
     bool IsVisible() const { return visible_; }
 
     /// Return has property (use for script).
-    bool HasProperty(const String& name) const;
+    bool HasProperty(const ea::string& name) const;
     /// Return property value (use for script).
-    const String& GetProperty(const String& name) const;
+    const ea::string& GetProperty(const ea::string& name) const;
 
 
 protected:
@@ -76,7 +76,7 @@ protected:
     /// Layer type.
     TileMapLayerType2D type_;
     /// Name.
-    String name_;
+    ea::string name_;
     /// Width.
     int width_{};
     /// Height.
@@ -100,7 +100,7 @@ public:
 
 protected:
     /// Tiles.
-    Vector<SharedPtr<Tile2D> > tiles_;
+    ea::vector<SharedPtr<Tile2D> > tiles_;
 };
 
 /// Tmx objects layer.
@@ -116,14 +116,14 @@ public:
     void StoreObject(const XMLElement& objectElem, const SharedPtr<TileMapObject2D>& object, const TileMapInfo2D& info, bool isTile = false);
 
     /// Return number of objects.
-    unsigned GetNumObjects() const { return objects_.Size(); }
+    unsigned GetNumObjects() const { return objects_.size(); }
 
     /// Return tile map object at index.
     TileMapObject2D* GetObject(unsigned index) const;
 
 private:
     /// Objects.
-    Vector<SharedPtr<TileMapObject2D> > objects_;
+    ea::vector<SharedPtr<TileMapObject2D> > objects_;
 };
 
 /// Tmx image layer.
@@ -139,7 +139,7 @@ public:
     const Vector2& GetPosition() const { return position_; }
 
     /// Return source.
-    const String& GetSource() const { return source_; }
+    const ea::string& GetSource() const { return source_; }
 
     /// Return sprite.
     Sprite2D* GetSprite() const;
@@ -148,7 +148,7 @@ private:
     /// Position.
     Vector2 position_;
     /// Source.
-    String source_;
+    ea::string source_;
     /// Sprite.
     SharedPtr<Sprite2D> sprite_;
 };
@@ -187,13 +187,13 @@ public:
     Sprite2D* GetTileSprite(unsigned gid) const;
 
     /// Return tile collision shapes for a given gid.
-    Vector<SharedPtr<TileMapObject2D> > GetTileCollisionShapes(unsigned gid) const;
+    ea::vector<SharedPtr<TileMapObject2D> > GetTileCollisionShapes(unsigned gid) const;
 
     /// Return tile property set by gid, if not exist return 0.
     PropertySet2D* GetTilePropertySet(unsigned gid) const;
 
     /// Return number of layers.
-    unsigned GetNumLayers() const { return layers_.Size(); }
+    unsigned GetNumLayers() const { return layers_.size(); }
 
     /// Return layer at index.
     const TmxLayer2D* GetLayer(unsigned index) const;
@@ -206,24 +206,24 @@ public:
 
 private:
     /// Load TSX file.
-    SharedPtr<XMLFile> LoadTSXFile(const String& source);
+    SharedPtr<XMLFile> LoadTSXFile(const ea::string& source);
     /// Load tile set.
     bool LoadTileSet(const XMLElement& element);
 
     /// XML file used during loading.
     SharedPtr<XMLFile> loadXMLFile_;
     /// TSX name to XML file mapping.
-    HashMap<String, SharedPtr<XMLFile> > tsxXMLFiles_;
+    ea::unordered_map<ea::string, SharedPtr<XMLFile> > tsxXMLFiles_;
     /// Tile map information.
     TileMapInfo2D info_{};
     /// Gid to tile sprite mapping.
-    HashMap<unsigned, SharedPtr<Sprite2D> > gidToSpriteMapping_;
+    ea::unordered_map<unsigned, SharedPtr<Sprite2D> > gidToSpriteMapping_;
     /// Gid to tile property set mapping.
-    HashMap<unsigned, SharedPtr<PropertySet2D> > gidToPropertySetMapping_;
+    ea::unordered_map<unsigned, SharedPtr<PropertySet2D> > gidToPropertySetMapping_;
     /// Gid to tile collision shape mapping.
-    HashMap<unsigned, Vector<SharedPtr<TileMapObject2D> > > gidToCollisionShapeMapping_;
+    ea::unordered_map<unsigned, ea::vector<SharedPtr<TileMapObject2D> > > gidToCollisionShapeMapping_;
     /// Layers.
-    Vector<TmxLayer2D*> layers_;
+    ea::vector<TmxLayer2D*> layers_;
     /// Texture edge offset.
     float edgeOffset_;
 };

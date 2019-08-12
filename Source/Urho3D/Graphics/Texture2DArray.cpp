@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -81,29 +81,29 @@ bool Texture2DArray::BeginLoad(Deserializer& source)
 
     cache->ResetDependencies(this);
 
-    String texPath, texName, texExt;
+    ea::string texPath, texName, texExt;
     SplitPath(GetName(), texPath, texName, texExt);
 
-    loadParameters_ = (new XMLFile(context_));
+    loadParameters_ = (context_->CreateObject<XMLFile>());
     if (!loadParameters_->Load(source))
     {
         loadParameters_.Reset();
         return false;
     }
 
-    loadImages_.Clear();
+    loadImages_.clear();
 
     XMLElement textureElem = loadParameters_->GetRoot();
     XMLElement layerElem = textureElem.GetChild("layer");
     while (layerElem)
     {
-        String name = layerElem.GetAttribute("name");
+        ea::string name = layerElem.GetAttribute("name");
 
         // If path is empty, add the XML file path
-        if (GetPath(name).Empty())
+        if (GetPath(name).empty())
             name = texPath + name;
 
-        loadImages_.Push(cache->GetTempResource<Image>(name));
+        loadImages_.push_back(cache->GetTempResource<Image>(name));
         cache->StoreResourceDependency(this, name);
 
         layerElem = layerElem.GetNext("layer");
@@ -112,7 +112,7 @@ bool Texture2DArray::BeginLoad(Deserializer& source)
     // Precalculate mip levels if async loading
     if (GetAsyncLoadState() == ASYNC_LOADING)
     {
-        for (unsigned i = 0; i < loadImages_.Size(); ++i)
+        for (unsigned i = 0; i < loadImages_.size(); ++i)
         {
             if (loadImages_[i])
                 loadImages_[i]->PrecalculateLevels();
@@ -132,12 +132,12 @@ bool Texture2DArray::EndLoad()
     CheckTextureBudget(GetTypeStatic());
 
     SetParameters(loadParameters_);
-    SetLayers(loadImages_.Size());
+    SetLayers(loadImages_.size());
 
-    for (unsigned i = 0; i < loadImages_.Size(); ++i)
+    for (unsigned i = 0; i < loadImages_.size(); ++i)
         SetData(i, loadImages_[i]);
 
-    loadImages_.Clear();
+    loadImages_.clear();
     loadParameters_.Reset();
 
     return true;
@@ -188,7 +188,7 @@ bool Texture2DArray::SetSize(unsigned layers, int width, int height, unsigned fo
     if (layers)
         layers_ = layers;
 
-    layerMemoryUse_.Resize(layers_);
+    layerMemoryUse_.resize(layers_);
     for (unsigned i = 0; i < layers_; ++i)
         layerMemoryUse_[i] = 0;
 

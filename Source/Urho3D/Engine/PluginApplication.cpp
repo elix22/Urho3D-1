@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,15 +22,44 @@
 
 #include "../Core/Context.h"
 #include "../Engine/PluginApplication.h"
-#include <cr/cr.h>
-
+#include "../IO/Log.h"
+#if !defined(URHO3D_STATIC) && defined(URHO3D_PLUGINS)
+#   if !defined(NDEBUG) && defined(URHO3D_LOGGING)
+#       define CR_DEBUG 1
+#       define CR_ERROR(format, ...) URHO3D_LOGERRORF(format, ##__VA_ARGS__)
+#       define CR_LOG(format, ...)   URHO3D_LOGTRACEF(format, ##__VA_ARGS__)
+#       define CR_TRACE
+#   endif
+#   if DESKTOP
+#       include <cr/cr.h>
+#   endif
+#endif
 
 namespace Urho3D
 {
 
-int PluginMain(void* ctx_, size_t operation, PluginApplication*(*factory)(Context*),
-    void(*destroyer)(PluginApplication*))
+PluginApplication::~PluginApplication()
 {
+    for (const auto& pair : registeredTypes_)
+    {
+        if (!pair.second.empty())
+            context_->RemoveFactory(pair.first, pair.second.c_str());
+        else
+            context_->RemoveFactory(pair.first);
+        context_->RemoveAllAttributes(pair.first);
+        context_->RemoveSubsystem(pair.first);
+    }
+}
+
+void PluginApplication::RecordPluginFactory(StringHash type, const char* category)
+{
+    registeredTypes_.push_back({type, category});
+}
+
+#if !defined(URHO3D_STATIC) && defined(URHO3D_PLUGINS)
+int PluginApplication::PluginMain(void* ctx_, size_t operation, PluginApplication*(*factory)(Context*))
+{
+#if DESKTOP
     assert(ctx_);
     auto* ctx = static_cast<cr_plugin*>(ctx_);
 
@@ -39,18 +68,14 @@ int PluginMain(void* ctx_, size_t operation, PluginApplication*(*factory)(Contex
     case CR_LOAD:
     {
         auto* context = static_cast<Context*>(ctx->userdata);
-        auto* application = factory(context);
-        application->OnLoad();
-        ctx->userdata = application;
+        ctx->userdata = factory(context);
         return 0;
     }
     case CR_UNLOAD:
     case CR_CLOSE:
     {
         auto* application = static_cast<PluginApplication*>(ctx->userdata);
-        application->OnUnload();
         ctx->userdata = application->GetContext();
-        destroyer(application);
         return 0;
     }
     case CR_STEP:
@@ -61,7 +86,9 @@ int PluginMain(void* ctx_, size_t operation, PluginApplication*(*factory)(Contex
 		break;
     }
 	assert(false);
+#endif
 	return -3;
 }
+#endif
 
 }

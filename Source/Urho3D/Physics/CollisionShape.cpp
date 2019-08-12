@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -101,11 +101,11 @@ public:
                 continue;
             }
 
-            SharedArrayPtr<unsigned char> vertexData;
-            SharedArrayPtr<unsigned char> indexData;
+            ea::shared_array<unsigned char> vertexData;
+            ea::shared_array<unsigned char> indexData;
             unsigned vertexSize;
             unsigned indexSize;
-            const PODVector<VertexElement>* elements;
+            const ea::vector<VertexElement>* elements;
 
             geometry->GetRawDataShared(vertexData, vertexSize, indexData, indexSize, elements);
             if (!vertexData || !indexData || !elements || VertexBuffer::GetElementOffset(*elements, TYPE_VECTOR3, SEM_POSITION) != 0)
@@ -115,8 +115,8 @@ public:
             }
 
             // Keep shared pointers to the vertex/index data so that if it's unloaded or changes size, we don't crash
-            dataArrays_.Push(vertexData);
-            dataArrays_.Push(indexData);
+            dataArrays_.push_back(vertexData);
+            dataArrays_.push_back(indexData);
 
             unsigned indexStart = geometry->GetIndexStart();
             unsigned indexCount = geometry->GetIndexCount();
@@ -126,7 +126,7 @@ public:
             meshIndex.m_triangleIndexBase = &indexData[indexStart * indexSize];
             meshIndex.m_triangleIndexStride = 3 * indexSize;
             meshIndex.m_numVertices = 0;
-            meshIndex.m_vertexBase = vertexData;
+            meshIndex.m_vertexBase = vertexData.get();
             meshIndex.m_vertexStride = vertexSize;
             meshIndex.m_indexType = (indexSize == sizeof(unsigned short)) ? PHY_SHORT : PHY_INTEGER;
             meshIndex.m_vertexType = PHY_FLOAT;
@@ -143,28 +143,28 @@ public:
     explicit TriangleMeshInterface(CustomGeometry* custom) :
         btTriangleIndexVertexArray()
     {
-        const Vector<PODVector<CustomGeometryVertex> >& srcVertices = custom->GetVertices();
+        const ea::vector<ea::vector<CustomGeometryVertex> >& srcVertices = custom->GetVertices();
         unsigned totalVertexCount = 0;
         unsigned totalTriangles = 0;
 
-        for (unsigned i = 0; i < srcVertices.Size(); ++i)
-            totalVertexCount += srcVertices[i].Size();
+        for (unsigned i = 0; i < srcVertices.size(); ++i)
+            totalVertexCount += srcVertices[i].size();
 
         if (totalVertexCount)
         {
             // CustomGeometry vertex data is unindexed, so build index data here
-            SharedArrayPtr<unsigned char> vertexData(new unsigned char[totalVertexCount * sizeof(Vector3)]);
-            SharedArrayPtr<unsigned char> indexData(new unsigned char[totalVertexCount * sizeof(unsigned)]);
-            dataArrays_.Push(vertexData);
-            dataArrays_.Push(indexData);
+            ea::shared_array<unsigned char> vertexData(new unsigned char[totalVertexCount * sizeof(Vector3)]);
+            ea::shared_array<unsigned char> indexData(new unsigned char[totalVertexCount * sizeof(unsigned)]);
+            dataArrays_.push_back(vertexData);
+            dataArrays_.push_back(indexData);
 
             auto* destVertex = reinterpret_cast<Vector3*>(&vertexData[0]);
             auto* destIndex = reinterpret_cast<unsigned*>(&indexData[0]);
             unsigned k = 0;
 
-            for (unsigned i = 0; i < srcVertices.Size(); ++i)
+            for (unsigned i = 0; i < srcVertices.size(); ++i)
             {
-                for (unsigned j = 0; j < srcVertices[i].Size(); ++j)
+                for (unsigned j = 0; j < srcVertices[i].size(); ++j)
                 {
                     *destVertex++ = srcVertices[i][j].position_;
                     *destIndex++ = k++;
@@ -173,10 +173,10 @@ public:
 
             btIndexedMesh meshIndex;
             meshIndex.m_numTriangles = totalVertexCount / 3;
-            meshIndex.m_triangleIndexBase = indexData;
+            meshIndex.m_triangleIndexBase = indexData.get();
             meshIndex.m_triangleIndexStride = 3 * sizeof(unsigned);
             meshIndex.m_numVertices = totalVertexCount;
-            meshIndex.m_vertexBase = vertexData;
+            meshIndex.m_vertexBase = vertexData.get();
             meshIndex.m_vertexStride = sizeof(Vector3);
             meshIndex.m_indexType = PHY_INTEGER;
             meshIndex.m_vertexType = PHY_FLOAT;
@@ -193,40 +193,40 @@ public:
 
 private:
     /// Shared vertex/index data used in the collision
-    Vector<SharedArrayPtr<unsigned char> > dataArrays_;
+    ea::vector<ea::shared_array<unsigned char> > dataArrays_;
 };
 
 TriangleMeshData::TriangleMeshData(Model* model, unsigned lodLevel)
 {
-    meshInterface_ = new TriangleMeshInterface(model, lodLevel);
-    shape_ = new btBvhTriangleMeshShape(meshInterface_.Get(), meshInterface_->useQuantize_, true);
+    meshInterface_ = ea::make_unique<TriangleMeshInterface>(model, lodLevel);
+    shape_ = ea::make_unique<btBvhTriangleMeshShape>(meshInterface_.get(), meshInterface_->useQuantize_, true);
 
-    infoMap_ = new btTriangleInfoMap();
-    btGenerateInternalEdgeInfo(shape_.Get(), infoMap_.Get());
+    infoMap_ = ea::make_unique<btTriangleInfoMap>();
+    btGenerateInternalEdgeInfo(shape_.get(), infoMap_.get());
 }
 
 TriangleMeshData::TriangleMeshData(CustomGeometry* custom)
 {
-    meshInterface_ = new TriangleMeshInterface(custom);
-    shape_ = new btBvhTriangleMeshShape(meshInterface_.Get(), meshInterface_->useQuantize_, true);
+    meshInterface_ = ea::make_unique<TriangleMeshInterface>(custom);
+    shape_ = ea::make_unique<btBvhTriangleMeshShape>(meshInterface_.get(), meshInterface_->useQuantize_, true);
 
-    infoMap_ = new btTriangleInfoMap();
-    btGenerateInternalEdgeInfo(shape_.Get(), infoMap_.Get());
+    infoMap_ = ea::make_unique<btTriangleInfoMap>();
+    btGenerateInternalEdgeInfo(shape_.get(), infoMap_.get());
 }
 
 GImpactMeshData::GImpactMeshData(Model* model, unsigned lodLevel)
 {
-    meshInterface_ = new TriangleMeshInterface(model, lodLevel);
+    meshInterface_ = ea::make_unique<TriangleMeshInterface>(model, lodLevel);
 }
 
 GImpactMeshData::GImpactMeshData(CustomGeometry* custom)
 {
-    meshInterface_ = new TriangleMeshInterface(custom);
+    meshInterface_ = ea::make_unique<TriangleMeshInterface>(custom);
 }
 
 ConvexData::ConvexData(Model* model, unsigned lodLevel)
 {
-    PODVector<Vector3> vertices;
+    ea::vector<Vector3> vertices;
     unsigned numGeometries = model->GetNumGeometries();
 
     for (unsigned i = 0; i < numGeometries; ++i)
@@ -242,7 +242,7 @@ ConvexData::ConvexData(Model* model, unsigned lodLevel)
         const unsigned char* indexData;
         unsigned vertexSize;
         unsigned indexSize;
-        const PODVector<VertexElement>* elements;
+        const ea::vector<VertexElement>* elements;
 
         geometry->GetRawData(vertexData, vertexSize, indexData, indexSize, elements);
         if (!vertexData || VertexBuffer::GetElementOffset(*elements, TYPE_VECTOR3, SEM_POSITION) != 0)
@@ -258,7 +258,7 @@ ConvexData::ConvexData(Model* model, unsigned lodLevel)
         for (unsigned j = 0; j < vertexCount; ++j)
         {
             const Vector3& v = *((const Vector3*)(&vertexData[(vertexStart + j) * vertexSize]));
-            vertices.Push(v);
+            vertices.push_back(v);
         }
     }
 
@@ -267,26 +267,26 @@ ConvexData::ConvexData(Model* model, unsigned lodLevel)
 
 ConvexData::ConvexData(CustomGeometry* custom)
 {
-    const Vector<PODVector<CustomGeometryVertex> >& srcVertices = custom->GetVertices();
-    PODVector<Vector3> vertices;
+    const ea::vector<ea::vector<CustomGeometryVertex> >& srcVertices = custom->GetVertices();
+    ea::vector<Vector3> vertices;
 
-    for (unsigned i = 0; i < srcVertices.Size(); ++i)
+    for (unsigned i = 0; i < srcVertices.size(); ++i)
     {
-        for (unsigned j = 0; j < srcVertices[i].Size(); ++j)
-            vertices.Push(srcVertices[i][j].position_);
+        for (unsigned j = 0; j < srcVertices[i].size(); ++j)
+            vertices.push_back(srcVertices[i][j].position_);
     }
 
     BuildHull(vertices);
 }
 
-void ConvexData::BuildHull(const PODVector<Vector3>& vertices)
+void ConvexData::BuildHull(const ea::vector<Vector3>& vertices)
 {
-    if (vertices.Size())
+    if (vertices.size())
     {
         // Build the convex hull from the raw geometry
         StanHull::HullDesc desc;
         desc.SetHullFlag(StanHull::QF_TRIANGLES);
-        desc.mVcount = vertices.Size();
+        desc.mVcount = vertices.size();
         desc.mVertices = vertices[0].Data();
         desc.mVertexStride = 3 * sizeof(float);
         desc.mSkinWidth = 0.0f;
@@ -302,8 +302,8 @@ void ConvexData::BuildHull(const PODVector<Vector3>& vertices)
         indexData_ = new unsigned[indexCount_];
 
         // Copy vertex data & index data
-        memcpy(vertexData_.Get(), result.mOutputVertices, vertexCount_ * sizeof(Vector3));
-        memcpy(indexData_.Get(), result.mIndices, indexCount_ * sizeof(unsigned));
+        memcpy(vertexData_.get(), result.mOutputVertices, vertexCount_ * sizeof(Vector3));
+        memcpy(indexData_.get(), result.mIndices, indexCount_ * sizeof(unsigned));
 
         lib.ReleaseResult(result);
     }
@@ -344,7 +344,7 @@ HeightfieldData::HeightfieldData(Terrain* terrain, unsigned lodLevel) :
                     break;
             }
 
-            SharedArrayPtr<float> lodHeightData(new float[lodSize.x_ * lodSize.y_]);
+            ea::shared_array<float> lodHeightData(new float[lodSize.x_ * lodSize.y_]);
             for (int y = 0, dY = 0; y < size_.y_ && dY < lodSize.y_; y += skip, ++dY)
             {
                 for (int x = 0, dX = 0; x < size_.x_ && dX < lodSize.x_; x += skip, ++dX)
@@ -357,7 +357,7 @@ HeightfieldData::HeightfieldData(Terrain* terrain, unsigned lodLevel) :
         }
 
         auto points = (unsigned)(size_.x_ * size_.y_);
-        float* data = heightData_.Get();
+        float* data = heightData_.get();
 
         minHeight_ = maxHeight_ = data[0];
         for (unsigned i = 1; i < points; ++i)
@@ -431,19 +431,19 @@ btCollisionShape* CreateCollisionGeometryDataShape(ShapeType shapeType, Collisio
     case SHAPE_TRIANGLEMESH:
         {
             auto* triMesh = static_cast<TriangleMeshData*>(geometry);
-            return new btScaledBvhTriangleMeshShape(triMesh->shape_.Get(), ToBtVector3(scale));
+            return new btScaledBvhTriangleMeshShape(triMesh->shape_.get(), ToBtVector3(scale));
         }
     case SHAPE_CONVEXHULL:
         {
             auto* convex = static_cast<ConvexData*>(geometry);
-            auto* shape = new btConvexHullShape((btScalar*)convex->vertexData_.Get(), convex->vertexCount_, sizeof(Vector3));
+            auto* shape = new btConvexHullShape((btScalar*)convex->vertexData_.get(), convex->vertexCount_, sizeof(Vector3));
             shape->setLocalScaling(ToBtVector3(scale));
             return shape;
         }
     case SHAPE_GIMPACTMESH:
         {
             auto* gimpactMesh = static_cast<GImpactMeshData*>(geometry);
-            auto* shape = new btGImpactMeshShape(gimpactMesh->meshInterface_.Get());
+            auto* shape = new btGImpactMeshShape(gimpactMesh->meshInterface_.get());
             shape->setLocalScaling(ToBtVector3(scale));
             shape->updateBound();
             return shape;
@@ -559,7 +559,7 @@ void CollisionShape::DrawDebugGeometry(DebugRenderer* debug, bool depthTest)
             Quaternion worldRotation(worldTransform.Rotation() * rotation_);
 
             btDiscreteDynamicsWorld* world = physicsWorld_->GetWorld();
-            world->debugDrawObject(btTransform(ToBtQuaternion(worldRotation), ToBtVector3(worldPosition)), shape_.Get(), bodyActive ?
+            world->debugDrawObject(btTransform(ToBtQuaternion(worldRotation), ToBtVector3(worldPosition)), shape_.get(), bodyActive ?
                 WHITE : GREEN);
 
             physicsWorld_->SetDebugRenderer(nullptr);
@@ -848,7 +848,7 @@ void CollisionShape::NotifyRigidBody(bool updateMass)
     if (node_ && shape_ && compound)
     {
         // Remove the shape first to ensure it is not added twice
-        compound->removeChildShape(shape_.Get());
+        compound->removeChildShape(shape_.get());
 
         if (IsEnabledEffective())
         {
@@ -864,7 +864,7 @@ void CollisionShape::NotifyRigidBody(bool updateMass)
             btTransform offset;
             offset.setOrigin(ToBtVector3(node_->GetWorldScale() * position));
             offset.setRotation(ToBtQuaternion(rotation_));
-            compound->addChildShape(offset, shape_.Get());
+            compound->addChildShape(offset, shape_.get());
         }
 
         // Finally tell the rigid body to update its mass
@@ -891,11 +891,11 @@ void CollisionShape::ReleaseShape()
     btCompoundShape* compound = GetParentCompoundShape();
     if (shape_ && compound)
     {
-        compound->removeChildShape(shape_.Get());
+        compound->removeChildShape(shape_.get());
         rigidBody_->UpdateMass();
     }
 
-    shape_.Reset();
+    shape_.reset();
 
     geometry_.Reset();
 
@@ -1018,31 +1018,31 @@ void CollisionShape::UpdateShape()
         switch (shapeType_)
         {
         case SHAPE_BOX:
-            shape_ = new btBoxShape(ToBtVector3(size_ * 0.5f));
+            shape_ = ea::make_unique<btBoxShape>(ToBtVector3(size_ * 0.5f));
             shape_->setLocalScaling(ToBtVector3(cachedWorldScale_));
             break;
 
         case SHAPE_SPHERE:
-            shape_ = new btSphereShape(size_.x_ * 0.5f);
+            shape_ = ea::make_unique<btSphereShape>(size_.x_ * 0.5f);
             shape_->setLocalScaling(ToBtVector3(cachedWorldScale_));
             break;
 
         case SHAPE_STATICPLANE:
-            shape_ = new btStaticPlaneShape(btVector3(0.0f, 1.0f, 0.0f), 0.0f);
+            shape_ = ea::make_unique<btStaticPlaneShape>(btVector3(0.0f, 1.0f, 0.0f), 0.0f);
             break;
 
         case SHAPE_CYLINDER:
-            shape_ = new btCylinderShape(btVector3(size_.x_ * 0.5f, size_.y_ * 0.5f, size_.x_ * 0.5f));
+            shape_ = ea::make_unique<btCylinderShape>(btVector3(size_.x_ * 0.5f, size_.y_ * 0.5f, size_.x_ * 0.5f));
             shape_->setLocalScaling(ToBtVector3(cachedWorldScale_));
             break;
 
         case SHAPE_CAPSULE:
-            shape_ = new btCapsuleShape(size_.x_ * 0.5f, Max(size_.y_ - size_.x_, 0.0f));
+            shape_ = ea::make_unique<btCapsuleShape>(size_.x_ * 0.5f, Max(size_.y_ - size_.x_, 0.0f));
             shape_->setLocalScaling(ToBtVector3(cachedWorldScale_));
             break;
 
         case SHAPE_CONE:
-            shape_ = new btConeShape(size_.x_ * 0.5f, size_.y_);
+            shape_ = ea::make_unique<btConeShape>(size_.x_ * 0.5f, size_.y_);
             shape_->setLocalScaling(ToBtVector3(cachedWorldScale_));
             break;
 
@@ -1067,9 +1067,9 @@ void CollisionShape::UpdateShape()
                     geometry_ = new HeightfieldData(terrain, lodLevel_);
                     auto* heightfield = static_cast<HeightfieldData*>(geometry_.Get());
 
-                    shape_ =
-                        new btHeightfieldTerrainShape(heightfield->size_.x_, heightfield->size_.y_, heightfield->heightData_.Get(),
-                            1.0f, heightfield->minHeight_, heightfield->maxHeight_, 1, PHY_FLOAT, false);
+                    shape_ = ea::make_unique<btHeightfieldTerrainShape>(heightfield->size_.x_, heightfield->size_.y_,
+                        heightfield->heightData_.get(), 1.0f, heightfield->minHeight_, heightfield->maxHeight_, 1,
+                        PHY_FLOAT, false);
                     shape_->setLocalScaling(
                         ToBtVector3(Vector3(heightfield->spacing_.x_, 1.0f, heightfield->spacing_.z_) * cachedWorldScale_ * size_));
                 }
@@ -1077,7 +1077,7 @@ void CollisionShape::UpdateShape()
             break;
 
         default:
-            shape_ = this->UpdateDerivedShape(shapeType_, cachedWorldScale_);
+            shape_.reset(UpdateDerivedShape(shapeType_, cachedWorldScale_));
             break;
         }
 
@@ -1106,20 +1106,20 @@ void CollisionShape::UpdateCachedGeometryShape(CollisionGeometryDataCache& cache
         {
             geometry_ = CreateCollisionGeometryData(shapeType_, custom);
             assert(geometry_);
-            shape_ = CreateCollisionGeometryDataShape(shapeType_, geometry_.Get(), cachedWorldScale_ * size_);
+            shape_.reset(CreateCollisionGeometryDataShape(shapeType_, geometry_, cachedWorldScale_ * size_));
             assert(shape_);
         }
         else
-            URHO3D_LOGWARNING("Could not find custom geometry component ID " + String(customGeometryID_) +
+            URHO3D_LOGWARNING("Could not find custom geometry component ID " + ea::to_string(customGeometryID_) +
                 " for collision shape creation");
     }
     else if (model_ && model_->GetNumGeometries())
     {
         // Check the geometry cache
-        Pair<Model*, unsigned> id = MakePair(model_.Get(), lodLevel_);
-        auto cachedGeometry = cache.Find(id);
-        if (cachedGeometry != cache.End())
-            geometry_ = cachedGeometry->second_;
+        ea::pair<Model*, unsigned> id = ea::make_pair(model_.Get(), lodLevel_);
+        auto cachedGeometry = cache.find(id);
+        if (cachedGeometry != cache.end())
+            geometry_ = cachedGeometry->second;
         else
         {
             geometry_ = CreateCollisionGeometryData(shapeType_, model_, lodLevel_);
@@ -1129,7 +1129,7 @@ void CollisionShape::UpdateCachedGeometryShape(CollisionGeometryDataCache& cache
                 cache[id] = geometry_;
         }
 
-        shape_ = CreateCollisionGeometryDataShape(shapeType_, geometry_.Get(), cachedWorldScale_ * size_);
+        shape_.reset(CreateCollisionGeometryDataShape(shapeType_, geometry_, cachedWorldScale_ * size_));
         assert(shape_);
         // Watch for live reloads of the collision model to reload the geometry if necessary
         SubscribeToEvent(model_, E_RELOADFINISHED, URHO3D_HANDLER(CollisionShape, HandleModelReloadFinished));

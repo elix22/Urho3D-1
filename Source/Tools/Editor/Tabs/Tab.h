@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 // Copyright (c) 2017 Eugene Kozlov
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -30,7 +30,6 @@
 #include <ImGui/imgui.h>
 #include <Toolbox/SystemUI/AttributeInspector.h>
 #include <Urho3D/SystemUI/SystemUI.h>
-#include <Toolbox/SystemUI/ImGuiDock.h>
 #include <Urho3D/Scene/Node.h>
 
 
@@ -47,8 +46,10 @@ public:
 class IInspectorProvider
 {
 public:
+    /// Clear current selection. Usually invoked when new selection is replacing old one.
+    virtual void ClearSelection() { }
     /// Render inspector window.
-    virtual void RenderInspector() = 0;
+    virtual void RenderInspector(const char* filter) = 0;
 };
 
 class Tab : public Object
@@ -59,48 +60,62 @@ public:
     explicit Tab(Context* context);
     /// Destruct.
     ~Tab() override;
-    /// Initialize.
-    void Initialize(const String& title, const Vector2& initSize={-1, -1}, ui::DockSlot initPosition=ui::Slot_Float, const String& afterDockName=String::EMPTY);
     /// Render content of tab window. Returns false if tab was closed.
     virtual bool RenderWindowContent() = 0;
     /// Render toolbar buttons.
     virtual void RenderToolbarButtons() { }
     /// Update window when it is active.
     virtual void OnActiveUpdate() { }
-    /// Render scene window.
+    /// Render tab content.
     virtual bool RenderWindow();
-    /// Save project data to xml.
-    virtual void OnSaveProject(JSONValue& tab);
-    /// Load project data from xml.
-    virtual void OnLoadProject(const JSONValue& tab);
+    /// Called right before ui::Begin() of tab.
+    virtual void OnBeforeBegin() { }
+    /// Called right after ui::Begin() of tab.
+    virtual void OnAfterBegin() { }
+    /// Called right before ui::End() of tab
+    virtual void OnBeforeEnd() { }
+    /// Called right after ui::End() of tab
+    virtual void OnAfterEnd() { }
+    /// Save ui settings.
+    virtual void OnSaveUISettings(ImGuiTextBuffer* buf);
+    /// Load ui settings.
+    virtual const char* OnLoadUISettings(const char* name, const char* line);
     /// Load a file from resource path.
-    virtual bool LoadResource(const String& resourcePath) { return true; }
+    virtual bool LoadResource(const ea::string& resourcePath);
     /// Save tab contents to a resource file.
-    virtual bool SaveResource() { return true; }
+    virtual bool SaveResource();
     /// Called when tab focused.
     virtual void OnFocused() { }
     /// Set scene view tab title.
-    void SetTitle(const String& title);
+    void SetTitle(const ea::string& title);
     /// Get scene view tab title.
-    String GetTitle() const { return title_; }
+    ea::string GetTitle() const { return title_; }
     /// Returns title which uniquely identifies scene tab in imgui.
-    String GetUniqueTitle() const { return uniqueTitle_;}
+    ea::string GetUniqueTitle() const { return uniqueTitle_;}
+    /// Returns title which uniquely identifies scene tab in imgui.
+    ea::string GetUniqueName() const { return uniqueName_;}
     /// Return true if scene tab is active and focused.
     bool IsActive() const { return isActive_; }
     /// Return true if scene view was rendered on this frame.
     bool IsRendered() const { return isRendered_; }
     /// Return unique object id.
-    String GetID() const { return id_; }
+    ea::string GetID() const { return id_; }
     /// Set unique object id.
-    void SetID(const String& id) { id_ = id; UpdateUniqueTitle(); }
+    void SetID(const ea::string& id);
     /// Returns true of tab is utility window.
     bool IsUtility() const { return isUtility_; }
     /// Position tab automatically to most appropriate place.
-    void AutoPlace();
+    void AutoPlace() { autoPlace_ = true; }
     /// Returns true when tab is open.
     bool IsOpen() const { return open_; }
     /// Open/close tab without permanently removing it.
     void SetOpen(bool open) { open_ = open; }
+    /// Make tab active.
+    void Activate() { activateTab_ = true; }
+    /// Returns true when loaded resource was modified.
+    virtual bool IsModified() const { return false; }
+    /// Closes current tab and unloads it's contents from memory.
+    virtual void Close() { open_ = false; }
 
 protected:
     ///
@@ -109,11 +124,13 @@ protected:
     void UpdateUniqueTitle();
 
     /// Unique scene id.
-    String id_;
+    ea::string id_;
     /// Scene title. Should be unique.
-    String title_;
+    ea::string title_;
     /// Title with id appended to it. Used as unique window name.
-    String uniqueTitle_;
+    ea::string uniqueTitle_;
+    /// TYpe name with id appended to it.
+    ea::string uniqueName_;
     /// Scene dock is active and window is focused.
     bool isActive_ = false;
     /// Flag set to true when dock contents were visible. Used for tracking "appearing" effect.
@@ -124,16 +141,16 @@ protected:
     ImGuiWindowFlags windowFlags_ = 0;
     /// Attribute inspector.
     AttributeInspector inspector_;
-    /// Name of sibling dock for initial placement.
-    String placeAfter_;
-    /// Position where this scene view should be docked initially.
-    ui::DockSlot placePosition_;
     /// Last known mouse position when it was visible.
     IntVector2 lastMousePosition_;
-    /// Initial tab size.
-    Vector2 initialSize_;
     /// Flag indicating that tab is open and renders it's contents.
     bool open_ = true;
+    /// Flag indicating tab should reactivate itself next time it is rendered.
+    bool activateTab_ = false;
+    /// Flag indicating that tab should auto-dock itself into most appropriate place.
+    bool autoPlace_ = false;
+    ///
+    bool wasOpen_ = false;
 };
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -45,7 +45,7 @@ public:
     static void RegisterObject(Context* context);
 
     /// Return UI rendering batches.
-    void GetBatches(PODVector<UIBatch>& batches, PODVector<float>& vertexData, const IntRect& currentScissor) override;
+    void GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, const IntRect& currentScissor) override;
 
     /// Set texture.
     void SetTexture(Texture* texture);
@@ -95,7 +95,7 @@ public:
 protected:
     /// Return UI rendering batches with offset to image rectangle.
     void GetBatches
-        (PODVector<UIBatch>& batches, PODVector<float>& vertexData, const IntRect& currentScissor, const IntVector2& offset);
+        (ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, const IntRect& currentScissor, const IntVector2& offset);
 
     /// Texture.
     SharedPtr<Texture> texture_;

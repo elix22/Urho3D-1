@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -176,7 +176,7 @@ bool Texture2DArray::SetData(unsigned layer, unsigned level, int x, int y, int w
 
 bool Texture2DArray::SetData(unsigned layer, Deserializer& source)
 {
-    SharedPtr<Image> image(new Image(context_));
+    SharedPtr<Image> image(context_->CreateObject<Image>());
     if (!image->Load(source))
         return false;
 
@@ -357,7 +357,7 @@ bool Texture2DArray::SetData(unsigned layer, Image* image, bool useAlpha)
     }
 
     layerMemoryUse_[layer] = memoryUse;
-    unsigned totalMemoryUse = sizeof(Texture2DArray) + layerMemoryUse_.Capacity() * sizeof(unsigned);
+    unsigned totalMemoryUse = sizeof(Texture2DArray) + layerMemoryUse_.capacity() * sizeof(unsigned);
     for (unsigned i = 0; i < layers_; ++i)
         totalMemoryUse += layerMemoryUse_[i];
     SetMemoryUse(totalMemoryUse);

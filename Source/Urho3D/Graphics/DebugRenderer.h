@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -108,6 +108,10 @@ public:
     void AddLine(const Vector3& start, const Vector3& end, const Color& color, bool depthTest = true);
     /// Add a line with color already converted to unsigned.
     void AddLine(const Vector3& start, const Vector3& end, unsigned color, bool depthTest = true);
+    /// Add a line in 2D screen space.
+    void AddLine2D(const Vector2& start, const Vector2& end, const Color& color, bool depthTest = true);
+    /// Add a line in 2D screen space with color already converted to unsigned.
+    void AddLine2D(const Vector2& start, const Vector2& end, unsigned color, bool depthTest = true);
     /// Add a solid triangle.
     void AddTriangle(const Vector3& v1, const Vector3& v2, const Vector3& v3, const Color& color, bool depthTest = true);
     /// Add a solid triangle with color already converted to unsigned.
@@ -118,6 +122,8 @@ public:
     void AddPolygon(const Vector3& v1, const Vector3& v2, const Vector3& v3, const Vector3& v4, unsigned color, bool depthTest = true);
     /// Add a scene node represented as its coordinate axes.
     void AddNode(Node* node, float scale = 1.0f, bool depthTest = true);
+    /// Add an XYZ frame at the given worldTransform with optional uniform scale.
+    void AddFrame(const Matrix3x4& worldTransform, float scale = 1.0f, Color colorX = Color::RED, Color colorY = Color::GREEN, Color colorZ = Color::BLUE, bool depthTest = true);
     /// Add a bounding box.
     void AddBoundingBox(const BoundingBox& box, const Color& color, bool depthTest = true, bool solid = false);
     /// Add a bounding box with transform.
@@ -175,13 +181,13 @@ private:
     void HandleEndFrame(StringHash eventType, VariantMap& eventData);
 
     /// Lines rendered with depth test.
-    PODVector<DebugLine> lines_;
+    ea::vector<DebugLine> lines_;
     /// Lines rendered without depth test.
-    PODVector<DebugLine> noDepthLines_;
+    ea::vector<DebugLine> noDepthLines_;
     /// Triangles rendered with depth test.
-    PODVector<DebugTriangle> triangles_;
+    ea::vector<DebugTriangle> triangles_;
     /// Triangles rendered without depth test.
-    PODVector<DebugTriangle> noDepthTriangles_;
+    ea::vector<DebugTriangle> noDepthTriangles_;
     /// View transform.
     Matrix3x4 view_;
     /// Projection transform.
@@ -194,6 +200,8 @@ private:
     SharedPtr<VertexBuffer> vertexBuffer_;
     /// Line antialiasing flag.
     bool lineAntiAlias_;
+    /// Active camera.
+    WeakPtr<Camera> camera_;
 };
 
 }

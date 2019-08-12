@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2019 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,8 +20,11 @@
 // THE SOFTWARE.
 //
 
+#include <Urho3D/IO/Log.h>
+
 #include "EditorEvents.h"
 #include "HierarchyTab.h"
+#include "Editor.h"
 
 namespace Urho3D
 {
@@ -29,19 +32,28 @@ namespace Urho3D
 HierarchyTab::HierarchyTab(Context* context)
     : Tab(context)
 {
-    SetTitle("Hierarchy");
+    SetID("2d753fe8-e3c1-4ccc-afae-ec4f3beb70e4");
     isUtility_ = true;
-    SubscribeToEvent(E_EDITORRENDERHIERARCHY, [&](StringHash, VariantMap& args) {
-        instance_ = (Tab*)args[EditorRenderHierarchy::P_INSPECTABLE].GetPtr();
-        hierarchyProvider_ = dynamic_cast<IHierarchyProvider*>(instance_.Get());
-    });
+    SetTitle("Hierarchy");
 }
 
 bool HierarchyTab::RenderWindowContent()
 {
-    if (!instance_.Expired())
-        hierarchyProvider_->RenderHierarchy();
+    // Render main tab inspectors
+    if (!provider_.first.Expired())
+        provider_.second->RenderHierarchy();
     return true;
+}
+
+void HierarchyTab::SetProvider(IHierarchyProvider* provider)
+{
+    if (auto* ptr = dynamic_cast<RefCounted*>(provider))
+    {
+        provider_.first = ptr;
+        provider_.second = provider;
+    }
+    else
+        URHO3D_LOGERROR("Classes that inherit IHierarchyProvider must also inherit RefCounted.");
 }
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,6 +25,7 @@
 #include "../Core/Context.h"
 #include "../Core/StringUtils.h"
 #include "../IO/Log.h"
+#include "../Scene/Serializable.h"
 #include "../Resource/JSONValue.h"
 
 #include "../DebugNew.h"
@@ -96,7 +97,7 @@ JSONValue& JSONValue::operator =(double rhs)
     return *this;
 }
 
-JSONValue& JSONValue::operator =(const String& rhs)
+JSONValue& JSONValue::operator =(const ea::string& rhs)
 {
     SetType(JSON_STRING);
     *stringValue_ = rhs;
@@ -210,12 +211,12 @@ JSONNumberType JSONValue::GetNumberType() const
     return (JSONNumberType)(type_ & 0xffffu);
 }
 
-String JSONValue::GetValueTypeName() const
+ea::string JSONValue::GetValueTypeName() const
 {
     return GetValueTypeName(GetValueType());
 }
 
-String JSONValue::GetNumberTypeName() const
+ea::string JSONValue::GetNumberTypeName() const
 {
     return GetNumberTypeName(GetNumberType());
 }
@@ -241,7 +242,7 @@ void JSONValue::Push(const JSONValue& value)
     // Convert to array type
     SetType(JSON_ARRAY);
 
-    arrayValue_->Push(value);
+    arrayValue_->push_back(value);
 }
 
 void JSONValue::Pop()
@@ -249,7 +250,7 @@ void JSONValue::Pop()
     if (GetValueType() != JSON_ARRAY)
         return;
 
-    arrayValue_->Pop();
+    arrayValue_->pop_back();
 }
 
 void JSONValue::Insert(unsigned pos, const JSONValue& value)
@@ -257,7 +258,7 @@ void JSONValue::Insert(unsigned pos, const JSONValue& value)
     if (GetValueType() != JSON_ARRAY)
         return;
 
-    arrayValue_->Insert(pos, value);
+    arrayValue_->insert(arrayValue_->begin() + pos, value);
 }
 
 void JSONValue::Erase(unsigned pos, unsigned length)
@@ -265,7 +266,7 @@ void JSONValue::Erase(unsigned pos, unsigned length)
     if (GetValueType() != JSON_ARRAY)
         return;
 
-    arrayValue_->Erase(pos, length);
+    arrayValue_->erase(arrayValue_->begin() + pos, arrayValue_->begin() + pos + length);
 }
 
 void JSONValue::Resize(unsigned newSize)
@@ -273,20 +274,20 @@ void JSONValue::Resize(unsigned newSize)
     // Convert to array type
     SetType(JSON_ARRAY);
 
-    arrayValue_->Resize(newSize);
+    arrayValue_->resize(newSize);
 }
 
 unsigned JSONValue::Size() const
 {
     if (GetValueType() == JSON_ARRAY)
-        return arrayValue_->Size();
+        return arrayValue_->size();
     else if (GetValueType() == JSON_OBJECT)
-        return objectValue_->Size();
+        return objectValue_->size();
 
     return 0;
 }
 
-JSONValue& JSONValue::operator [](const String& key)
+JSONValue& JSONValue::operator [](const ea::string& key)
 {
     // Convert to object type
     SetType(JSON_OBJECT);
@@ -294,7 +295,7 @@ JSONValue& JSONValue::operator [](const String& key)
     return (*objectValue_)[key];
 }
 
-const JSONValue& JSONValue::operator [](const String& key) const
+const JSONValue& JSONValue::operator [](const ea::string& key) const
 {
     if (GetValueType() != JSON_OBJECT)
         return EMPTY;
@@ -302,7 +303,7 @@ const JSONValue& JSONValue::operator [](const String& key) const
     return (*objectValue_)[key];
 }
 
-void JSONValue::Set(const String& key, const JSONValue& value)
+void JSONValue::Set(const ea::string& key, const JSONValue& value)
 {
     // Convert to object type
     SetType(JSON_OBJECT);
@@ -310,16 +311,16 @@ void JSONValue::Set(const String& key, const JSONValue& value)
     (*objectValue_)[key] = value;
 }
 
-const JSONValue& JSONValue::Get(const String& key) const
+const JSONValue& JSONValue::Get(const ea::string& key) const
 {
     if (GetValueType() != JSON_OBJECT)
         return EMPTY;
 
-    JSONObject::ConstIterator i = objectValue_->Find(key);
-    if (i == objectValue_->End())
+    auto i = objectValue_->find(key);
+    if (i == objectValue_->end())
         return EMPTY;
 
-    return i->second_;
+    return i->second;
 }
 
 const JSONValue& JSONValue::Get(int index) const
@@ -327,66 +328,34 @@ const JSONValue& JSONValue::Get(int index) const
     if (GetValueType() != JSON_ARRAY)
         return EMPTY;
 
-    if (index < 0 || index >= arrayValue_->Size())
+    if (index < 0 || index >= arrayValue_->size())
         return EMPTY;
 
-    return arrayValue_->At(index);
+    return arrayValue_->at(index);
 }
 
-bool JSONValue::Erase(const String& key)
+bool JSONValue::Erase(const ea::string& key)
 {
     if (GetValueType() != JSON_OBJECT)
         return false;
 
-    return objectValue_->Erase(key);
+    return objectValue_->erase(key);
 }
 
-bool JSONValue::Contains(const String& key) const
+bool JSONValue::Contains(const ea::string& key) const
 {
     if  (GetValueType() != JSON_OBJECT)
         return false;
 
-    return objectValue_->Contains(key);
-}
-
-JSONObjectIterator JSONValue::Begin()
-{
-    // Convert to object type.
-    SetType(JSON_OBJECT);
-
-    return objectValue_->Begin();
-}
-
-ConstJSONObjectIterator JSONValue::Begin() const
-{
-    if (GetValueType() != JSON_OBJECT)
-        return emptyObject.Begin();
-
-    return objectValue_->Begin();
-}
-
-JSONObjectIterator JSONValue::End()
-{
-    // Convert to object type.
-    SetType(JSON_OBJECT);
-
-    return objectValue_->End();
-}
-
-ConstJSONObjectIterator JSONValue::End() const
-{
-    if (GetValueType() != JSON_OBJECT)
-        return emptyObject.End();
-
-    return objectValue_->End();
+    return objectValue_->contains(key);
 }
 
 void JSONValue::Clear()
 {
     if (GetValueType() == JSON_ARRAY)
-        arrayValue_->Clear();
+        arrayValue_->clear();
     else if (GetValueType() == JSON_OBJECT)
-        objectValue_->Clear();
+        objectValue_->clear();
 }
 
 void JSONValue::SetType(JSONValueType valueType, JSONNumberType numberType)
@@ -418,7 +387,7 @@ void JSONValue::SetType(JSONValueType valueType, JSONNumberType numberType)
     switch (GetValueType())
     {
     case JSON_STRING:
-        stringValue_ = new String();
+        stringValue_ = new ea::string();
         break;
 
     case JSON_ARRAY:
@@ -497,7 +466,7 @@ void JSONValue::SetVariantValue(const Variant& variant, Context* context)
             }
 
             const ResourceRef& ref = variant.GetResourceRef();
-            *this = String(context->GetTypeName(ref.type_)) + ";" + ref.name_;
+            *this = ea::string(context->GetTypeName(ref.type_)) + ";" + ref.name_;
         }
         return;
 
@@ -510,8 +479,8 @@ void JSONValue::SetVariantValue(const Variant& variant, Context* context)
             }
 
             const ResourceRefList& refList = variant.GetResourceRefList();
-            String str(context->GetTypeName(refList.type_));
-            for (unsigned i = 0; i < refList.names_.Size(); ++i)
+            ea::string str(context->GetTypeName(refList.type_));
+            for (unsigned i = 0; i < refList.names_.size(); ++i)
             {
                 str += ";";
                 str += refList.names_[i];
@@ -523,9 +492,30 @@ void JSONValue::SetVariantValue(const Variant& variant, Context* context)
     case VAR_STRINGVECTOR:
         {
             const StringVector& vector = variant.GetStringVector();
-            Resize(vector.Size());
-            for (unsigned i = 0; i < vector.Size(); ++i)
+            Resize(vector.size());
+            for (unsigned i = 0; i < vector.size(); ++i)
                 (*this)[i] = vector[i];
+        }
+        return;
+
+    case VAR_CUSTOM:
+        {
+            if (const Serializable* object = variant.GetCustom<SharedPtr<Serializable>>())
+            {
+                JSONValue value;
+                if (object->SaveJSON(value))
+                {
+                    Set("type", object->GetTypeName());
+                    Set("value", value);
+                }
+                else
+                    SetType(JSON_NULL);
+            }
+            else
+            {
+                SetType(JSON_NULL);
+                URHO3D_LOGERROR("Serialization of objects other than SharedPtr<Serializable> is not supported.");
+            }
         }
         return;
 
@@ -534,7 +524,7 @@ void JSONValue::SetVariantValue(const Variant& variant, Context* context)
     }
 }
 
-Variant JSONValue::GetVariantValue(VariantType type) const
+Variant JSONValue::GetVariantValue(VariantType type, Context* context) const
 {
     Variant variant;
     switch (type)
@@ -570,8 +560,8 @@ Variant JSONValue::GetVariantValue(VariantType type) const
     case VAR_RESOURCEREF:
         {
             ResourceRef ref;
-            Vector<String> values = GetString().Split(';');
-            if (values.Size() == 2)
+            ea::vector<ea::string> values = GetString().split(';');
+            if (values.size() == 2)
             {
                 ref.type_ = values[0];
                 ref.name_ = values[1];
@@ -583,12 +573,12 @@ Variant JSONValue::GetVariantValue(VariantType type) const
     case VAR_RESOURCEREFLIST:
         {
             ResourceRefList refList;
-            Vector<String> values = GetString().Split(';', true);
-            if (values.Size() >= 1)
+            ea::vector<ea::string> values = GetString().split(';', true);
+            if (values.size() >= 1)
             {
                 refList.type_ = values[0];
-                refList.names_.Resize(values.Size() - 1);
-                for (unsigned i = 1; i < values.Size(); ++i)
+                refList.names_.resize(values.size() - 1);
+                for (unsigned i = 1; i < values.size(); ++i)
                     refList.names_[i - 1] = values[i];
             }
             variant = refList;
@@ -599,8 +589,47 @@ Variant JSONValue::GetVariantValue(VariantType type) const
         {
             StringVector vector;
             for (unsigned i = 0; i < Size(); ++i)
-                vector.Push((*this)[i].GetString());
+                vector.push_back((*this)[i].GetString());
             variant = vector;
+        }
+        break;
+
+    case VAR_CUSTOM:
+        {
+            if (!context)
+            {
+                URHO3D_LOGERROR("Context must not be null for SharedPtr<Serializable>");
+                break;
+            }
+
+            if (GetValueType() == JSON_NULL)
+                return Variant::EMPTY;
+
+            if (GetValueType() != JSON_OBJECT)
+            {
+                URHO3D_LOGERROR("SharedPtr<Serializable> expects json object");
+                break;
+            }
+
+            const ea::string& typeName = (*this)["type"].GetString();
+            if (!typeName.empty())
+            {
+                SharedPtr<Serializable> object;
+                object.StaticCast(context->CreateObject(typeName));
+
+                if (object.NotNull())
+                {
+                    // Restore proper refcount.
+                    if (object->LoadJSON((*this)["value"]))
+                        variant.SetCustom(object);
+                    else
+                        URHO3D_LOGERROR("Deserialization of '{}' failed", typeName);
+                }
+                else
+                    URHO3D_LOGERROR("Creation of type '{}' failed because it has no factory registered", typeName);
+            }
+            else
+                URHO3D_LOGERROR("Malformed json input: 'type' is required when deserializing an object");
         }
         break;
 
@@ -614,8 +643,8 @@ Variant JSONValue::GetVariantValue(VariantType type) const
 void JSONValue::SetVariantMap(const VariantMap& variantMap, Context* context)
 {
     SetType(JSON_OBJECT);
-    for (VariantMap::ConstIterator i = variantMap.Begin(); i != variantMap.End(); ++i)
-        (*this)[i->first_.ToString()].SetVariant(i->second_);
+    for (auto i = variantMap.begin(); i != variantMap.end(); ++i)
+        (*this)[i->first.ToString()].SetVariant(i->second);
 }
 
 VariantMap JSONValue::GetVariantMap() const
@@ -627,11 +656,11 @@ VariantMap JSONValue::GetVariantMap() const
         return variantMap;
     }
 
-    for (ConstJSONObjectIterator i = Begin(); i != End(); ++i)
+    for (const auto& i : *this)
     {
         /// \todo Ideally this should allow any strings, but for now the convention is that the keys need to be hexadecimal StringHashes
-        StringHash key(ToUInt(i->first_, 16));
-        Variant variant = i->second_.GetVariant();
+        StringHash key(ToUInt(i.first, 16));
+        Variant variant = i.second.GetVariant();
         variantMap[key] = variant;
     }
 
@@ -641,12 +670,12 @@ VariantMap JSONValue::GetVariantMap() const
 void JSONValue::SetVariantVector(const VariantVector& variantVector, Context* context)
 {
     SetType(JSON_ARRAY);
-    arrayValue_->Reserve(variantVector.Size());
-    for (unsigned i = 0; i < variantVector.Size(); ++i)
+    arrayValue_->reserve(variantVector.size());
+    for (unsigned i = 0; i < variantVector.size(); ++i)
     {
         JSONValue val;
         val.SetVariant(variantVector[i], context);
-        arrayValue_->Push(val);
+        arrayValue_->push_back(val);
     }
 }
 
@@ -662,25 +691,25 @@ VariantVector JSONValue::GetVariantVector() const
     for (unsigned i = 0; i < Size(); ++i)
     {
         Variant variant = (*this)[i].GetVariant();
-        variantVector.Push(variant);
+        variantVector.push_back(variant);
     }
 
     return variantVector;
 }
 
-String JSONValue::GetValueTypeName(JSONValueType type)
+ea::string JSONValue::GetValueTypeName(JSONValueType type)
 {
     return valueTypeNames[type];
 }
 
-String JSONValue::GetNumberTypeName(JSONNumberType type)
+ea::string JSONValue::GetNumberTypeName(JSONNumberType type)
 {
     return numberTypeNames[type];
 }
 
-JSONValueType JSONValue::GetValueTypeFromName(const String& typeName)
+JSONValueType JSONValue::GetValueTypeFromName(const ea::string& typeName)
 {
-    return GetValueTypeFromName(typeName.CString());
+    return GetValueTypeFromName(typeName.c_str());
 }
 
 JSONValueType JSONValue::GetValueTypeFromName(const char* typeName)
@@ -688,14 +717,46 @@ JSONValueType JSONValue::GetValueTypeFromName(const char* typeName)
     return (JSONValueType)GetStringListIndex(typeName, valueTypeNames, JSON_NULL);
 }
 
-JSONNumberType JSONValue::GetNumberTypeFromName(const String& typeName)
+JSONNumberType JSONValue::GetNumberTypeFromName(const ea::string& typeName)
 {
-    return GetNumberTypeFromName(typeName.CString());
+    return GetNumberTypeFromName(typeName.c_str());
 }
 
 JSONNumberType JSONValue::GetNumberTypeFromName(const char* typeName)
 {
     return (JSONNumberType)GetStringListIndex(typeName, numberTypeNames, JSONNT_NAN);
+}
+
+JSONObjectIterator begin(JSONValue& value)
+{
+    // Convert to object type.
+    value.SetType(JSON_OBJECT);
+
+    return value.objectValue_->begin();
+}
+
+ConstJSONObjectIterator begin(const JSONValue& value)
+{
+    if (value.GetValueType() != JSON_OBJECT)
+        return JSONValue::emptyObject.begin();
+
+    return value.objectValue_->begin();
+}
+
+JSONObjectIterator end(JSONValue& value)
+{
+    // Convert to object type.
+    value.SetType(JSON_OBJECT);
+
+    return value.objectValue_->end();
+}
+
+ConstJSONObjectIterator end(const JSONValue& value)
+{
+    if (value.GetValueType() != JSON_OBJECT)
+        return JSONValue::emptyObject.end();
+
+    return value.objectValue_->end();
 }
 
 }

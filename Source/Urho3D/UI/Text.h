@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -87,20 +87,20 @@ public:
     /// Apply attribute changes that can not be applied immediately.
     void ApplyAttributes() override;
     /// Return UI rendering batches.
-    void GetBatches(PODVector<UIBatch>& batches, PODVector<float>& vertexData, const IntRect& currentScissor) override;
+    void GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, const IntRect& currentScissor) override;
     /// React to resize.
     void OnResize(const IntVector2& newSize, const IntVector2& delta) override;
     /// React to indent change.
     void OnIndentSet() override;
 
     /// Set font by looking from resource cache by name and font size. Return true if successful.
-    bool SetFont(const String& fontName, float size = DEFAULT_FONT_SIZE);
+    bool SetFont(const ea::string& fontName, float size = DEFAULT_FONT_SIZE);
     /// Set font and font size. Return true if successful.
     bool SetFont(Font* font, float size = DEFAULT_FONT_SIZE);
     /// Set font size only while retaining the existing font. Return true if successful.
     bool SetFontSize(float size);
     /// Set text. Text is assumed to be either ASCII or UTF8-encoded.
-    void SetText(const String& text);
+    void SetText(const ea::string& text);
     /// Set row alignment.
     void SetTextAlignment(HorizontalAlignment align);
     /// Set row spacing, 1.0 for original font spacing.
@@ -131,7 +131,7 @@ public:
     float GetFontSize() const { return fontSize_; }
 
     /// Return text.
-    const String& GetText() const { return text_; }
+    const ea::string& GetText() const { return text_; }
 
     /// Return row alignment.
     HorizontalAlignment GetTextAlignment() const { return textAlignment_; }
@@ -170,10 +170,10 @@ public:
     float GetRowHeight() const { return rowHeight_; }
 
     /// Return number of rows.
-    unsigned GetNumRows() const { return rowWidths_.Size(); }
+    unsigned GetNumRows() const { return rowWidths_.size(); }
 
     /// Return number of characters.
-    unsigned GetNumChars() const { return unicodeText_.Size(); }
+    unsigned GetNumChars() const { return unicodeText_.size(); }
 
     /// Return width of row by index.
     float GetRowWidth(unsigned index) const;
@@ -193,9 +193,9 @@ public:
     /// Return font attribute.
     ResourceRef GetFontAttr() const;
     /// Set text attribute.
-    void SetTextAttr(const String& value);
+    void SetTextAttr(const ea::string& value);
     /// Return text attribute.
-    String GetTextAttr() const;
+    ea::string GetTextAttr() const;
 
 protected:
     /// Filter implicit attributes in serialization process.
@@ -210,7 +210,7 @@ protected:
     int GetRowStartPosition(unsigned rowIndex) const;
     /// Construct batch.
     void ConstructBatch
-        (UIBatch& pageBatch, const PODVector<GlyphLocation>& pageGlyphLocation, float dx = 0, float dy = 0, Color* color = nullptr,
+        (UIBatch& pageBatch, const ea::vector<GlyphLocation>& pageGlyphLocation, float dx = 0, float dy = 0, Color* color = nullptr,
             float depthBias = 0.0f);
 
     /// Font.
@@ -220,7 +220,7 @@ protected:
     /// Font size.
     float fontSize_;
     /// UTF-8 encoded text.
-    String text_;
+    ea::string text_;
     /// Row alignment.
     HorizontalAlignment textAlignment_;
     /// Row spacing.
@@ -248,21 +248,21 @@ protected:
     /// Row height.
     float rowHeight_;
     /// Text as Unicode characters.
-    PODVector<unsigned> unicodeText_;
+    ea::vector<unsigned> unicodeText_;
     /// Text modified into printed form.
-    PODVector<unsigned> printText_;
+    ea::vector<unsigned> printText_;
     /// Mapping of printed form back to original char indices.
-    PODVector<unsigned> printToText_;
+    ea::vector<unsigned> printToText_;
     /// Row widths.
-    PODVector<float> rowWidths_;
+    ea::vector<float> rowWidths_;
     /// Glyph locations per each texture in the font.
-    Vector<PODVector<GlyphLocation> > pageGlyphLocations_;
+    ea::vector<ea::vector<GlyphLocation> > pageGlyphLocations_;
     /// Cached locations of each character in the text.
-    PODVector<CharLocation> charLocations_;
+    ea::vector<CharLocation> charLocations_;
     /// The text will be automatically translated.
     bool autoLocalizable_;
     /// Localization string id storage. Used when autoLocalizable flag is set.
-    String stringId_;
+    ea::string stringId_;
     /// Handle change Language.
     void HandleChangeLanguage(StringHash eventType, VariantMap& eventData);
     /// UTF8 to Unicode.

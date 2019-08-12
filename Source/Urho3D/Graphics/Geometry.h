@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
+#include <EASTL/shared_array.h>
+
 #include "../Core/Object.h"
 #include "../Graphics/GraphicsDefs.h"
 
@@ -45,6 +46,9 @@ public:
     /// Destruct.
     ~Geometry() override;
 
+    /// Register object with the engine.
+    static void RegisterObject(Context* context);
+
     /// Set number of vertex buffers.
     bool SetNumVertexBuffers(unsigned num);
     /// Set a vertex buffer by index.
@@ -59,19 +63,19 @@ public:
     /// Set the LOD distance.
     void SetLodDistance(float distance);
     /// Override raw vertex data to be returned for CPU-side operations.
-    void SetRawVertexData(const SharedArrayPtr<unsigned char>& data, const PODVector<VertexElement>& elements);
+    void SetRawVertexData(const ea::shared_array<unsigned char>& data, const ea::vector<VertexElement>& elements);
     /// Override raw vertex data to be returned for CPU-side operations using a legacy vertex bitmask.
-    void SetRawVertexData(const SharedArrayPtr<unsigned char>& data, unsigned elementMask);
+    void SetRawVertexData(const ea::shared_array<unsigned char>& data, unsigned elementMask);
     /// Override raw index data to be returned for CPU-side operations.
-    void SetRawIndexData(const SharedArrayPtr<unsigned char>& data, unsigned indexSize);
+    void SetRawIndexData(const ea::shared_array<unsigned char>& data, unsigned indexSize);
     /// Draw.
     void Draw(Graphics* graphics);
 
     /// Return all vertex buffers.
-    const Vector<SharedPtr<VertexBuffer> >& GetVertexBuffers() const { return vertexBuffers_; }
+    const ea::vector<SharedPtr<VertexBuffer> >& GetVertexBuffers() const { return vertexBuffers_; }
 
     /// Return number of vertex buffers.
-    unsigned GetNumVertexBuffers() const { return vertexBuffers_.Size(); }
+    unsigned GetNumVertexBuffers() const { return vertexBuffers_.size(); }
 
     /// Return vertex buffer by index.
     VertexBuffer* GetVertexBuffer(unsigned index) const;
@@ -100,10 +104,10 @@ public:
     /// Return buffers' combined hash value for state sorting.
     unsigned short GetBufferHash() const;
     /// Return raw vertex and index data for CPU operations, or null pointers if not available. Will return data of the first vertex buffer if override data not set.
-    void GetRawData(const unsigned char*& vertexData, unsigned& vertexSize, const unsigned char*& indexData, unsigned& indexSize, const PODVector<VertexElement>*& elements) const;
+    void GetRawData(const unsigned char*& vertexData, unsigned& vertexSize, const unsigned char*& indexData, unsigned& indexSize, const ea::vector<VertexElement>*& elements) const;
     /// Return raw vertex and index data for CPU operations, or null pointers if not available. Will return data of the first vertex buffer if override data not set.
-    void GetRawDataShared(SharedArrayPtr<unsigned char>& vertexData, unsigned& vertexSize, SharedArrayPtr<unsigned char>& indexData,
-        unsigned& indexSize, const PODVector<VertexElement>*& elements) const;
+    void GetRawDataShared(ea::shared_array<unsigned char>& vertexData, unsigned& vertexSize, ea::shared_array<unsigned char>& indexData,
+        unsigned& indexSize, const ea::vector<VertexElement>*& elements) const;
     /// Return ray hit distance or infinity if no hit. Requires raw data to be set. Optionally return hit normal and hit uv coordinates at intersect point.
     float GetHitDistance(const Ray& ray, Vector3* outNormal = nullptr, Vector2* outUV = nullptr) const;
     /// Return whether or not the ray is inside geometry.
@@ -114,7 +118,7 @@ public:
 
 private:
     /// Vertex buffers.
-    Vector<SharedPtr<VertexBuffer> > vertexBuffers_;
+    ea::vector<SharedPtr<VertexBuffer> > vertexBuffers_;
     /// Index buffer.
     SharedPtr<IndexBuffer> indexBuffer_;
     /// Primitive type.
@@ -130,11 +134,11 @@ private:
     /// LOD distance.
     float lodDistance_;
     /// Raw vertex data elements.
-    PODVector<VertexElement> rawElements_;
+    ea::vector<VertexElement> rawElements_;
     /// Raw vertex data override.
-    SharedArrayPtr<unsigned char> rawVertexData_;
+    ea::shared_array<unsigned char> rawVertexData_;
     /// Raw index data override.
-    SharedArrayPtr<unsigned char> rawIndexData_;
+    ea::shared_array<unsigned char> rawIndexData_;
     /// Raw vertex data override size.
     unsigned rawVertexSize_;
     /// Raw index data override size.

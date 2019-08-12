@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,28 +22,23 @@
 
 #pragma once
 
+#include <EASTL/allocator.h>
 
-#include <functional>
-
-#ifdef URHO3D_IS_BUILDING
-#include "Urho3D.h"
-#else
 #include <Urho3D/Urho3D.h>
-#endif
 
 namespace Urho3D
 {
 
 /// Reference count structure.
-struct RefCount
+struct URHO3D_API RefCount
 {
-    /// Construct.
-    RefCount() :
-        refs_(0),
-        weakRefs_(0)
-    {
-    }
+protected:
+    using Allocator = EASTLAllocatorType;
 
+    /// Construct.
+    RefCount() = default;
+
+public:
     /// Destruct.
     ~RefCount()
     {
@@ -52,10 +47,15 @@ struct RefCount
         weakRefs_ = -1;
     }
 
+    /// Allocate RefCount using it's default allocator.
+    static RefCount* Allocate();
+    /// Free RefCount using it's default allocator.
+    static void Free(RefCount* instance);
+
     /// Reference count. If below zero, the object has been destroyed.
-    int refs_;
+    int refs_ = 0;
     /// Weak reference count.
-    int weakRefs_;
+    int weakRefs_ = 0;
 };
 
 /// Base class for intrusively reference-counted objects. These are noncopyable and non-assignable.
@@ -67,10 +67,15 @@ public:
     /// Destruct. Mark as expired and also delete the reference count structure if no outside weak references exist.
     virtual ~RefCounted();
 
-    /// Increment reference count. Can also be called outside of a SharedPtr for traditional reference counting.
-    void AddRef();
-    /// Decrement reference count and delete self if no more references. Can also be called outside of a SharedPtr for traditional reference counting.
-    void ReleaseRef();
+    /// Prevent copy construction.
+    RefCounted(const RefCounted& rhs) = delete;
+    /// Prevent assignment.
+    RefCounted& operator =(const RefCounted& rhs) = delete;
+
+    /// Increment reference count. Can also be called outside of a SharedPtr for traditional reference counting. Returns new reference count value. Operation is atomic.
+    int AddRef();
+    /// Decrement reference count and delete self if no more references. Can also be called outside of a SharedPtr for traditional reference counting. Returns new reference count value. Operation is atomic.
+    int ReleaseRef();
     /// Return reference count.
     int Refs() const;
     /// Return weak reference count.
@@ -78,23 +83,25 @@ public:
 
     /// Return pointer to the reference count structure.
     RefCount* RefCountPtr() { return refCount_; }
+#if URHO3D_CSHARP
+    /// Return true if script runtime object wrapping this native object exists.
+    bool HasScriptObject() const { return scriptObject_ != 0; }
 
-    /// Set a custom deleter function which will be in charge of deallocating object.
-    void SetDeleter(std::function<void(RefCounted*)> deleter);
-    /// Returns custom deleter of this object.
-    std::function<void(RefCounted*)> GetDeleter() const { return deleter_; }
-
+protected:
+    /// Returns handle to wrapper script object. This is scripting-runtime-dependent.
+    uintptr_t GetScriptObject() const { return scriptObject_; }
+    /// Sets handle to wrapper script object. This is scripting-runtime-dependent.
+    void SetScriptObject(uintptr_t handle) { scriptObject_ = handle; }
+    /// Sets handle to wrapper script object and returns previous handle value.
+    uintptr_t SwapScriptObject(uintptr_t handle);
+#endif
 private:
-    /// Prevent copy construction.
-    RefCounted(const RefCounted& rhs);
-    /// Prevent assignment.
-    RefCounted& operator =(const RefCounted& rhs);
-
     /// Pointer to the reference count structure.
-    RefCount* refCount_;
-
-    /// Custom deleter which will be deallocating native object.
-    std::function<void(RefCounted*)> deleter_{};
+    RefCount* refCount_ = nullptr;
+#if URHO3D_CSHARP
+    /// A handle to script object that wraps this native instance.
+    uintptr_t scriptObject_ = 0;
+#endif
 };
 
 }

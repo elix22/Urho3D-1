@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -146,7 +146,7 @@ public:
     void AddDelayedWorldTransform(const DelayedWorldTransform2D& transform);
 
     /// Perform a physics world raycast and return all hits.
-    void Raycast(PODVector<PhysicsRaycastResult2D>& results, const Vector2& startPoint, const Vector2& endPoint,
+    void Raycast(ea::vector<PhysicsRaycastResult2D>& results, const Vector2& startPoint, const Vector2& endPoint,
         unsigned collisionMask = M_MAX_UNSIGNED);
     /// Perform a physics world raycast and return the closest hit.
     void RaycastSingle(PhysicsRaycastResult2D& result, const Vector2& startPoint, const Vector2& endPoint,
@@ -156,7 +156,7 @@ public:
     /// Return rigid body at screen point.
     RigidBody2D* GetRigidBody(int screenX, int screenY, unsigned collisionMask = M_MAX_UNSIGNED);
     /// Return rigid bodies by a box query.
-    void GetRigidBodies(PODVector<RigidBody2D*>& results, const Rect& aabb, unsigned collisionMask = M_MAX_UNSIGNED);
+    void GetRigidBodies(ea::vector<RigidBody2D*>& results, const Rect& aabb, unsigned collisionMask = M_MAX_UNSIGNED);
 
     /// Return whether physics world will automatically simulate during scene update.
     bool IsUpdateEnabled() const { return updateEnabled_; }
@@ -197,7 +197,7 @@ public:
     int GetPositionIterations() const { return positionIterations_; }
 
     /// Return the Box2D physics world.
-    b2World* GetWorld() { return world_.Get(); }
+    b2World* GetWorld() { return world_.get(); }
 
     /// Set node dirtying to be disregarded.
     void SetApplyingTransforms(bool enable) { applyingTransforms_ = enable; }
@@ -217,7 +217,7 @@ protected:
     void SendEndContactEvents();
 
     /// Box2D physics world.
-    UniquePtr<b2World> world_;
+    ea::unique_ptr<b2World> world_;
     /// Gravity.
     Vector2 gravity_;
     /// Velocity iterations.
@@ -239,9 +239,9 @@ protected:
     /// Applying transforms.
     bool applyingTransforms_{};
     /// Rigid bodies.
-    Vector<WeakPtr<RigidBody2D> > rigidBodies_;
+    ea::vector<WeakPtr<RigidBody2D> > rigidBodies_;
     /// Delayed (parented) world transform assignments.
-    HashMap<RigidBody2D*, DelayedWorldTransform2D> delayedWorldTransforms_;
+    ea::unordered_map<RigidBody2D*, DelayedWorldTransform2D> delayedWorldTransforms_;
 
     /// Contact info.
     struct ContactInfo
@@ -251,7 +251,7 @@ protected:
         /// Construct.
         explicit ContactInfo(b2Contact* contact);
         /// Write contact info to buffer.
-        const PODVector<unsigned char>& Serialize(VectorBuffer& buffer) const;
+        const ea::vector<unsigned char>& Serialize(VectorBuffer& buffer) const;
 
         /// Rigid body A.
         SharedPtr<RigidBody2D> bodyA_;
@@ -275,9 +275,9 @@ protected:
         float separations_[b2_maxManifoldPoints]{};
     };
     /// Begin contact infos.
-    Vector<ContactInfo> beginContactInfos_;
+    ea::vector<ContactInfo> beginContactInfos_;
     /// End contact infos.
-    Vector<ContactInfo> endContactInfos_;
+    ea::vector<ContactInfo> endContactInfos_;
     /// Temporary buffer with contact data.
     VectorBuffer contacts_;
 };

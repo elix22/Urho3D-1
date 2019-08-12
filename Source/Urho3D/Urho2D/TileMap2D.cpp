@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -96,7 +96,7 @@ void TileMap2D::DrawDebugGeometry(DebugRenderer* debug, bool depthTest)
         break;
     }
 
-    for (unsigned i = 0; i < layers_.Size(); ++i)
+    for (unsigned i = 0; i < layers_.size(); ++i)
         layers_[i]->DrawDebugGeometry(debug, depthTest);
 }
 
@@ -121,7 +121,7 @@ void TileMap2D::SetTmxFile(TmxFile2D* tmxFile)
     if (rootNode_)
         rootNode_->RemoveAllChildren();
 
-    layers_.Clear();
+    layers_.clear();
 
     tmxFile_ = tmxFile;
     if (!tmxFile_)
@@ -135,7 +135,7 @@ void TileMap2D::SetTmxFile(TmxFile2D* tmxFile)
     }
 
     unsigned numLayers = tmxFile_->GetNumLayers();
-    layers_.Resize(numLayers);
+    layers_.resize(numLayers);
 
     for (unsigned i = 0; i < numLayers; ++i)
     {
@@ -158,7 +158,7 @@ TmxFile2D* TileMap2D::GetTmxFile() const
 
 TileMapLayer2D* TileMap2D::GetLayer(unsigned index) const
 {
-    if (index >= layers_.Size())
+    if (index >= layers_.size())
         return nullptr;
 
     return layers_[index];
@@ -185,9 +185,9 @@ ResourceRef TileMap2D::GetTmxFileAttr() const
     return GetResourceRef(tmxFile_, TmxFile2D::GetTypeStatic());
 }
 
-Vector<SharedPtr<TileMapObject2D> > TileMap2D::GetTileCollisionShapes(unsigned gid) const
+ea::vector<SharedPtr<TileMapObject2D> > TileMap2D::GetTileCollisionShapes(unsigned gid) const
 {
-    Vector<SharedPtr<TileMapObject2D> > shapes;
+    ea::vector<SharedPtr<TileMapObject2D> > shapes;
     return tmxFile_ ? tmxFile_->GetTileCollisionShapes(gid) : shapes;
 }
 

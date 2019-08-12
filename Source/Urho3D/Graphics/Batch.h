@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -58,7 +58,7 @@ struct Batch
         renderOrder_(rhs.material_ ? rhs.material_->GetRenderOrder() : DEFAULT_RENDER_ORDER),
         isBase_(false),
         geometry_(rhs.geometry_),
-        material_(rhs.material_),
+        material_(rhs.material_.Get()),
         worldTransform_(rhs.worldTransform_),
         numWorldTransforms_(rhs.numWorldTransforms_),
         instancingData_(rhs.instancingData_),
@@ -159,7 +159,7 @@ struct BatchGroup : public Batch
         for (unsigned i = 0; i < batch.numWorldTransforms_; ++i)
         {
             newInstance.worldTransform_ = &batch.worldTransform_[i];
-            instances_.Push(newInstance);
+            instances_.push_back(newInstance);
         }
     }
 
@@ -169,7 +169,7 @@ struct BatchGroup : public Batch
     void Draw(View* view, Camera* camera, bool allowDepthWrite) const;
 
     /// Instance data.
-    PODVector<InstanceData> instances_;
+    ea::vector<InstanceData> instances_;
     /// Instance stream start index, or M_MAX_UNSIGNED if transforms not pre-set.
     unsigned startIndex_;
 };
@@ -233,7 +233,7 @@ public:
     /// Sort instanced and non-instanced draw calls front to back.
     void SortFrontToBack();
     /// Sort batches front to back while also maintaining state sorting.
-    void SortFrontToBack2Pass(PODVector<Batch*>& batches);
+    template <class T> void SortFrontToBack2Pass(ea::vector<T>& batches);
     /// Pre-set instance data of all groups. The vertex buffer must be big enough to hold all data.
     void SetInstancingData(void* lockedData, unsigned stride, unsigned& freeIndex);
     /// Draw.
@@ -242,31 +242,31 @@ public:
     unsigned GetNumInstances() const;
 
     /// Return whether the batch group is empty.
-    bool IsEmpty() const { return batches_.Empty() && batchGroups_.Empty(); }
+    bool IsEmpty() const { return batches_.empty() && batchGroups_.empty(); }
 
     /// Instanced draw calls.
-    HashMap<BatchGroupKey, BatchGroup> batchGroups_;
+    ea::unordered_map<BatchGroupKey, BatchGroup> batchGroups_;
     /// Shader remapping table for 2-pass state and distance sort.
-    HashMap<unsigned, unsigned> shaderRemapping_;
+    ea::unordered_map<unsigned, unsigned> shaderRemapping_;
     /// Material remapping table for 2-pass state and distance sort.
-    HashMap<unsigned short, unsigned short> materialRemapping_;
+    ea::unordered_map<unsigned short, unsigned short> materialRemapping_;
     /// Geometry remapping table for 2-pass state and distance sort.
-    HashMap<unsigned short, unsigned short> geometryRemapping_;
+    ea::unordered_map<unsigned short, unsigned short> geometryRemapping_;
 
     /// Unsorted non-instanced draw calls.
-    PODVector<Batch> batches_;
+    ea::vector<Batch> batches_;
     /// Sorted non-instanced draw calls.
-    PODVector<Batch*> sortedBatches_;
+    ea::vector<Batch*> sortedBatches_;
     /// Sorted instanced draw calls.
-    PODVector<BatchGroup*> sortedBatchGroups_;
+    ea::vector<BatchGroup*> sortedBatchGroups_;
     /// Maximum sorted instances.
     unsigned maxSortedInstances_;
     /// Whether the pass command contains extra shader defines.
     bool hasExtraDefines_;
     /// Vertex shader extra defines.
-    String vsExtraDefines_;
+    ea::string vsExtraDefines_;
     /// Pixel shader extra defines.
-    String psExtraDefines_;
+    ea::string psExtraDefines_;
     /// Hash for vertex shader extra defines.
     StringHash vsExtraDefinesHash_;
     /// Hash for pixel shader extra defines.
@@ -302,11 +302,11 @@ struct LightBatchQueue
     /// Lit geometry draw calls, non-base (additive)
     BatchQueue litBatches_;
     /// Shadow map split queues.
-    Vector<ShadowBatchQueue> shadowSplits_;
+    ea::vector<ShadowBatchQueue> shadowSplits_;
     /// Per-vertex lights.
-    PODVector<Light*> vertexLights_;
+    ea::vector<Light*> vertexLights_;
     /// Light volume draw calls.
-    PODVector<Batch> volumeBatches_;
+    ea::vector<Batch> volumeBatches_;
 };
 
 }

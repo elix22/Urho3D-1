@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,6 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
 #include "../Resource/Resource.h"
 
 #ifdef URHO3D_SPINE
@@ -63,9 +62,9 @@ public:
     /// Get number of animations.
     unsigned GetNumAnimations() const;
     /// Return animation name.
-    String GetAnimation(unsigned index) const;
+    ea::string GetAnimation(unsigned index) const;
     /// Check has animation.
-    bool HasAnimation(const String& animationName) const;
+    bool HasAnimation(const ea::string& animationName) const;
 
     /// Return sprite.
     Sprite2D* GetSprite() const;
@@ -76,7 +75,7 @@ public:
 #endif
 
     /// Return spriter data.
-    Spriter::SpriterData* GetSpriterData() const { return spriterData_.Get(); }
+    Spriter::SpriterData* GetSpriterData() const { return spriterData_.get(); }
     /// Return spriter file sprite.
     Sprite2D* GetSpriterFileSprite(int folderId, int fileId) const;
 
@@ -101,7 +100,7 @@ private:
 
 #ifdef URHO3D_SPINE
     /// Spine json data.
-    SharedArrayPtr<char> jsonData_;
+    ea::shared_array<char> jsonData_;
     /// Spine skeleton data.
     spSkeletonData* skeletonData_;
     /// Spine atlas.
@@ -109,15 +108,15 @@ private:
 #endif
 
     /// Spriter data.
-    UniquePtr<Spriter::SpriterData> spriterData_;
+    ea::unique_ptr<Spriter::SpriterData> spriterData_;
     /// Has sprite sheet.
     bool hasSpriteSheet_;
     /// Sprite sheet file path.
-    String spriteSheetFilePath_;
+    ea::string spriteSheetFilePath_;
     /// Sprite sheet.
     SharedPtr<SpriteSheet2D> spriteSheet_;
     /// Spriter sprites.
-    HashMap<unsigned, SharedPtr<Sprite2D> > spriterFileSprites_;
+    ea::unordered_map<unsigned, SharedPtr<Sprite2D> > spriterFileSprites_;
 };
 
 }

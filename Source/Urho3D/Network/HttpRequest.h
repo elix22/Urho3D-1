@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,8 @@
 
 #pragma once
 
-#include "../Container/ArrayPtr.h"
+#include <EASTL/shared_array.h>
+
 #include "../Core/Mutex.h"
 #include "../Container/RefCounted.h"
 #include "../Core/Thread.h"
@@ -45,7 +46,7 @@ class URHO3D_API HttpRequest : public RefCounted, public Deserializer, public Th
 {
 public:
     /// Construct with parameters.
-    HttpRequest(const String& url, const String& verb, const Vector<String>& headers, const String& postData);
+    HttpRequest(const ea::string& url, const ea::string& verb, const ea::vector<ea::string>& headers, const ea::string& postData);
     /// Destruct. Release the connection object.
     ~HttpRequest() override;
 
@@ -60,13 +61,13 @@ public:
     bool IsEof() const override;
 
     /// Return URL used in the request.
-    const String& GetURL() const { return url_; }
+    const ea::string& GetURL() const { return url_; }
 
     /// Return verb used in the request. Default GET if empty verb specified on construction.
-    const String& GetVerb() const { return verb_; }
+    const ea::string& GetVerb() const { return verb_; }
 
     /// Return error. Only non-empty in the error state.
-    String GetError() const;
+    ea::string GetError() const;
     /// Return connection state.
     HttpRequestState GetState() const;
     /// Return amount of bytes in the read buffer.
@@ -77,26 +78,26 @@ public:
 
 private:
     /// Check for available read data in buffer and whether end has been reached. Must only be called when the mutex is held by the main thread.
-    Pair<unsigned, bool> CheckAvailableSizeAndEof() const;
+    ea::pair<unsigned, bool> CheckAvailableSizeAndEof() const;
 
     /// URL.
-    String url_;
+    ea::string url_;
     /// Verb.
-    String verb_;
+    ea::string verb_;
     /// Error string. Empty if no error.
-    String error_;
+    ea::string error_;
     /// Headers.
-    Vector<String> headers_;
+    ea::vector<ea::string> headers_;
     /// POST data.
-    String postData_;
+    ea::string postData_;
     /// Connection state.
     HttpRequestState state_;
     /// Mutex for synchronizing the worker and the main thread.
     mutable Mutex mutex_;
     /// Read buffer for the worker thread.
-    SharedArrayPtr<unsigned char> httpReadBuffer_;
+    ea::shared_array<unsigned char> httpReadBuffer_;
     /// Read buffer for the main thread.
-    SharedArrayPtr<unsigned char> readBuffer_;
+    ea::shared_array<unsigned char> readBuffer_;
     /// Read buffer read cursor.
     unsigned readPosition_;
     /// Read buffer write cursor.

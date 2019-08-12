@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -44,12 +44,12 @@ static const char* shaderParameterGroups[] = {
     "custom"
 };
 
-static unsigned NumberPostfix(const String& str)
+static unsigned NumberPostfix(const ea::string& str)
 {
-    for (unsigned i = 0; i < str.Length(); ++i)
+    for (unsigned i = 0; i < str.length(); ++i)
     {
         if (IsDigit(str[i]))
-            return ToUInt(str.CString() + i);
+            return ToUInt(str.c_str() + i);
     }
 
     return M_MAX_UNSIGNED;
@@ -64,7 +64,7 @@ ShaderProgram::ShaderProgram(Graphics* graphics, ShaderVariation* vertexShader, 
     pixelShader_(pixelShader)
 {
     for (auto& parameterSource : parameterSources_)
-        parameterSource = (const void*)M_MAX_UNSIGNED;
+        parameterSource = (const void*)(uintptr_t)M_MAX_UNSIGNED;
 }
 
 ShaderProgram::~ShaderProgram()
@@ -79,7 +79,7 @@ void ShaderProgram::OnDeviceLost()
     if (graphics_ && graphics_->GetShaderProgram() == this)
         graphics_->SetShaders(nullptr, nullptr);
 
-    linkerOutput_.Clear();
+    linkerOutput_.clear();
 }
 
 void ShaderProgram::Release()
@@ -98,9 +98,9 @@ void ShaderProgram::Release()
         }
 
         object_.name_ = 0;
-        linkerOutput_.Clear();
-        shaderParameters_.Clear();
-        vertexAttributes_.Clear();
+        linkerOutput_.clear();
+        shaderParameters_.clear();
+        vertexAttributes_.clear();
         usedVertexAttributes_ = 0;
 
         for (bool& useTextureUnit : useTextureUnits_)
@@ -133,14 +133,14 @@ bool ShaderProgram::Link()
     if (!linked)
     {
         glGetProgramiv(object_.name_, GL_INFO_LOG_LENGTH, &length);
-        linkerOutput_.Resize((unsigned)length);
+        linkerOutput_.resize((unsigned) length);
         int outLength;
         glGetProgramInfoLog(object_.name_, length, &outLength, &linkerOutput_[0]);
         glDeleteProgram(object_.name_);
         object_.name_ = 0;
     }
     else
-        linkerOutput_.Clear();
+        linkerOutput_.clear();
 
     if (!object_.name_)
         return false;
@@ -158,14 +158,14 @@ bool ShaderProgram::Link()
     {
         glGetActiveAttrib(object_.name_, i, (GLsizei)MAX_NAME_LENGTH, &nameLength, &elementCount, &type, nameBuffer);
 
-        String name = String(nameBuffer, nameLength);
+        ea::string name = ea::string(nameBuffer, nameLength);
         VertexElementSemantic semantic = MAX_VERTEX_ELEMENT_SEMANTICS;
         unsigned char semanticIndex = 0;
 
         // Go in reverse order so that "binormal" is detected before "normal"
         for (unsigned j = MAX_VERTEX_ELEMENT_SEMANTICS - 1; j < MAX_VERTEX_ELEMENT_SEMANTICS; --j)
         {
-            if (name.Contains(ShaderVariation::elementSemanticNames[j], false))
+            if (name.contains(ShaderVariation::elementSemanticNames[j], false))
             {
                 semantic = (VertexElementSemantic)j;
                 unsigned index = NumberPostfix(name);
@@ -182,14 +182,14 @@ bool ShaderProgram::Link()
             continue;
         }
 
-        int location = glGetAttribLocation(object_.name_, name.CString());
-        vertexAttributes_[MakePair((unsigned char)semantic, semanticIndex)] = location;
+        int location = glGetAttribLocation(object_.name_, name.c_str());
+        vertexAttributes_[ea::make_pair((unsigned char)semantic, semanticIndex)] = location;
         usedVertexAttributes_ |= (1u << location);
     }
 
     // Check for constant buffers
 #ifndef GL_ES_VERSION_2_0
-    HashMap<unsigned, unsigned> blockToBinding;
+    ea::unordered_map<unsigned, unsigned> blockToBinding;
 
     if (Graphics::GetGL3Support())
     {
@@ -200,15 +200,15 @@ bool ShaderProgram::Link()
         {
             glGetActiveUniformBlockName(object_.name_, (GLuint)i, MAX_NAME_LENGTH, &nameLength, nameBuffer);
 
-            String name(nameBuffer, (unsigned)nameLength);
+            ea::string name(nameBuffer, (unsigned)nameLength);
 
-            unsigned blockIndex = glGetUniformBlockIndex(object_.name_, name.CString());
+            unsigned blockIndex = glGetUniformBlockIndex(object_.name_, name.c_str());
             unsigned group = M_MAX_UNSIGNED;
 
             // Try to recognize the use of the buffer from its name
             for (unsigned j = 0; j < MAX_SHADER_PARAMETER_GROUPS; ++j)
             {
-                if (name.Contains(shaderParameterGroups[j], false))
+                if (name.contains(shaderParameterGroups[j], false))
                 {
                     group = j;
                     break;
@@ -236,7 +236,7 @@ bool ShaderProgram::Link()
             // Vertex shader constant buffer bindings occupy slots starting from zero to maximum supported, pixel shader bindings
             // from that point onward
             ShaderType shaderType = VS;
-            if (name.Contains("PS", false))
+            if (name.contains("PS", false))
             {
                 bindingIndex += MAX_SHADER_PARAMETER_GROUPS;
                 shaderType = PS;
@@ -258,21 +258,21 @@ bool ShaderProgram::Link()
         int location = glGetUniformLocation(object_.name_, nameBuffer);
 
         // Check for array index included in the name and strip it
-        String name(nameBuffer);
-        unsigned index = name.Find('[');
-        if (index != String::NPOS)
+        ea::string name(nameBuffer);
+        unsigned index = name.find('[');
+        if (index != ea::string::npos)
         {
             // If not the first index, skip
-            if (name.Find("[0]", index) == String::NPOS)
+            if (name.find("[0]", index) == ea::string::npos)
                 continue;
 
-            name = name.Substring(0, index);
+            name = name.substr(0, index);
         }
 
         if (name[0] == 'c')
         {
             // Store constant uniform
-            String paramName = name.Substring(1);
+            ea::string paramName = name.substr(1);
             ShaderParameter parameter{paramName, type, location};
             bool store = location >= 0;
 
@@ -298,7 +298,7 @@ bool ShaderProgram::Link()
         else if (location >= 0 && name[0] == 's')
         {
             // Set the samplers here so that they do not have to be set later
-            unsigned unit = graphics_->GetTextureUnit(name.Substring(1));
+            unsigned unit = graphics_->GetTextureUnit(name.substr(1));
             if (unit >= MAX_TEXTURE_UNITS)
                 unit = NumberPostfix(name);
 
@@ -311,8 +311,8 @@ bool ShaderProgram::Link()
     }
 
     // Rehash the parameter & vertex attributes maps to ensure minimal load factor
-    vertexAttributes_.Rehash(NextPowerOfTwo(vertexAttributes_.Size()));
-    shaderParameters_.Rehash(NextPowerOfTwo(shaderParameters_.Size()));
+    vertexAttributes_.rehash(Max(2, NextPowerOfTwo(vertexAttributes_.size())));
+    shaderParameters_.rehash(Max(2, NextPowerOfTwo(shaderParameters_.size())));
 
     return true;
 }
@@ -329,14 +329,14 @@ ShaderVariation* ShaderProgram::GetPixelShader() const
 
 bool ShaderProgram::HasParameter(StringHash param) const
 {
-    return shaderParameters_.Find(param) != shaderParameters_.End();
+    return shaderParameters_.find(param) != shaderParameters_.end();
 }
 
 const ShaderParameter* ShaderProgram::GetParameter(StringHash param) const
 {
-    HashMap<StringHash, ShaderParameter>::ConstIterator i = shaderParameters_.Find(param);
-    if (i != shaderParameters_.End())
-        return &i->second_;
+    auto i = shaderParameters_.find(param);
+    if (i != shaderParameters_.end())
+        return &i->second;
     else
         return nullptr;
 }
@@ -347,14 +347,14 @@ bool ShaderProgram::NeedParameterUpdate(ShaderParameterGroup group, const void* 
     if (globalFrameNumber != frameNumber_)
     {
         for (auto& parameterSource : parameterSources_)
-            parameterSource = (const void*)M_MAX_UNSIGNED;
+            parameterSource = (const void*)(uintptr_t)M_MAX_UNSIGNED;
         frameNumber_ = globalFrameNumber;
     }
 
     // The shader program may use a mixture of constant buffers and individual uniforms even in the same group
 #ifndef GL_ES_VERSION_2_0
-    bool useBuffer = constantBuffers_[group].Get() || constantBuffers_[group + MAX_SHADER_PARAMETER_GROUPS].Get();
-    bool useIndividual = !constantBuffers_[group].Get() || !constantBuffers_[group + MAX_SHADER_PARAMETER_GROUPS].Get();
+    bool useBuffer = constantBuffers_[group] || constantBuffers_[group + MAX_SHADER_PARAMETER_GROUPS];
+    bool useIndividual = !constantBuffers_[group] || !constantBuffers_[group + MAX_SHADER_PARAMETER_GROUPS];
     bool needUpdate = false;
 
     if (useBuffer && globalParameterSources[group] != source)
@@ -385,15 +385,15 @@ void ShaderProgram::ClearParameterSource(ShaderParameterGroup group)
 {
     // The shader program may use a mixture of constant buffers and individual uniforms even in the same group
 #ifndef GL_ES_VERSION_2_0
-    bool useBuffer = constantBuffers_[group].Get() || constantBuffers_[group + MAX_SHADER_PARAMETER_GROUPS].Get();
-    bool useIndividual = !constantBuffers_[group].Get() || !constantBuffers_[group + MAX_SHADER_PARAMETER_GROUPS].Get();
+    bool useBuffer = constantBuffers_[group] || constantBuffers_[group + MAX_SHADER_PARAMETER_GROUPS];
+    bool useIndividual = !constantBuffers_[group] || !constantBuffers_[group + MAX_SHADER_PARAMETER_GROUPS];
 
     if (useBuffer)
-        globalParameterSources[group] = (const void*)M_MAX_UNSIGNED;
+        globalParameterSources[group] = (const void*)(uintptr_t)M_MAX_UNSIGNED;
     if (useIndividual)
-        parameterSources_[group] = (const void*)M_MAX_UNSIGNED;
+        parameterSources_[group] = (const void*)(uintptr_t)M_MAX_UNSIGNED;
 #else
-    parameterSources_[group] = (const void*)M_MAX_UNSIGNED;
+    parameterSources_[group] = (const void*)(uintptr_t)M_MAX_UNSIGNED;
 #endif
 }
 
@@ -405,13 +405,13 @@ void ShaderProgram::ClearParameterSources()
 
 #ifndef GL_ES_VERSION_2_0
     for (auto& globalParameterSource : globalParameterSources)
-        globalParameterSource = (const void*)M_MAX_UNSIGNED;
+        globalParameterSource = (const void*)(uintptr_t)M_MAX_UNSIGNED;
 #endif
 }
 
 void ShaderProgram::ClearGlobalParameterSource(ShaderParameterGroup group)
 {
-    globalParameterSources[group] = (const void*)M_MAX_UNSIGNED;
+    globalParameterSources[group] = (const void*)(uintptr_t)M_MAX_UNSIGNED;
 }
 
 }

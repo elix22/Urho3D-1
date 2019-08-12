@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -70,7 +70,7 @@ public:
     static void RegisterObject(Context* context);
 
     /// Process octree raycast. May be called from a worker thread.
-    void ProcessRayQuery(const RayOctreeQuery& query, PODVector<RayQueryResult>& results) override;
+    void ProcessRayQuery(const RayOctreeQuery& query, ea::vector<RayQueryResult>& results) override;
     /// Return the geometry for a specific LOD level.
     Geometry* GetLodGeometry(unsigned batchIndex, unsigned level) override;
     /// Return number of occlusion geometry triangles.
@@ -108,7 +108,7 @@ public:
     bool SetMaterial(unsigned index, Material* material);
 
     /// Return number of geometries.
-    unsigned GetNumGeometries() const { return geometries_.Size(); }
+    unsigned GetNumGeometries() const { return geometries_.size(); }
 
     /// Return number of vertices in a geometry.
     unsigned GetNumVertices(unsigned index) const;
@@ -120,17 +120,17 @@ public:
     Material* GetMaterial(unsigned index = 0) const;
 
     /// Return all vertices. These can be edited; calling Commit() updates the vertex buffer.
-    Vector<PODVector<CustomGeometryVertex> >& GetVertices() { return vertices_; }
+    ea::vector<ea::vector<CustomGeometryVertex> >& GetVertices() { return vertices_; }
 
     /// Return a vertex in a geometry for editing, or null if out of bounds. After the edits are finished, calling Commit() updates  the vertex buffer.
     CustomGeometryVertex* GetVertex(unsigned geometryIndex, unsigned vertexNum);
 
     /// Set geometry data attribute.
-    void SetGeometryDataAttr(const PODVector<unsigned char>& value);
+    void SetGeometryDataAttr(const ea::vector<unsigned char>& value);
     /// Set materials attribute.
     void SetMaterialsAttr(const ResourceRefList& value);
     /// Return geometry data attribute.
-    PODVector<unsigned char> GetGeometryDataAttr() const;
+    ea::vector<unsigned char> GetGeometryDataAttr() const;
     /// Return materials attribute.
     const ResourceRefList& GetMaterialsAttr() const;
 
@@ -140,11 +140,11 @@ protected:
 
 private:
     /// Primitive type per geometry.
-    PODVector<PrimitiveType> primitiveTypes_;
+    ea::vector<PrimitiveType> primitiveTypes_;
     /// Source vertices per geometry.
-    Vector<PODVector<CustomGeometryVertex> > vertices_;
+    ea::vector<ea::vector<CustomGeometryVertex> > vertices_;
     /// All geometries.
-    Vector<SharedPtr<Geometry> > geometries_;
+    ea::vector<SharedPtr<Geometry> > geometries_;
     /// Vertex buffer.
     SharedPtr<VertexBuffer> vertexBuffer_;
     /// Element mask used so far.

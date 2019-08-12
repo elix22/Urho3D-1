@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -42,6 +42,20 @@ struct Vertex2D
     unsigned color_;
     /// UV.
     Vector2 uv_;
+
+    /// Equality comparison operator.
+    bool operator==(const Vertex2D& other) const
+    {
+        if (this == &other)
+            return true;
+        return position_ == other.position_ && color_ == other.color_ && uv_ == other.uv_;
+    }
+
+    /// Inequality comparison operator.
+    bool operator!=(const Vertex2D& other) const
+    {
+        return !(*this == other);
+    }
 };
 
 /// 2D source batch.
@@ -59,7 +73,22 @@ struct SourceBatch2D
     /// Material.
     SharedPtr<Material> material_;
     /// Vertices.
-    Vector<Vertex2D> vertices_;
+    ea::vector<Vertex2D> vertices_;
+
+    /// Equality comparison operator.
+    bool operator==(const SourceBatch2D& other) const
+    {
+        if (this == &other)
+            return true;
+        return owner_ == other.owner_ && distance_ == other.distance_ && drawOrder_ == other.drawOrder_ &&
+            material_ == other.material_ && vertices_ == other.vertices_;
+    }
+
+    /// Inequality comparison operator.
+    bool operator!=(const SourceBatch2D& other) const
+    {
+        return !(*this == other);
+    }
 };
 
 /// Pixel size (equal 0.01f).
@@ -93,7 +122,7 @@ public:
     int GetOrderInLayer() const { return orderInLayer_; }
 
     /// Return all source batches (called by Renderer2D).
-    const Vector<SourceBatch2D>& GetSourceBatches();
+    const ea::vector<SourceBatch2D>& GetSourceBatches();
 
 protected:
     /// Handle scene being assigned.
@@ -113,7 +142,7 @@ protected:
     /// Order in layer.
     int orderInLayer_;
     /// Source batches.
-    Vector<SourceBatch2D> sourceBatches_;
+    ea::vector<SourceBatch2D> sourceBatches_;
     /// Source batches dirty flag.
     bool sourceBatchesDirty_;
     /// Renderer2D.

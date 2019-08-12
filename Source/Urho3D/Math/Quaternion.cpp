@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2018 the Urho3D project.
+// Copyright (c) 2008-2019 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -322,11 +322,11 @@ Quaternion Quaternion::Nlerp(const Quaternion& rhs, float t, bool shortestPath) 
     return result;
 }
 
-String Quaternion::ToString() const
+ea::string Quaternion::ToString() const
 {
     char tempBuffer[CONVERSION_BUFFER_LENGTH];
     sprintf(tempBuffer, "%g %g %g %g", w_, x_, y_, z_);
-    return String(tempBuffer);
+    return ea::string(tempBuffer);
 }
 
 }
