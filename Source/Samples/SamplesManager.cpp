@@ -289,9 +289,6 @@ void SamplesManager::Start()
     RegisterSample<Serialization>();
     RegisterSample<BakedLighting>();
 
-    // TODO(glow): Remove it
-    startSample_ = "BakedLighting";
-
     if (!startSample_.empty())
         StartSample(startSample_);
 }
