@@ -40,6 +40,7 @@ namespace Urho3D
 
 class File;
 class PackageFile;
+class Texture2D;
 
 static const unsigned FIRST_REPLICATED_ID = 0x1;
 static const unsigned LAST_REPLICATED_ID = 0xffffff;
@@ -133,6 +134,15 @@ public:
     /// Add a replication state that is tracking this scene.
     void AddReplicationState(NodeReplicationState* state) override;
 
+    /// Return number of lightmaps.
+    unsigned GetNumLightmaps() const { return lightmaps_.names_.size(); }
+    /// Reset lightmaps.
+    void ResetLightmaps();
+    /// Add lightmap texture.
+    void AddLightmap(const ea::string& lightmapTextureName);
+    /// Return lightmap texture.
+    Texture2D* GetLightmapTexture(unsigned index);
+
     /// Load from an XML file. Return true if successful.
     bool LoadXML(Deserializer& source);
     /// Load from a JSON file. Return true if successful.
@@ -186,6 +196,9 @@ public:
     void UnregisterVar(const ea::string& name);
     /// Clear all registered node user variable hash reverse mappings.
     void UnregisterAllVars();
+
+    /// Set source file name.
+    void SetFileName(const ea::string_view fileName) { fileName_ = fileName; }
 
     /// Return node from the whole scene by ID, or null if not found.
     Node* GetNode(unsigned id) const;
@@ -301,6 +314,8 @@ private:
     void PreloadResourcesJSON(const JSONValue& value);
     /// Return component index storage for given type.
     entt::storage<entt::entity, Component*>* GetComponentIndexStorage(StringHash componentType);
+    /// Mark lightmap textures dirty.
+    void MarkLightmapTexturesDirty() { lightmapTexturesDirty_ = true; }
 
     /// Whether the registry is active.
     bool registryEnabled_{ false };
@@ -367,6 +382,13 @@ private:
     bool asyncLoading_;
     /// Threaded update flag.
     bool threadedUpdate_;
+
+    /// Lightmap textures names.
+    ResourceRefList lightmaps_;
+    /// Whether the lightmap textures are dirty.
+    bool lightmapTexturesDirty_{ false };
+    /// Loaded lightmap textures.
+    ea::vector<SharedPtr<Texture2D>> lightmapTextures_;
 };
 
 /// Register Scene library objects.

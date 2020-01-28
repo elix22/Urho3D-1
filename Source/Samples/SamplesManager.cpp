@@ -115,6 +115,7 @@
 #include "100_HelloSystemUI/HelloSystemUI.h"
 #endif
 #include "105_Serialization/Serialization.h"
+#include "106_BakedLighting/BakedLighting.h"
 #include "Rotator.h"
 
 #include "SamplesManager.h"
@@ -286,6 +287,7 @@ void SamplesManager::Start()
     RegisterSample<HelloSystemUi>();
 #endif
     RegisterSample<Serialization>();
+    RegisterSample<BakedLighting>();
 
     if (!startSample_.empty())
         StartSample(startSample_);

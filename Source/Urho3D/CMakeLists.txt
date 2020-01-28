@@ -65,6 +65,10 @@ if (NOT MINI_URHO)
     endif ()
 endif ()
 
+if (URHO3D_GLOW)
+    define_engine_source_files (Glow)
+endif ()
+
 if (URHO3D_IK)
     define_engine_source_files (IK)
 endif ()
@@ -173,6 +177,8 @@ set (THIRD_PARTY_DEPENDENCIES
     EASTL
     entt
     ETCPACK
+    xatlas
+    embree
 )
 
 if (URHO3D_MERGE_STATIC_LIBS)

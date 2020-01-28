@@ -29,6 +29,10 @@
 #include "../Math/Matrix3x4.h"
 #include "../Math/Rect.h"
 
+#if URHO3D_SPHERICAL_HARMONICS
+#include "../Math/SphericalHarmonics.h"
+#endif
+
 namespace Urho3D
 {
 
@@ -45,6 +49,18 @@ class VertexBuffer;
 class View;
 class Zone;
 struct LightBatchQueue;
+
+/// Per-instance shader parameters.
+struct InstanceShaderParameters
+{
+#if URHO3D_SPHERICAL_HARMONICS
+    /// L2 spherical harmonics for ambient light.
+    SphericalHarmonicsDot9 ambient_;
+#else
+    /// Constant ambient light.
+    Vector4 ambient_;
+#endif
+};
 
 /// Queued 3D geometry draw call.
 struct Batch
@@ -63,7 +79,9 @@ struct Batch
         numWorldTransforms_(rhs.numWorldTransforms_),
         instancingData_(rhs.instancingData_),
         lightQueue_(nullptr),
-        geometryType_(rhs.geometryType_)
+        geometryType_(rhs.geometryType_),
+        lightmapScaleOffset_(rhs.lightmapScaleOffset_),
+        lightmapIndex_(rhs.lightmapIndex_)
     {
     }
 
@@ -106,6 +124,12 @@ struct Batch
     ShaderVariation* pixelShader_{};
     /// %Geometry type.
     GeometryType geometryType_{};
+    /// Mandatory per-instance shader parameters.
+    InstanceShaderParameters shaderParameters_;
+    /// Lightmap scale and offset.
+    Vector4* lightmapScaleOffset_{};
+    /// Lightmap index.
+    unsigned lightmapIndex_{};
 };
 
 /// Data for one geometry instance.
@@ -115,8 +139,10 @@ struct InstanceData
     InstanceData() = default;
 
     /// Construct with transform, instancing data and distance.
-    InstanceData(const Matrix3x4* worldTransform, const void* instancingData, float distance) :
+    InstanceData(const Matrix3x4* worldTransform, const InstanceShaderParameters& shaderParameters,
+        const void* instancingData, float distance) :
         worldTransform_(worldTransform),
+        shaderParameters_(shaderParameters),
         instancingData_(instancingData),
         distance_(distance)
     {
@@ -124,6 +150,8 @@ struct InstanceData
 
     /// World transform.
     const Matrix3x4* worldTransform_{};
+    /// Mandatory per-instance shader parameters.
+    InstanceShaderParameters shaderParameters_;
     /// Instancing data buffer.
     const void* instancingData_{};
     /// Distance from camera.
@@ -155,6 +183,7 @@ struct BatchGroup : public Batch
         InstanceData newInstance;
         newInstance.distance_ = batch.distance_;
         newInstance.instancingData_ = batch.instancingData_;
+        newInstance.shaderParameters_ = batch.shaderParameters_;
 
         for (unsigned i = 0; i < batch.numWorldTransforms_; ++i)
         {

@@ -32,9 +32,12 @@
 #include "../Graphics/CustomGeometry.h"
 #include "../Graphics/DebugRenderer.h"
 #include "../Graphics/DecalSet.h"
+#include "../Graphics/GlobalIllumination.h"
 #include "../Graphics/Graphics.h"
 #include "../Graphics/GraphicsImpl.h"
 #include "../Graphics/IndexBuffer.h"
+#include "../Graphics/LightBaker.h"
+#include "../Graphics/LightProbeGroup.h"
 #include "../Graphics/Material.h"
 #include "../Graphics/OcclusionBuffer.h"
 #include "../Graphics/Octree.h"
@@ -425,6 +428,9 @@ void RegisterGraphicsLibrary(Context* context)
     Camera::RegisterObject(context);
     Drawable::RegisterObject(context);
     Light::RegisterObject(context);
+    LightBaker::RegisterObject(context);
+    LightProbeGroup::RegisterObject(context);
+    GlobalIllumination::RegisterObject(context);
     StaticModel::RegisterObject(context);
     StaticModelGroup::RegisterObject(context);
     Skybox::RegisterObject(context);

@@ -31,7 +31,9 @@
 #include "../IO/Log.h"
 #include "../IO/PackageFile.h"
 #include "../Resource/BackgroundLoader.h"
+#include "../Resource/BinaryFile.h"
 #include "../Resource/Image.h"
+#include "../Resource/ImageCube.h"
 #include "../Resource/JSONFile.h"
 #include "../Resource/PListFile.h"
 #include "../Resource/ResourceCache.h"
@@ -606,6 +608,7 @@ Resource* ResourceCache::GetResource(StringHash type, const ea::string& name, bo
 
     URHO3D_LOGDEBUG("Loading resource " + sanitatedName);
     resource->SetName(sanitatedName);
+    resource->SetNativeFileName(file->GetNativeName());
 
     if (!resource->Load(*(file.Get())))
     {
@@ -685,6 +688,7 @@ SharedPtr<Resource> ResourceCache::GetTempResource(StringHash type, const ea::st
 
     URHO3D_LOGDEBUG("Loading temporary resource " + sanitatedName);
     resource->SetName(file->GetName());
+    resource->SetNativeFileName(file->GetNativeName());
 
     if (!resource->Load(*(file.Get())))
     {
@@ -1139,7 +1143,9 @@ File* ResourceCache::SearchPackages(const ea::string& name)
 
 void RegisterResourceLibrary(Context* context)
 {
+    BinaryFile::RegisterObject(context);
     Image::RegisterObject(context);
+    ImageCube::RegisterObject(context);
     JSONFile::RegisterObject(context);
     PListFile::RegisterObject(context);
     XMLFile::RegisterObject(context);
@@ -1251,6 +1257,9 @@ bool ResourceCache::RenameResource(const ea::string& source, const ea::string& d
         return false;
     }
 
+    const ea::string sourceDir = AddTrailingSlash(source);
+    const ea::string destinationDir = AddTrailingSlash(destination);
+
     // Update loaded resource information
     for (auto& groupPair : resourceGroups_)
     {
@@ -1260,16 +1269,24 @@ bool ResourceCache::RenameResource(const ea::string& source, const ea::string& d
         {
             SharedPtr<Resource> resource = resourcePair.second;
             ea::string newName;
+            ea::string newNativeFileName;
             if (dirMode)
             {
                 if (!resource->GetName().starts_with(resourceName))
                     continue;
                 newName = destinationName + resource->GetName().substr(resourceName.length());
+
+                newNativeFileName = resource->GetNativeFileName();
+                if (newNativeFileName.starts_with(sourceDir))
+                    newNativeFileName.replace(0u, sourceDir.length(), destinationDir);
             }
             else if (resource->GetName() != resourceName)
                 continue;
             else
+            {
                 newName = destinationName;
+                newNativeFileName = destination;
+            }
 
             if (autoReloadResources_)
             {
@@ -1279,6 +1296,7 @@ bool ResourceCache::RenameResource(const ea::string& source, const ea::string& d
 
             groupPair.second.resources_.erase(resource->GetNameHash());
             resource->SetName(newName);
+            resource->SetNativeFileName(newNativeFileName);
             groupPair.second.resources_[resource->GetNameHash()] = resource;
             movedAny = true;
 

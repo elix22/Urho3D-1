@@ -101,6 +101,12 @@ public:
     /// Construct from 32-bit integer. Default format is 0xAABBGGRR.
     explicit Color(unsigned color, ChannelMask mask = ABGR) { FromUIntMask(color, mask); }
 
+    /// Construct from 3-vector.
+    explicit Color(const Vector3& color) : Color(color.x_, color.y_, color.z_) {}
+
+    /// Construct from 4-vector.
+    explicit Color(const Vector4& color) : Color(color.x_, color.y_, color.z_, color.w_) {}
+
     /// Assign from another color.
     Color& operator =(const Color& rhs) noexcept = default;
 
@@ -178,6 +184,36 @@ public:
 
     /// Return value as defined for HSV: largest value of the RGB components. Equivalent to calling MinRGB().
     float Value() const { return MaxRGB(); }
+
+    /// Convert single component of the color from gamma to linear space.
+    static float ConvertGammaToLinear(float value)
+    {
+        if (value <= 0.04045f)
+            return value / 12.92f;
+        else if (value < 1.0f)
+            return Pow((value + 0.055f) / 1.055f, 2.4f);
+        else
+            return Pow(value, 2.2f);
+    }
+
+    /// Convert single component of the color from linear to gamma space.
+    static float ConvertLinearToGamma(float value)
+    {
+        if (value <= 0.0f)
+            return 0.0f;
+        else if (value <= 0.0031308f)
+            return 12.92f * value;
+        else if (value < 1.0f)
+            return 1.055f * Pow(value, 0.4166667f) - 0.055f;
+        else
+            return Pow(value, 0.45454545f);
+    }
+
+    /// Convert color from gamma to linear space.
+    Color GammaToLinear() const { return { ConvertGammaToLinear(r_), ConvertGammaToLinear(g_), ConvertGammaToLinear(b_), a_ }; }
+
+    /// Convert color from linear to gamma space.
+    Color LinearToGamma() const { return { ConvertLinearToGamma(r_), ConvertLinearToGamma(g_), ConvertLinearToGamma(b_), a_ }; }
 
     /// Return lightness as defined for HSL: average of the largest and smallest values of the RGB components.
     float Lightness() const;

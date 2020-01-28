@@ -30,6 +30,7 @@
 #include "../Graphics/Camera.h"
 #include "../Graphics/DebugRenderer.h"
 #include "../Graphics/Geometry.h"
+#include "../Graphics/GlobalIllumination.h"
 #include "../Graphics/Graphics.h"
 #include "../Graphics/GraphicsEvents.h"
 #include "../Graphics/GraphicsImpl.h"
@@ -59,6 +60,21 @@
 
 namespace Urho3D
 {
+
+/// Update ambient for Drawable.
+static void UpdateBatchAmbient(Batch& destBatch, GlobalIllumination* gi, Drawable* drawable)
+{
+    if (gi && !destBatch.lightmapScaleOffset_)
+    {
+        unsigned& hint = drawable->GetMutableLightProbeTetrahedronHint();
+        const Vector3& samplePosition = drawable->GetWorldBoundingBox().Center();
+#if URHO3D_SPHERICAL_HARMONICS
+        destBatch.shaderParameters_.ambient_ = gi->SampleAmbientSH(samplePosition, hint);
+#else
+        destBatch.shaderParameters_.ambient_ = gi->SampleAverageAmbient(samplePosition, hint);
+#endif
+    }
+}
 
 /// %Frustum octree query for shadowcasters.
 class ShadowCasterOctreeQuery : public FrustumOctreeQuery
@@ -364,6 +380,7 @@ bool View::Define(RenderSurface* renderTarget, Viewport* viewport)
             lightVolumeCommand_ = sourceView_->lightVolumeCommand_;
             forwardLightsCommand_ = sourceView_->forwardLightsCommand_;
             octree_ = sourceView_->octree_;
+            globalIllumination_ = sourceView_->globalIllumination_;
             return true;
         }
         else
@@ -462,6 +479,7 @@ bool View::Define(RenderSurface* renderTarget, Viewport* viewport)
     }
 
     octree_ = nullptr;
+    globalIllumination_ = nullptr;
     // Get default zone first in case we do not have zones defined
     cameraZone_ = farClipZone_ = renderer_->GetDefaultZone();
 
@@ -475,6 +493,7 @@ bool View::Define(RenderSurface* renderTarget, Viewport* viewport)
             return false;
 
         octree_ = scene_->GetComponent<Octree>();
+        globalIllumination_ = scene_->GetComponent<GlobalIllumination>();
         if (!octree_)
             return false;
 
@@ -1136,7 +1155,7 @@ void View::GetLightBatches()
 
                 // In deferred modes, store the light volume batch now. Since light mask 8 lowest bits are output to the stencil,
                 // lights that have all zeroes in the low 8 bits can be skipped; they would not affect geometry anyway
-                if (deferred_ && (light->GetLightMask() & 0xffu) != 0)
+                if (deferred_ && (light->GetLightMaskEffective() & 0xffu) != 0)
                 {
                     Batch volumeBatch;
                     volumeBatch.geometry_ = renderer_->GetLightGeometry(light);
@@ -1235,6 +1254,7 @@ void View::GetBaseBatches()
                 Batch destBatch(srcBatch);
                 destBatch.pass_ = pass;
                 destBatch.zone_ = GetZone(drawable);
+                UpdateBatchAmbient(destBatch, globalIllumination_, drawable);
                 destBatch.isBase_ = true;
                 destBatch.lightMask_ = (unsigned char)GetLightMask(drawable);
 
@@ -1435,6 +1455,7 @@ void View::GetLitBatches(Drawable* drawable, LightBatchQueue& lightQueue, BatchQ
 
         destBatch.lightQueue_ = &lightQueue;
         destBatch.zone_ = zone;
+        UpdateBatchAmbient(destBatch, globalIllumination_, drawable);
 
         if (!isLitAlpha)
         {
@@ -2285,7 +2306,7 @@ void View::ProcessLight(LightQueryResult& query, unsigned threadIndex)
 {
     Light* light = query.light_;
     LightType type = light->GetLightType();
-    unsigned lightMask = light->GetLightMask();
+    unsigned lightMask = light->GetLightMaskEffective();
     const Frustum& frustum = cullCamera_->GetFrustum();
 
     // Check if light should be shadowed
@@ -2387,7 +2408,7 @@ void View::ProcessLight(LightQueryResult& query, unsigned threadIndex)
 void View::ProcessShadowCasters(LightQueryResult& query, const ea::vector<Drawable*>& drawables, unsigned splitIndex)
 {
     Light* light = query.light_;
-    unsigned lightMask = light->GetLightMask();
+    unsigned lightMask = light->GetLightMaskEffective();
 
     Camera* shadowCamera = query.shadowCameras_[splitIndex];
     const Frustum& shadowCameraFrustum = shadowCamera->GetFrustum();
@@ -2644,7 +2665,7 @@ void View::SetupDirLightShadowCamera(Camera* shadowCamera, Light* light, float n
     if (parameters.focus_)
     {
         BoundingBox litGeometriesBox;
-        unsigned lightMask = light->GetLightMask();
+        unsigned lightMask = light->GetLightMaskEffective();
 
         for (unsigned i = 0; i < geometries_.size(); ++i)
         {
@@ -3053,7 +3074,7 @@ void View::SetupLightVolumeBatch(Batch& batch)
 
     graphics_->SetScissorTest(false);
     if (!noStencil_)
-        graphics_->SetStencilTest(true, CMP_NOTEQUAL, OP_KEEP, OP_KEEP, OP_KEEP, 0, light->GetLightMask());
+        graphics_->SetStencilTest(true, CMP_NOTEQUAL, OP_KEEP, OP_KEEP, OP_KEEP, 0, light->GetLightMaskEffective());
     else
         graphics_->SetStencilTest(false);
 }

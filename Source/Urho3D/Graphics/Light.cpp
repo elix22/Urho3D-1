@@ -50,6 +50,14 @@ static const char* typeNames[] =
     nullptr
 };
 
+static const char* modeNames[] =
+{
+    "Realtime",
+    "Mixed",
+    "Baked",
+    nullptr
+};
+
 void BiasParameters::Validate()
 {
     constantBias_ = Clamp(constantBias_, -1.0f, 1.0f);
@@ -104,10 +112,12 @@ void Light::RegisterObject(Context* context)
 
     URHO3D_ACCESSOR_ATTRIBUTE("Is Enabled", IsEnabled, SetEnabled, bool, true, AM_DEFAULT);
     URHO3D_ENUM_ACCESSOR_ATTRIBUTE("Light Type", GetLightType, SetLightType, LightType, typeNames, DEFAULT_LIGHTTYPE, AM_DEFAULT);
+    URHO3D_ENUM_ACCESSOR_ATTRIBUTE("Light Mode", GetLightMode, SetLightMode, LightMode, modeNames, LM_REALTIME, AM_DEFAULT);
     URHO3D_ACCESSOR_ATTRIBUTE("Color", GetColor, SetColor, Color, Color::WHITE, AM_DEFAULT);
     URHO3D_ACCESSOR_ATTRIBUTE("Specular Intensity", GetSpecularIntensity, SetSpecularIntensity, float, DEFAULT_SPECULARINTENSITY,
         AM_DEFAULT);
     URHO3D_ACCESSOR_ATTRIBUTE("Brightness Multiplier", GetBrightness, SetBrightness, float, DEFAULT_BRIGHTNESS, AM_DEFAULT);
+    URHO3D_ACCESSOR_ATTRIBUTE("Indirect Brightness", GetIndirectBrightness, SetIndirectBrightness, float, 1.0f, AM_DEFAULT);
     URHO3D_ACCESSOR_ATTRIBUTE("Temperature", GetTemperature, SetTemperature, float, DEFAULT_TEMPERATURE, AM_DEFAULT);
     URHO3D_ATTRIBUTE("Use Physical Values", bool, usePhysicalValues_, false, AM_DEFAULT);
     URHO3D_ACCESSOR_ATTRIBUTE("Radius", GetRadius, SetRadius, float, DEFAULT_RADIUS, AM_DEFAULT);
@@ -256,6 +266,12 @@ void Light::SetLightType(LightType type)
     MarkNetworkUpdate();
 }
 
+void Light::SetLightMode(LightMode mode)
+{
+    lightMode_ = mode;
+    MarkNetworkUpdate();
+}
+
 void Light::SetPerVertex(bool enable)
 {
     perVertex_ = enable;
@@ -301,6 +317,12 @@ void Light::SetSpecularIntensity(float intensity)
 void Light::SetBrightness(float brightness)
 {
     brightness_ = brightness;
+    MarkNetworkUpdate();
+}
+
+void Light::SetIndirectBrightness(float indirectBrightness)
+{
+    indirectBrightness_ = indirectBrightness;
     MarkNetworkUpdate();
 }
 

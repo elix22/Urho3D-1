@@ -101,6 +101,25 @@ public:
     /// Return materials attribute.
     const ResourceRefList& GetMaterialsAttr() const;
 
+    /// Set whether the lightmap is baked for this object.
+    void SetBakeLightmap(bool bakeLightmap) { bakeLightmap_ = bakeLightmap; UpdateBatchesLightmaps(); }
+    /// Return whether the lightmap is baked for this object.
+    bool GetBakeLightmap() const { return bakeLightmap_; }
+    /// Return whether the lightmap is baked for this object. Return false for objects with zero scale in lightmap.
+    bool GetBakeLightmapEffective() const { return bakeLightmap_ && scaleInLightmap_ > 0.0f; }
+    /// Set scale in lightmap.
+    void SetScaleInLightmap(float scale) { scaleInLightmap_ = scale; }
+    /// Return scale in lightmap.
+    float GetScaleInLightmap() const { return scaleInLightmap_; }
+    /// Set lightmap index.
+    void SetLightmapIndex(unsigned idx) { lightmapIndex_ = idx; UpdateBatchesLightmaps(); }
+    /// Return lightmap index.
+    unsigned GetLightmapIndex() const { return lightmapIndex_; }
+    /// Set lightmap scale and offset.
+    void SetLightmapScaleOffset(const Vector4& scaleOffset) { lightmapScaleOffset_ = scaleOffset; UpdateBatchesLightmaps(); }
+    /// Return lightmap scale and offset.
+    const Vector4& GetLightmapScaleOffset() const { return lightmapScaleOffset_; }
+
 protected:
     /// Recalculate the world-space bounding box.
     void OnWorldBoundingBoxUpdate() override;
@@ -112,6 +131,8 @@ protected:
     void ResetLodLevels();
     /// Choose LOD levels based on distance.
     void CalculateLodLevels();
+    /// Update lightmaps in batches.
+    void UpdateBatchesLightmaps();
 
     /// Extra per-geometry data.
     ea::vector<StaticModelGeometryData> geometryData_;
@@ -123,6 +144,15 @@ protected:
     unsigned occlusionLodLevel_;
     /// Material list attribute.
     mutable ResourceRefList materialsAttr_;
+
+    /// Whether the lightmap is enabled.
+    bool bakeLightmap_{};
+    /// Texel density scale in lightmap.
+    float scaleInLightmap_{ 1.0f };
+    /// Lightmap index.
+    unsigned lightmapIndex_{};
+    /// Lightmap scale and offset.
+    Vector4 lightmapScaleOffset_{ 1.0f, 1.0f, 0.0f, 0.0f };
 
 private:
     /// Handle model reload finished.

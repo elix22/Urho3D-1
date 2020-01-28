@@ -93,6 +93,7 @@ _option(URHO3D_STATIC_RUNTIME                    "Link to static runtime"       
 set    (URHO3D_SSE             SSE2 CACHE STRING "Enable SSE instructions")
 
 # Subsystems
+_option2(URHO3D_GLOW              "Lightmapping subsystem enabled"                        ${URHO3D_ENABLE_ALL} "NOT WEB AND NOT MOBILE AND NOT MINGW" OFF)
 _option(URHO3D_IK                 "Inverse kinematics subsystem enabled"                  ${URHO3D_ENABLE_ALL})
 _option(URHO3D_LOGGING            "Enable logging subsystem"                              ${URHO3D_ENABLE_ALL})
 _option(URHO3D_NAVIGATION         "Navigation subsystem enabled"                          ${URHO3D_ENABLE_ALL})
@@ -113,6 +114,7 @@ else ()
     set (URHO3D_WITH_MONO ON)
 endif ()
 _option2(URHO3D_FILEWATCHER       "Watch filesystem for resource changes"                 ${URHO3D_ENABLE_ALL} "URHO3D_THREADING"              OFF)
+_option(URHO3D_SPHERICAL_HARMONICS "Use spherical harmonics for ambient lighting"         ON)
 _option(URHO3D_HASH_DEBUG         "Enable StringHash name debugging"                      ${URHO3D_ENABLE_ALL}                                    )
 _option(URHO3D_MONOLITHIC_HEADER  "Create Urho3DAll.h which includes all engine headers." OFF                                                     )
 _option2(URHO3D_MINIDUMPS         "Enable writing minidumps on crash"                     ${URHO3D_ENABLE_ALL} "MSVC"                          OFF)

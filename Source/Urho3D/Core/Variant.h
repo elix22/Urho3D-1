@@ -29,6 +29,7 @@
 #include <EASTL/unique_ptr.h>
 
 #include "../Container/Ptr.h"
+#include "../Container/ByteVector.h"
 #include "../Core/TypeTrait.h"
 #include "../Math/Color.h"
 #include "../Math/Matrix3.h"
@@ -90,7 +91,8 @@ using StringVector = ea::vector<ea::string>;
 /// Map of variants.
 using VariantMap = ea::unordered_map<StringHash, Variant>;
 
-/// Byte buffer used by variant.
+/// Deprecated. Use ByteVector instead.
+/// TODO: Rename all instances of VariantBuffer to ByteVector.
 using VariantBuffer = ea::vector<unsigned char>;
 
 /// Typed resource reference.

@@ -162,6 +162,21 @@ void CalculateSpotMatrix(Matrix4& dest, Light* light)
     dest = texAdjust * spotProj * spotView;
 }
 
+void SetInstanceShaderParameters(Graphics* graphics, const InstanceShaderParameters& params)
+{
+#if URHO3D_SPHERICAL_HARMONICS
+    graphics->SetShaderParameter(VSP_SHAR, params.ambient_.Ar_);
+    graphics->SetShaderParameter(VSP_SHAG, params.ambient_.Ag_);
+    graphics->SetShaderParameter(VSP_SHAB, params.ambient_.Ab_);
+    graphics->SetShaderParameter(VSP_SHBR, params.ambient_.Br_);
+    graphics->SetShaderParameter(VSP_SHBG, params.ambient_.Bg_);
+    graphics->SetShaderParameter(VSP_SHBB, params.ambient_.Bb_);
+    graphics->SetShaderParameter(VSP_SHC, params.ambient_.C_);
+#else
+    graphics->SetShaderParameter(VSP_AMBIENT, params.ambient_);
+#endif
+}
+
 void Batch::CalculateSortKey()
 {
     auto shaderID = (unsigned)(
@@ -245,6 +260,7 @@ void Batch::Prepare(View* view, Camera* camera, bool setModelTransform, bool all
     // Set model or skinning transforms
     if (setModelTransform && graphics->NeedParameterUpdate(SP_OBJECT, worldTransform_))
     {
+        SetInstanceShaderParameters(graphics, shaderParameters_);
         if (geometryType_ == GEOM_SKINNED)
         {
             graphics->SetShaderParameter(VSP_SKINMATRICES, reinterpret_cast<const float*>(worldTransform_),
@@ -261,6 +277,11 @@ void Batch::Prepare(View* view, Camera* camera, bool setModelTransform, bool all
             else
                 graphics->SetShaderParameter(VSP_BILLBOARDROT, cameraNode->GetWorldRotation().RotationMatrix());
         }
+    }
+
+    if (lightmapScaleOffset_)
+    {
+        graphics->SetShaderParameter(VSP_LMOFFSET, *lightmapScaleOffset_);
     }
 
     // Set zone-related shader parameters
@@ -611,8 +632,17 @@ void Batch::Prepare(View* view, Camera* camera, bool setModelTransform, bool all
         for (auto i = textures.begin(); i !=
             textures.end(); ++i)
         {
+            if (i->first == TU_EMISSIVE && lightmapScaleOffset_)
+                continue;
+
             if (graphics->HasTextureUnit(i->first))
                 graphics->SetTexture(i->first, i->second.Get());
+        }
+
+        if (lightmapScaleOffset_)
+        {
+            if (Scene* scene = view->GetScene())
+                graphics->SetTexture(TU_EMISSIVE, scene->GetLightmapTexture(lightmapIndex_));
         }
     }
 
@@ -661,10 +691,17 @@ void BatchGroup::SetInstancingData(void* lockedData, unsigned stride, unsigned& 
         const InstanceData& instance = instances_[i];
 
         memcpy(buffer, instance.worldTransform_, sizeof(Matrix3x4));
-        if (instance.instancingData_)
-            memcpy(buffer + sizeof(Matrix3x4), instance.instancingData_, stride - sizeof(Matrix3x4));
+        buffer += sizeof(Matrix3x4);
 
-        buffer += stride;
+        memcpy(buffer, &instance.shaderParameters_, sizeof(InstanceShaderParameters));
+        buffer += sizeof(InstanceShaderParameters);
+
+        if (instance.instancingData_)
+        {
+            unsigned extraSize = stride - sizeof(Matrix3x4) - sizeof(InstanceShaderParameters);
+            memcpy(buffer, instance.instancingData_, extraSize);
+            buffer += extraSize;
+        }
     }
 
     freeIndex += instances_.size();
@@ -689,7 +726,10 @@ void BatchGroup::Draw(View* view, Camera* camera, bool allowDepthWrite) const
             for (unsigned i = 0; i < instances_.size(); ++i)
             {
                 if (graphics->NeedParameterUpdate(SP_OBJECT, instances_[i].worldTransform_))
+                {
                     graphics->SetShaderParameter(VSP_MODEL, *instances_[i].worldTransform_);
+                    SetInstanceShaderParameters(graphics, instances_[i].shaderParameters_);
+                }
 
                 graphics->Draw(geometry_->GetPrimitiveType(), geometry_->GetIndexStart(), geometry_->GetIndexCount(),
                     geometry_->GetVertexStart(), geometry_->GetVertexCount());

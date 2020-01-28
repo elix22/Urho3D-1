@@ -26,6 +26,7 @@
 #include "../Core/CoreEvents.h"
 #include "../Core/Profiler.h"
 #include "../Core/WorkQueue.h"
+#include "../Graphics/Texture2D.h"
 #include "../IO/Archive.h"
 #include "../IO/File.h"
 #include "../IO/Log.h"
@@ -72,7 +73,8 @@ Scene::Scene(Context* context) :
     snapThreshold_(DEFAULT_SNAP_THRESHOLD),
     updateEnabled_(true),
     asyncLoading_(false),
-    threadedUpdate_(false)
+    threadedUpdate_(false),
+    lightmaps_(Texture2D::GetTypeStatic())
 {
     // Assign an ID to self so that nodes can refer to this node as a parent
     SetID(GetFreeNodeID(REPLICATED));
@@ -120,6 +122,7 @@ void Scene::RegisterObject(Context* context)
     URHO3D_ATTRIBUTE("Next Local Component ID", unsigned, localComponentID_, FIRST_LOCAL_ID, AM_FILE | AM_NOEDIT);
     URHO3D_ATTRIBUTE("Variables", VariantMap, vars_, Variant::emptyVariantMap, AM_FILE); // Network replication of vars uses custom data
     URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Variable Names", GetVarNamesAttr, SetVarNamesAttr, ea::string, EMPTY_STRING, AM_FILE | AM_NOEDIT);
+    URHO3D_ATTRIBUTE_EX("Lightmaps", ResourceRefList, lightmaps_, MarkLightmapTexturesDirty, ResourceRefList(Texture2D::GetTypeStatic()), AM_DEFAULT);
 }
 
 bool Scene::EnableRegistry()
@@ -272,6 +275,35 @@ void Scene::AddReplicationState(NodeReplicationState* state)
     for (auto i = replicatedNodes_.begin(); i !=
         replicatedNodes_.end(); ++i)
         state->sceneState_->dirtyNodes_.insert(i->first);
+}
+
+void Scene::ResetLightmaps()
+{
+    lightmaps_.names_.clear();
+    MarkLightmapTexturesDirty();
+}
+
+void Scene::AddLightmap(const ea::string& lightmapTextureName)
+{
+    lightmaps_.names_.push_back(lightmapTextureName);
+    MarkLightmapTexturesDirty();
+}
+
+Texture2D* Scene::GetLightmapTexture(unsigned index)
+{
+    if (lightmapTexturesDirty_)
+    {
+        auto cache = GetSubsystem<ResourceCache>();
+        lightmapTextures_.clear();
+        for (const ea::string& lightmapTextureName : lightmaps_.names_)
+        {
+            SharedPtr<Texture2D> texture{ cache->GetResource<Texture2D>(lightmapTextureName) };
+            lightmapTextures_.push_back(texture);
+        }
+
+        lightmapTexturesDirty_ = false;
+    }
+    return index < lightmapTextures_.size() ? lightmapTextures_[index] : nullptr;
 }
 
 bool Scene::LoadXML(Deserializer& source)
@@ -1371,6 +1403,7 @@ void Scene::FinishLoading(Deserializer* source)
 {
     if (source)
     {
+        // TODO: This name is not full file name, it's resource name. Consider changing it.
         fileName_ = source->GetName();
         checksum_ = source->GetChecksum();
     }
@@ -1381,6 +1414,7 @@ void Scene::FinishSaving(Serializer* dest) const
     auto* ptr = dynamic_cast<Deserializer*>(dest);
     if (ptr)
     {
+        // TODO: This name is not full file name, it's resource name. Consider changing it.
         fileName_ = ptr->GetName();
         checksum_ = ptr->GetChecksum();
     }

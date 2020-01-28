@@ -407,6 +407,18 @@ extern URHO3D_API const StringHash VSP_ZONE;
 extern URHO3D_API const StringHash VSP_LIGHTMATRICES;
 extern URHO3D_API const StringHash VSP_SKINMATRICES;
 extern URHO3D_API const StringHash VSP_VERTEXLIGHTS;
+extern URHO3D_API const StringHash VSP_LMOFFSET;
+#if URHO3D_SPHERICAL_HARMONICS
+extern URHO3D_API const StringHash VSP_SHAR;
+extern URHO3D_API const StringHash VSP_SHAG;
+extern URHO3D_API const StringHash VSP_SHAB;
+extern URHO3D_API const StringHash VSP_SHBR;
+extern URHO3D_API const StringHash VSP_SHBG;
+extern URHO3D_API const StringHash VSP_SHBB;
+extern URHO3D_API const StringHash VSP_SHC;
+#else
+extern URHO3D_API const StringHash VSP_AMBIENT;
+#endif
 extern URHO3D_API const StringHash PSP_AMBIENTCOLOR;
 extern URHO3D_API const StringHash PSP_CAMERAPOS;
 extern URHO3D_API const StringHash PSP_DELTATIME;
@@ -479,7 +491,7 @@ enum VertexMask : unsigned
 };
 URHO3D_FLAGSET(VertexMask, VertexMaskFlags);
 
-static const int MAX_RENDERTARGETS = 4;
+static const int MAX_RENDERTARGETS = 8;
 static const int MAX_VERTEX_STREAMS = 4;
 static const int MAX_CONSTANT_REGISTERS = 256;
 
