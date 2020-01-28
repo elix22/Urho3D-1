@@ -1,5 +1,5 @@
-//
-// Copyright (c) 2008-2019 the Urho3D project.
+﻿//
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,8 @@
 
 #include "../Core/Context.h"
 #include "../Core/Profiler.h"
+#include "../IO/Archive.h"
+#include "../IO/ArchiveSerialization.h"
 #include "../IO/Log.h"
 #include "../IO/MemoryBuffer.h"
 #include "../Resource/XMLFile.h"
@@ -91,6 +93,146 @@ void Node::RegisterObject(Context* context)
         AM_NET | AM_LATESTDATA | AM_NOEDIT);
     URHO3D_ACCESSOR_ATTRIBUTE("Network Parent Node", GetNetParentAttr, SetNetParentAttr, ea::vector<unsigned char>, Variant::emptyBuffer,
         AM_NET | AM_NOEDIT);
+}
+
+bool Node::Serialize(Archive& archive)
+{
+    if (ArchiveBlock block = archive.OpenUnorderedBlock("node"))
+    {
+        if (archive.IsInput())
+        {
+            SceneResolver resolver;
+
+            // Load this node ID for resolver
+            unsigned nodeID{};
+            if (!SerializeValue(archive, "id", id_))
+                return false;
+            resolver.AddNode(nodeID, this);
+
+            // Load node content
+            if (!Serialize(archive, block, &resolver))
+                return false;
+
+            // Resolve IDs and apply attributes
+            resolver.Resolve();
+            ApplyAttributes();
+        }
+        else
+        {
+            // Save node ID and content
+            SerializeValue(archive, "id", id_);
+            Serialize(archive, block, nullptr);
+        }
+        return true;
+    }
+    return false;
+}
+
+bool Node::Serialize(Archive& archive, ArchiveBlock& block, SceneResolver* resolver,
+    bool serializeChildren /*= true*/, bool rewriteIDs /*= false*/, CreateMode mode /*= REPLICATED*/)
+{
+    // Resolver must be present if loading
+    const bool loading = archive.IsInput();
+    assert(loading == !!resolver);
+
+    // Remove all children and components first in case this is not a fresh load
+    if (loading)
+    {
+        RemoveAllChildren();
+        RemoveAllComponents();
+    }
+
+    // Serialize base class
+    if (!Animatable::Serialize(archive, block))
+        return false;
+
+    // Serialize components
+    const unsigned numComponentsToWrite = loading ? 0 : GetNumPersistentComponents();
+    const bool componentsSerialized = SerializeCustomVector(archive, ArchiveBlockType::Array, "components", numComponentsToWrite, components_,
+        [&](unsigned /*index*/, SharedPtr<Component> component, bool loading)
+    {
+        assert(loading || component);
+
+        // Skip temporary components
+        if (component && component->IsTemporary())
+            return true;
+
+        // Serialize component
+        if (ArchiveBlock componentBlock = archive.OpenSafeUnorderedBlock("component"))
+        {
+            // Serialize component ID and type
+            unsigned componentID = component ? component->GetID() : 0;
+            StringHash componentType = component ? component->GetType() : StringHash{};
+            const ea::string& componentTypeName = component ? component->GetTypeName() : EMPTY_STRING;
+            SerializeValue(archive, "id", componentID);
+            SerializeStringHash(archive, "type", componentType, componentTypeName);
+
+            // Create component if loading
+            if (loading)
+            {
+                const bool isReplicated = mode == REPLICATED && Scene::IsReplicatedID(componentID);
+                component = SafeCreateComponent(EMPTY_STRING, componentType, isReplicated ? REPLICATED : LOCAL, componentID);
+
+                // Add component to resolver
+                resolver->AddComponent(componentID, component);
+            }
+
+            // Serialize component.
+            component->Serialize(archive, componentBlock);
+            return true;
+        }
+        return false;
+    });
+
+    if (!componentsSerialized)
+        return false;
+
+    // Skip children
+    if (!serializeChildren)
+        return true;
+
+    // Serialize children
+    const unsigned numChildrenToWrite = loading ? 0 : GetNumPersistentChildren();
+    const bool childrenSerialized = SerializeCustomVector(archive, ArchiveBlockType::Array, "children", numChildrenToWrite, children_,
+        [&](unsigned /*index*/, SharedPtr<Node> child, bool loading)
+    {
+        assert(loading || child);
+
+        // Skip temporary children
+        if (child && child->IsTemporary())
+            return true;
+
+        // Serialize child
+        if (ArchiveBlock childBlock = archive.OpenUnorderedBlock("child"))
+        {
+            // Serialize node ID
+            unsigned nodeID = child ? child->GetID() : 0;
+            SerializeValue(archive, "id", nodeID);
+
+            // Create child if loading
+            if (loading)
+            {
+                const bool isReplicated = mode == REPLICATED && Scene::IsReplicatedID(nodeID);
+                child = CreateChild(rewriteIDs ? 0 : nodeID, isReplicated ? REPLICATED : LOCAL);
+
+                // Add child node to resolver
+                resolver->AddNode(nodeID, child);
+            }
+
+            // Serialize child
+            if (!child->Serialize(archive, childBlock, resolver, serializeChildren, rewriteIDs, mode))
+                return false;
+
+            return true;
+        }
+
+        return false;
+    });
+
+    if (!childrenSerialized)
+        return false;
+
+    return true;
 }
 
 bool Node::Load(Deserializer& source)
@@ -554,6 +696,11 @@ void Node::SetWorldTransform(const Vector3& position, const Quaternion& rotation
     SetWorldPosition(position);
     SetWorldRotation(rotation);
     SetWorldScale(scale);
+}
+
+void Node::SetWorldTransform(const Matrix3x4& worldTransform)
+{
+    SetWorldTransform(worldTransform.Translation(), worldTransform.Rotation(), worldTransform.Scale());
 }
 
 void Node::Translate(const Vector3& delta, TransformSpace space)
@@ -1436,6 +1583,11 @@ Component* Node::GetParentComponent(StringHash type, bool fullTraversal) const
 void Node::SetID(unsigned id)
 {
     id_ = id;
+}
+
+void Node::SetEntity(entt::entity entity)
+{
+    entity_ = entity;
 }
 
 void Node::SetScene(Scene* scene)

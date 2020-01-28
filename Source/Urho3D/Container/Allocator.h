@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,11 +22,9 @@
 
 #pragma once
 
-#ifdef URHO3D_IS_BUILDING
-#include "Urho3D.h"
-#else
+#include "../Core/NonCopyable.h"
+
 #include <Urho3D/Urho3D.h>
-#endif
 
 #include <cstddef>
 #include <EASTL/utility.h>
@@ -70,7 +68,7 @@ URHO3D_API void* AllocatorReserve(AllocatorBlock* allocator);
 URHO3D_API void AllocatorFree(AllocatorBlock* allocator, void* ptr);
 
 /// %Allocator template class. Allocates objects of a specific class.
-template <class T> class Allocator
+template <class T> class Allocator : private NonCopyable
 {
 public:
     /// Construct.
@@ -86,11 +84,6 @@ public:
     {
         AllocatorUninitialize(allocator_);
     }
-
-    /// Prevent copy construction.
-    Allocator(const Allocator<T>& rhs) = delete;
-    /// Prevent assignment.
-    Allocator<T>& operator =(const Allocator<T>& rhs) = delete;
 
     /// Reserve and default-construct an object.
     template<typename... Args>

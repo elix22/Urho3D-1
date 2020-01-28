@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -279,12 +279,14 @@ bool Graphics::SetMode(int width, int height, bool fullscreen, bool borderless, 
     multiSample = Clamp(multiSample, 1, 16);
 
     if (IsInitialized() && width == width_ && height == height_ && fullscreen == fullscreen_ && borderless == borderless_ &&
-        resizable == resizable_ && vsync == vsync_ && tripleBuffer == tripleBuffer_ && multiSample == multiSample_)
+        resizable == resizable_ && vsync == vsync_ && tripleBuffer == tripleBuffer_ && multiSample == multiSample_ &&
+        monitor == monitor_ && refreshRate == refreshRate_)
         return true;
 
     // If only vsync changes, do not destroy/recreate the context
     if (IsInitialized() && width == width_ && height == height_ && fullscreen == fullscreen_ && borderless == borderless_ &&
-        resizable == resizable_ && tripleBuffer == tripleBuffer_ && multiSample == multiSample_ && vsync != vsync_)
+        resizable == resizable_ && tripleBuffer == tripleBuffer_ && multiSample == multiSample_ && monitor == monitor_ &&
+        refreshRate == refreshRate_ && vsync != vsync_)
     {
         SDL_GL_SetSwapInterval(vsync ? 1 : 0);
         vsync_ = vsync;
@@ -322,7 +324,9 @@ bool Graphics::SetMode(int width, int height, bool fullscreen, bool borderless, 
 
             for (unsigned i = 0; i < resolutions.size(); ++i)
             {
-                unsigned error = Abs(resolutions[i].x_ - width) + Abs(resolutions[i].y_ - height);
+                unsigned error = (unsigned)(Abs(resolutions[i].x_ - width) + Abs(resolutions[i].y_ - height));
+                if (refreshRate != 0)
+                    error += (unsigned)(Abs(resolutions[i].z_ - refreshRate));
                 if (error < bestError)
                 {
                     best = i;
@@ -510,14 +514,15 @@ bool Graphics::SetMode(int width, int height, bool fullscreen, bool borderless, 
 
 #ifdef URHO3D_LOGGING
     URHO3D_LOGINFOF("Adapter used %s %s", (const char *) glGetString(GL_VENDOR), (const char *) glGetString(GL_RENDERER));
-    
+
     ea::string msg;
-    msg.append_sprintf("Set screen mode %dx%d %s monitor %d", width_, height_,
-        (fullscreen_ ? "fullscreen" : "windowed"), monitor_);
+    msg.append_sprintf("Set screen mode %dx%d %s monitor %d", width_, height_, (fullscreen_ ? "fullscreen" : "windowed"), monitor_);
     if (borderless_)
         msg.append(" borderless");
     if (resizable_)
         msg.append(" resizable");
+    if (highDPI_)
+        msg.append(" highDPI");
     if (multiSample > 1)
         msg.append_sprintf(" multisample %d", multiSample);
     URHO3D_LOGINFO(msg);
@@ -623,14 +628,11 @@ bool Graphics::BeginFrame()
     if (!IsInitialized() || IsDeviceLost())
         return false;
 
-    // If using an external window, check it for size changes, and reset screen mode if necessary
-    if (externalWindow_)
+    if (!externalWindow_)
     {
-        int width, height;
-
-        SDL_GL_GetDrawableSize(window_, &width, &height);
-        if (width != width_ || height != height_)
-            SetMode(width, height);
+        // Do not attempt to render when in fullscreen and the window is minimized
+        if (fullscreen_ && (SDL_GetWindowFlags(window_) & SDL_WINDOW_MINIMIZED))
+            return false;
     }
 
     // Re-enable depth test and depth func in case a third party program has modified it
@@ -669,6 +671,16 @@ void Graphics::EndFrame()
 
     // Clean up too large scratch buffers
     CleanupScratchBuffers();
+
+    // If using an external window, check it for size changes, and reset screen mode if necessary
+    if (externalWindow_)
+    {
+        int width, height;
+
+        SDL_GL_GetDrawableSize(window_, &width, &height);
+        if (width != width_ || height != height_)
+            SetMode(width, height);
+    }
 }
 
 void Graphics::Clear(ClearTargetFlags flags, const Color& color, float depth, unsigned stencil)
@@ -1186,7 +1198,7 @@ void Graphics::SetShaders(ShaderVariation* vs, ShaderVariation* ps)
     impl_->vertexBuffersDirty_ = true;
 }
 
-void Graphics::SetShaderParameter(StringHash param, const float* data, unsigned count)
+void Graphics::SetShaderParameter(StringHash param, const float data[], unsigned count)
 {
     if (impl_->shaderProgram_)
     {
@@ -2856,6 +2868,7 @@ void Graphics::CheckFeatureSupport()
     dxtTextureSupport_ = CheckExtension("WEBGL_compressed_texture_s3tc"); // https://www.khronos.org/registry/webgl/extensions/WEBGL_compressed_texture_s3tc/
     etcTextureSupport_ = CheckExtension("WEBGL_compressed_texture_etc1"); // https://www.khronos.org/registry/webgl/extensions/WEBGL_compressed_texture_etc1/
     pvrtcTextureSupport_ = CheckExtension("WEBGL_compressed_texture_pvrtc"); // https://www.khronos.org/registry/webgl/extensions/WEBGL_compressed_texture_pvrtc/
+    etc2TextureSupport_ = gl3Support || CheckExtension("WEBGL_compressed_texture_etc"); // https://www.khronos.org/registry/webgl/extensions/WEBGL_compressed_texture_etc/
     // Instancing is in core in WebGL 2, so the extension may not be present anymore. In WebGL 1, find https://www.khronos.org/registry/webgl/extensions/ANGLE_instanced_arrays/
     // TODO: In the distant future, this may break if WebGL 3 is introduced, so either improve the GL_VERSION parsing here, or keep track of which WebGL version we attempted to initialize.
     instancingSupport_ = (strstr((const char *)glGetString(GL_VERSION), "WebGL 2.") != 0) || CheckExtension("ANGLE_instanced_arrays");

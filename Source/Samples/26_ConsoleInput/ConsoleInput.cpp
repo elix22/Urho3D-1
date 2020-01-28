@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -72,7 +72,7 @@ void ConsoleInput::Start()
     UnsubscribeFromEvent(E_KEYUP);
 
     // Enable filesystem interaction in console.
-    GetFileSystem()->SetExecuteConsoleCommands(true);
+    context_->GetFileSystem()->SetExecuteConsoleCommands(true);
 
     // Show the console by default, make it large. Console will show the text edit field when there is at least one
     // subscriber for the console command event

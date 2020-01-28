@@ -16,8 +16,10 @@
 namespace eastl {
 
 %naturalvar string;
+%naturalvar string_view;
 
 class string;
+class string_view;
 
 // string
 %typemap(ctype) string "char *"
@@ -156,7 +158,8 @@ class string;
         SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "null string", 0);
         return $null;
     }
-    $*1_ltype $input_str(*(const char**)$input);
+    const char* p_$input = *(const char**)$input;
+    $*1_ltype $input_str(p_$input ? p_$input : "");
     $1 = &$input_str;
 %}
 %typemap(argout) string& %{ *(const char**)$input = SWIG_csharp_string_callback($input_str.c_str()); %}
@@ -185,7 +188,7 @@ class string;
 ") string&     "ref $iminputRef"
 
 // Variables
-%typemap(csvarin, excode=SWIGEXCODE2) string&, String * %{
+%typemap(csvarin, excode=SWIGEXCODE2) string&, string * %{
     set {
         unsafe {
             fixed (byte* $csinputPtr = System.Text.Encoding.UTF8.GetBytes($csinput)) {
@@ -196,7 +199,7 @@ class string;
     }
 %}
 
-%typemap(csvarout, excode=SWIGEXCODE2) string&, String * %{
+%typemap(csvarout, excode=SWIGEXCODE2) string&, string * %{
     get {
         unsafe {
             var str = $imcall;$excode
@@ -207,8 +210,27 @@ class string;
 
 
 // Ptr types
-%apply       string& {       String * };
-%apply const string& { const String * };
+%apply       string& {       string* };
+%apply const string& { const string* };
 
+// string_view
+%apply string { string_view };
+%typemap(out) string_view %{ $result = SWIG_csharp_string_callback($1.data()); %}
+%typemap(in, canthrow=1) string_view
+%{ if (!$input) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "null string", 0);
+    return $null;
+   }
+   eastl::string_view $input_view((const char*)$input);
+   $1.swap($input_view); %}
+%typemap(out) string %{ $result = SWIG_csharp_string_callback($1.c_str()); %}
+
+%typemap(directorout, canthrow=1) string_view
+%{ if (!$input) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "null string", 0);
+    return $null;
+   }
+   eastl::string_view $input_view((const char*)$input);
+   $result.swap($input_view); %}
 }
 

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -48,15 +48,9 @@ URHO3D_EVENT(E_EDITORAPPLICATIONMENU, EditorApplicationMenu)
 }
 
 /// Event sent when editor is about to save a Project.json file.
-URHO3D_EVENT(E_EDITORPROJECTSAVING, EditorProjectSaving)
+URHO3D_EVENT(E_EDITORPROJECTSERIALIZE, EditorProjectSerialize)
 {
-    URHO3D_PARAM(P_ROOT, Root);                      // Raw pointer to JSONValue.
-}
-
-/// Event sent when editor is about to load a Project.json file.
-URHO3D_EVENT(E_EDITORPROJECTLOADING, EditorProjectLoading)
-{
-    URHO3D_PARAM(P_ROOT, Root);                      // Raw pointer to JSONValue.
+    URHO3D_PARAM(P_ARCHIVE, Root);                      // Raw pointer to Archive.
 }
 
 /// Event sent when editor is about to load a Project.json file.
@@ -92,6 +86,35 @@ URHO3D_EVENT(E_EDITORRESOURCECONTEXTMENU, EditorResourceContextMenu)
 {
     URHO3D_PARAM(P_CTYPE, CType);                       // ContentType
     URHO3D_PARAM(P_RESOURCENAME, ResourceName);         // String
+}
+
+/// Sent when user adds a new flavor.
+URHO3D_EVENT(E_EDITORFLAVORADDED, EditorFlavorAdded)
+{
+    URHO3D_PARAM(P_FLAVOR, Flavor);                     // Ptr
+}
+
+/// Sent when user adds a new flavor.
+URHO3D_EVENT(E_EDITORFLAVORREMOVED, EditorFlavorRemoved)
+{
+    URHO3D_PARAM(P_FLAVOR, Flavor);                     // Ptr
+}
+
+/// Sent when user adds a new flavor.
+URHO3D_EVENT(E_EDITORFLAVORRENAMED, EditorFlavorRenamed)
+{
+    URHO3D_PARAM(P_FLAVOR, Flavor);                     // Ptr
+    URHO3D_PARAM(P_OLDNAME, OldName);                   // String
+    URHO3D_PARAM(P_NEWNAME, NewName);                   // String
+}
+
+/// Sent when user adds a new flavor.
+URHO3D_EVENT(E_EDITORIMPORTERATTRIBUTEMODIFIED, EditorImporterAttributeModified)
+{
+    URHO3D_PARAM(P_ASSET, Asset);                       // Ptr
+    URHO3D_PARAM(P_IMPORTER, Importer);                 // Ptr
+    URHO3D_PARAM(P_ATTRINFO, AttrInfo);                 // Void Ptr
+    URHO3D_PARAM(P_NEWVALUE, NewValue);                 // Variant
 }
 
 }

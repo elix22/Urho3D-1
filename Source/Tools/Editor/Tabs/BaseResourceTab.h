@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -51,11 +51,13 @@ public:
     /// Closes current tab and unloads it's contents from memory.
     void Close() override;
     ///
-    void OnBeforeEnd() override;
+    bool RenderWindowContent() override;
 
 protected:
     /// Set resource name.
     void SetResourceName(const ea::string& resourceName);
+    /// Render scene tab context menu.
+    void OnRenderContextMenu();
 
     /// Name of loaded resource.
     ea::string resourceName_;

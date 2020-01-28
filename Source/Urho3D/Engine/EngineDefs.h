@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -79,5 +79,7 @@ static const ea::string EP_WINDOW_MAXIMIZE = "WindowMaximize";
 static const ea::string EP_WINDOW_TITLE = "WindowTitle";
 static const ea::string EP_WINDOW_WIDTH = "WindowWidth";
 static const ea::string EP_WORKER_THREADS = "WorkerThreads";
-
+static const ea::string EP_ENGINE_CLI_PARAMETERS = "EngineCliParameters";
+static const ea::string EP_ENGINE_AUTO_LOAD_SCRIPTS = "EngineAutoLoadScripts";
+static const ea::string EP_SYSTEMUI_FLAGS = "SystemUIFlags";
 }

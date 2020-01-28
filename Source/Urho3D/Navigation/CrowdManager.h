@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -55,6 +55,9 @@ struct CrowdObstacleAvoidanceParams
     unsigned char adaptiveDepth;    ///< adaptive
 };
 
+/// Callback used to adjust crowd agent velocity.
+using CrowdAgentVelocityShader = std::function<void(CrowdAgent* agent, float timeStep, Vector3& desiredVelocity, float& desiredSpeed)>;
+
 /// Crowd manager scene component. Should be added only to the root scene node.
 class URHO3D_API CrowdManager : public Component
 {
@@ -76,6 +79,11 @@ public:
     void DrawDebugGeometry(DebugRenderer* debug, bool depthTest) override;
     /// Add debug geometry to the debug renderer.
     void DrawDebugGeometry(bool depthTest);
+
+    /// Set velocity shader.
+    void SetVelocityShader(const CrowdAgentVelocityShader& shader) { velocityShader_ = shader; }
+    /// Update agent velocity using velocity shader.
+    void UpdateAgentVelocity(CrowdAgent* agent, float timeStep, Vector3& desiredVelocity, float& desiredSpeed) const { if (velocityShader_) velocityShader_(agent, timeStep, desiredVelocity, desiredSpeed); }
 
     /// Set the crowd target position. The target position is set to all crowd agents found in the specified node. Defaulted to scene node.
     void SetCrowdTarget(const Vector3& position, Node* node = nullptr);
@@ -181,6 +189,8 @@ private:
 
     /// Internal Detour crowd object.
     dtCrowd* crowd_{};
+    /// Velocity shader.
+    CrowdAgentVelocityShader velocityShader_;
     /// NavigationMesh for which the crowd was created.
     WeakPtr<NavigationMesh> navigationMesh_;
     /// The NavigationMesh component Id for pending crowd creation.

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -514,7 +514,22 @@ bool CrowdAgent::IsInCrowd() const
     return crowdManager_ && agentCrowdId_ != -1;
 }
 
-void CrowdAgent::OnCrowdUpdate(dtCrowdAgent* ag, float dt)
+void CrowdAgent::OnCrowdVelocityUpdate(dtCrowdAgent* ag, float* pos, float dt)
+{
+    assert (ag);
+    if (node_)
+    {
+        // Yes, pos actually stores desired velocity in this callback
+        Vector3 desiredVelocity{ pos };
+        crowdManager_->UpdateAgentVelocity(this, dt, desiredVelocity, ag->desiredSpeed);
+
+        pos[0] = desiredVelocity.x_;
+        pos[1] = desiredVelocity.y_;
+        pos[2] = desiredVelocity.z_;
+    }
+}
+
+void CrowdAgent::OnCrowdPositionUpdate(dtCrowdAgent* ag, float* /*pos*/, float dt)
 {
     assert (ag);
     if (node_)

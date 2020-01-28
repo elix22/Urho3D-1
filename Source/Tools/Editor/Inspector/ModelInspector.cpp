@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,24 +19,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-
-#include <Urho3D/Graphics/Viewport.h>
-#include <Urho3D/Graphics/RenderPath.h>
-#include <Urho3D/Graphics/Renderer.h>
-#include <Urho3D/Graphics/Light.h>
-#include <Urho3D/Graphics/Camera.h>
 #include <Urho3D/Graphics/Model.h>
-#include <Urho3D/Resource/ResourceCache.h>
 #include <Urho3D/SystemUI/SystemUI.h>
-#include <Urho3D/Input/Input.h>
-#include <Urho3D/Core/StringUtils.h>
 #include <Urho3D/Graphics/StaticModel.h>
-#include <Toolbox/SystemUI/Widgets.h>
-#include <Urho3D/IO/Log.h>
-#include "Tabs/Scene/SceneTab.h"
-#include "EditorEvents.h"
+
 #include "ModelInspector.h"
 #include "Editor.h"
+
 
 namespace Urho3D
 {
@@ -46,28 +35,22 @@ ModelInspector::ModelInspector(Context* context)
 {
 }
 
-void ModelInspector::RegisterObject(Context* context)
+void ModelInspector::SetInspected(Object* inspected)
 {
-    context->RegisterFactory<ModelInspector>();
-}
-
-void ModelInspector::SetResource(const ea::string& resourceName)
-{
-    if (Model* model = GetCache()->GetResource<Model>(resourceName))
-    {
-        BaseClassName::SetResource(resourceName);
-        SetModel(model);
-    }
+    assert(inspected->IsInstanceOf<Model>());
+    InspectorProvider::SetInspected(inspected);
+    SetModel(static_cast<Model*>(inspected));
 }
 
 void ModelInspector::RenderInspector(const char* filter)
 {
-    SharedPtr<ModelInspector> ref(this);
+    if (inspected_.Expired())
+        return;
+
     if (ui::CollapsingHeader("Model", ImGuiTreeNodeFlags_DefaultOpen))
     {
         RenderPreview();
-        HandleInput();
-        if (StaticModel* staticModel = node_->GetComponent<StaticModel>())
+        if (auto* staticModel = node_->GetComponent<StaticModel>())
         {
             if (Model* modelResource = staticModel->GetModel())
             {

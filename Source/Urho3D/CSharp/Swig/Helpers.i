@@ -1,4 +1,5 @@
 // Various marshalling helpers
+%include <typemaps.i>
 
 %typemap(ctype)  char* strdup "char*"
 %typemap(imtype) char* strdup "global::System.IntPtr"
@@ -22,6 +23,26 @@ void* malloc(int size);
 char* strdup(const char* void_ptr_string);
 int strlen(const char* void_ptr_string);
 
+%typemap(ctype)  const char* const* "char**"
+%typemap(imtype) const char* const* "global::System.IntPtr"
+%typemap(cstype) const char* const* "string[]"
+// FIXME: %typemap(in)     const char* const* "$1 = $input;"
+%typemap(out)    const char* const* "$result = $1;"
+// FIXME: %typemap(csin)   const char* const* "$csinput"
+%typemap(csout, excode=SWIGEXCODE) const char* const* {
+    unsafe {
+      var ptr = (byte**)$imcall;$excode
+      var len = 0;
+      if (ptr != null)
+      {
+          for (; ptr[len] != null; len++) { }
+      }
+      var ret = new string[len];
+      for (var i = 0; i < len; i++)
+        ret[i] = global::System.Text.Encoding.UTF8.GetString(ptr[i], Urho3D.strlen(new global::System.IntPtr(ptr[i])));
+      return ret;
+    }
+  }
 
 %define CS_CONSTANT(fqn, name, value)
   %csconst(1) fqn;
@@ -92,44 +113,3 @@ int strlen(const char* void_ptr_string);
 %}
 %pragma(csharp) imclasscode=
 %enddef
-
-%runtime %{
-    #include <cstddef>
-
-    template<typename T> T* addr(T& ref)  { return &ref; }
-    template<typename T> T* addr(T* ptr)  { return ptr;  }
-    template<typename T> T* addr(SwigValueWrapper<T>& ref)  { return &(T&)ref; }
-    template<typename T> T* addr(SwigValueWrapper<T>* ptr)  { return *ptr;  }
-    template<typename T> T& deref(T& ref) { return ref;  }
-    template<typename T> T& deref(T* ptr) { return *ptr; }
-    template<typename T> T& deref(SwigValueWrapper<T>& ref) { return (T&)ref;  }
-    template<typename T> T& deref(SwigValueWrapper<T>* ptr) { return (T&)*ptr; }
-
-    namespace pod
-    {
-        #define DEFINE_POD_HELPER_STRUCT(type, n) struct type##n { type data[n]; };
-        DEFINE_POD_HELPER_STRUCT(int, 2);
-        DEFINE_POD_HELPER_STRUCT(int, 3);
-        DEFINE_POD_HELPER_STRUCT(int, 4);
-        DEFINE_POD_HELPER_STRUCT(float, 2);
-        DEFINE_POD_HELPER_STRUCT(float, 3);
-        DEFINE_POD_HELPER_STRUCT(float, 4);
-        DEFINE_POD_HELPER_STRUCT(float, 6);
-        DEFINE_POD_HELPER_STRUCT(float, 7);
-        DEFINE_POD_HELPER_STRUCT(float, 8);
-        DEFINE_POD_HELPER_STRUCT(float, 9);
-        DEFINE_POD_HELPER_STRUCT(float, 12);
-        DEFINE_POD_HELPER_STRUCT(float, 16);
-        #undef DEFINE_POD_HELPER_STRUCT
-
-        template<typename From, typename To>
-        To convert(const From& from)
-        {
-            static_assert(sizeof(From) == sizeof(To), "");
-            To value;
-            memcpy(&value, &from, sizeof(from));
-            return value;
-        }
-    }
-
-%}

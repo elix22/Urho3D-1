@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,9 +20,13 @@
 // THE SOFTWARE.
 //
 
+/// \file
+
 #pragma once
 
 #include <EASTL/map.h>
+
+#include <utility>
 
 #include "../Core/Variant.h"
 
@@ -138,6 +142,12 @@ public:
     {
         *this = value;
     }
+    /// Move-construct from another JSON value.
+    JSONValue(JSONValue && value) :
+        type_(0)
+    {
+        *this = std::move(value);
+    }
     /// Destruct.
     ~JSONValue()
     {
@@ -164,6 +174,8 @@ public:
     JSONValue& operator =(const ea::map<ea::string, JSONValue>& rhs);
     /// Assign from another JSON value.
     JSONValue& operator =(const JSONValue& rhs);
+    /// Move-assign from another JSON value.
+    JSONValue& operator =(JSONValue && rhs);
     /// Value equality operator.
     bool operator ==(const JSONValue& rhs) const;
     /// Value inequality operator.
@@ -192,19 +204,19 @@ public:
     bool IsObject() const { return GetValueType() == JSON_OBJECT; }
 
     /// Return boolean value.
-    bool GetBool() const { return IsBool() ? boolValue_ : false;}
+    bool GetBool(bool defaultValue = false) const { return IsBool() ? boolValue_ : defaultValue;}
     /// Return integer value.
-    int GetInt() const { return IsNumber() ? (int)numberValue_ : 0; }
+    int GetInt(int defaultValue = 0) const { return IsNumber() ? (int)numberValue_ : defaultValue; }
     /// Return unsigned integer value.
-    unsigned GetUInt() const { return IsNumber() ? (unsigned)numberValue_ : 0; }
+    unsigned GetUInt(unsigned defaultValue = 0) const { return IsNumber() ? (unsigned)numberValue_ : defaultValue; }
     /// Return float value.
-    float GetFloat() const { return IsNumber() ? (float)numberValue_ : 0.0f; }
+    float GetFloat(float defaultValue = 0.0f) const { return IsNumber() ? (float)numberValue_ : defaultValue; }
     /// Return double value.
-    double GetDouble() const { return IsNumber() ? numberValue_ : 0.0; }
-    /// Return string value.
-    const ea::string& GetString() const { return IsString() ? *stringValue_ : EMPTY_STRING;}
-    /// Return C string value.
-    const char* GetCString() const { return IsString() ? stringValue_->c_str() : nullptr;}
+    double GetDouble(double defaultValue = 0.0) const { return IsNumber() ? numberValue_ : defaultValue; }
+    /// Return string value. The 'defaultValue' may potentially be returned as is, so it is the responsibility of the caller to ensure the 'defaultValue' remains valid while the return value is being referenced.
+    const ea::string& GetString(const ea::string& defaultValue = EMPTY_STRING) const { return IsString() ? *stringValue_ : defaultValue;}
+    /// Return C string value. Default to empty string literal.
+    const char* GetCString(const char* defaultValue = "") const { return IsString() ? stringValue_->c_str() : defaultValue;}
     /// Return JSON array value.
     const ea::vector<JSONValue>& GetArray() const { return IsArray() ? *arrayValue_ : emptyArray; }
     /// Return JSON object value.
@@ -216,11 +228,11 @@ public:
     /// Return JSON value at index.
     const JSONValue& operator [](unsigned index) const;
     /// Add JSON value at end.
-    void Push(const JSONValue& value);
+    void Push(JSONValue value);
     /// Remove the last JSON value.
     void Pop();
     /// Insert an JSON value at position.
-    void Insert(unsigned pos, const JSONValue& value);
+    void Insert(unsigned pos, JSONValue value);
     /// Erase a range of JSON values.
     void Erase(unsigned pos, unsigned length = 1);
     /// Resize array.
@@ -234,7 +246,7 @@ public:
     /// Return JSON value with key.
     const JSONValue& operator [](const ea::string& key) const;
     /// Set JSON value with key.
-    void Set(const ea::string& key, const JSONValue& value);
+    void Set(const ea::string& key, JSONValue value);
     /// Return JSON value with key.
     const JSONValue& Get(const ea::string& key) const;
     /// Return JSON value with index.

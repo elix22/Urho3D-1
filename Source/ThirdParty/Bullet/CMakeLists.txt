@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2019 the Urho3D project.
+# Copyright (c) 2008-2020 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,7 +29,7 @@ endif ()
 file (GLOB_RECURSE SOURCE_FILES *.h *.cpp)
 set (SOURCE_FILES ${SOURCE_FILES})
 add_library (Bullet STATIC ${SOURCE_FILES})
-target_include_directories(Bullet
+target_include_directories(Bullet SYSTEM
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Bullet>
            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
            $<INSTALL_INTERFACE:${DEST_THIRDPARTY_HEADERS_DIR}/Bullet>
@@ -41,5 +41,5 @@ endif ()
 
 install(DIRECTORY Bullet DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR} FILES_MATCHING PATTERN *.h)
 if (NOT URHO3D_MERGE_STATIC_LIBS)
-    install(TARGETS Bullet EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
+    install(TARGETS Bullet EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG})
 endif ()

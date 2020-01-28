@@ -1,5 +1,5 @@
-﻿//
-// Copyright (c) 2017-2019 the rbfx project.
+//
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +27,33 @@ namespace Urho3DNet
         public T CreateComponent<T>(CreateMode mode = CreateMode.Replicated, uint id = 0) where T: Component
         {
             return (T)CreateComponent(typeof(T).Name, mode, id);
+        }
+
+        public T GetComponent<T>(bool recursive) where T: Component
+        {
+            return (T)GetComponent(typeof(T).Name, recursive);
+        }
+
+        /// <summary>
+        /// Get first occurrence of a component type
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public T GetComponent<T>() where T: Component
+        {
+            return (T)GetComponent(typeof(T).Name);
+        }
+
+        /// <summary>
+        /// get all components of a type
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        public ComponentList GetComponents<T>(bool recursive = false) where T: Component
+        {
+            ComponentList componentList = new ComponentList();
+            GetComponents(componentList, typeof(T).Name, recursive);
+            return componentList;
         }
     }
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -79,7 +79,7 @@ public:
     }
 
     /// Construct from a float array.
-    explicit Quaternion(const float* data) noexcept
+    explicit Quaternion(const float data[]) noexcept
 #ifndef URHO3D_SSE
        :w_(data[0]),
         x_(data[1]),
@@ -104,7 +104,7 @@ public:
         FromAngleAxis(angle, Vector3::FORWARD);
     }
 
-    /// Construct from Euler angles (in degrees.)
+    /// Construct from Euler angles (in degrees.) Equivalent to Y*X*Z.
     Quaternion(float x, float y, float z) noexcept
     {
         FromEulerAngles(x, y, z);
@@ -298,7 +298,7 @@ public:
 
     /// Define from an angle (in degrees) and axis.
     void FromAngleAxis(float angle, const Vector3& axis);
-    /// Define from Euler angles (in degrees.)
+    /// Define from Euler angles (in degrees.) Equivalent to Y*X*Z.
     void FromEulerAngles(float x, float y, float z);
     /// Define from the rotation difference between two direction vectors.
     void FromRotationTo(const Vector3& start, const Vector3& end);
@@ -410,9 +410,9 @@ public:
     }
 
     /// Test for equality with another quaternion with epsilon.
-    bool Equals(const Quaternion& rhs) const
+    bool Equals(const Quaternion& rhs, float eps = M_EPSILON) const
     {
-        return Urho3D::Equals(w_, rhs.w_) && Urho3D::Equals(x_, rhs.x_) && Urho3D::Equals(y_, rhs.y_) && Urho3D::Equals(z_, rhs.z_);
+        return Urho3D::Equals(w_, rhs.w_, eps) && Urho3D::Equals(x_, rhs.x_, eps) && Urho3D::Equals(y_, rhs.y_, eps) && Urho3D::Equals(z_, rhs.z_, eps);
     }
 
     /// Return whether any element is NaN.
@@ -456,6 +456,18 @@ public:
 
     /// Return as string.
     ea::string ToString() const;
+
+    /// Return hash value for HashSet & HashMap.
+    unsigned ToHash() const
+    {
+        unsigned hash = 37;
+        hash = 37 * hash + FloatToRawIntBits(x_);
+        hash = 37 * hash + FloatToRawIntBits(y_);
+        hash = 37 * hash + FloatToRawIntBits(z_);
+        hash = 37 * hash + FloatToRawIntBits(w_);
+
+        return hash;
+    }
 
     /// W coordinate.
     float w_;

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -131,6 +131,8 @@ private:
     ShaderProgramMap shaderPrograms_;
     /// Shader program in use.
     ShaderProgram* shaderProgram_;
+    /// Last device lost message timestamp. Used to avoid log spam.
+    unsigned deviceLostTimestamp_;
 
 };
 

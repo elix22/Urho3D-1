@@ -108,10 +108,11 @@ endif ()
 add_library(Urho3D ${SOURCE_FILES} ${HEADER_FILES} $<$<CXX_COMPILER_ID:MSVC>:${rbfx_SOURCE_DIR}/script/rbfx.natvis>)
 target_include_directories(Urho3D PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/..>        # For parent projects to find auto-generated engine headers
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>           # Misc configured headers
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>> # Urho3D.h
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>        # For parent projects to find engine headers
     $<INSTALL_INTERFACE:${DEST_BASE_INCLUDE_DIR}>
     $<INSTALL_INTERFACE:${DEST_THIRDPARTY_HEADERS_DIR}>
-    PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
 )
 
 # Add any variables starting with URHO3D_ as project defines
@@ -127,7 +128,7 @@ endforeach()
 if (MINI_URHO)
     target_compile_definitions(Urho3D PUBLIC -DMINI_URHO)
 endif ()
-target_compile_definitions(Urho3D PRIVATE -DURHO3D_IS_BUILDING PUBLIC -DNOMINMAX)
+target_compile_definitions(Urho3D PUBLIC -DNOMINMAX -DURHO3D_DEBUG=$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>)
 
 # Set platform definitions
 foreach(def LINUX ANDROID IOS APPLE MACOS MOBILE DESKTOP)
@@ -165,12 +166,13 @@ set (THIRD_PARTY_DEPENDENCIES
     LibCpuId
     GLEW
     MojoShader
-    cr
     nativefiledialog
     CLI11
     fmt
     spdlog
     EASTL
+    entt
+    ETCPACK
 )
 
 if (URHO3D_MERGE_STATIC_LIBS)
@@ -272,7 +274,7 @@ if (GNU OR Clang)
 endif ()
 
 if (URHO3D_PROFILING)
-    target_link_libraries(Urho3D PUBLIC tracy-lib)
+    target_link_libraries(Urho3D PUBLIC Tracy)
 endif ()
 
 # Graphics
@@ -302,27 +304,19 @@ if (NOT MINI_URHO)
 endif ()
 
 if (WEB)
-    target_link_libraries(Urho3D PUBLIC "-s WASM=$<BOOL:URHO3D_WEB_ASSEMBLY>")
+    target_link_libraries(Urho3D PUBLIC "-s WASM=$<BOOL:EMSCRIPTEN_WASM>")
     target_compile_options(Urho3D PRIVATE -Wno-warn-absolute-paths -Wno-unknown-warning-option)
     if (URHO3D_THREADING)
         target_compile_options(Urho3D PRIVATE "-s USE_PTHREADS=1")
     endif ()
-    # Since version 1.37.25 emcc reduces default runtime exports, but we need "UTF8ToString" so it needs to be explicitly declared now
-    # (See https://github.com/kripken/emscripten/commit/3bc1f9f08b9f420680124af703c787244468cedc for more detail)
-    if (NOT EMSCRIPTEN_EMCC_VERSION VERSION_LESS 1.37.25)
-        target_link_libraries(Urho3D PUBLIC "-s EXTRA_EXPORTED_RUNTIME_METHODS=\"['UTF8ToString']\"")
-    endif ()
-    # Since version 1.37.28 emcc reduces default runtime exports, but we need "FS" so it needs to be explicitly requested now
-    # (See https://github.com/kripken/emscripten/commit/f2191c1223e8261bf45f4e27d2ba4d2e9d8b3341 for more detail)
-    if (NOT EMSCRIPTEN_EMCC_VERSION VERSION_LESS 1.37.28)
-        target_link_libraries(Urho3D PUBLIC "-s FORCE_FILESYSTEM=1")
-    endif ()
-    # Remove variables to make the -O3 regalloc easier, embed data in asm.js to reduce number of moving part
-    target_compile_options(Urho3D PUBLIC --memory-init-file 0)
-    target_link_libraries(Urho3D PUBLIC "-s AGGRESSIVE_VARIABLE_ELIMINATION=1")
-    # Preserve LLVM debug information, show line number debug comments, and generate source maps; always disable exception handling codegen
+    set_target_properties(Urho3D PROPERTIES COMPILE_OPTIONS $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-O3>)
+    set_target_properties(Urho3D PROPERTIES LINK_FLAGS_RELEASE "-s AGGRESSIVE_VARIABLE_ELIMINATION=1")
     target_compile_options(Urho3D PUBLIC $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:-g4>)
-    target_link_libraries(Urho3D PUBLIC "-s DISABLE_EXCEPTION_CATCHING=1")
+    target_link_libraries(Urho3D PUBLIC "-s DISABLE_EXCEPTION_CATCHING=1" "-s EXTRA_EXPORTED_RUNTIME_METHODS=['Pointer_stringify']" "-s FORCE_FILESYSTEM=1" "-s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=0")
+    target_link_libraries(Urho3D PUBLIC "-s TOTAL_MEMORY=${EMSCRIPTEN_TOTAL_MEMORY}")
+    if (EMSCRIPTEN_ALLOW_MEMORY_GROWTH)
+        target_link_libraries(Urho3D PUBLIC "-s ALLOW_MEMORY_GROWTH=1" --no-heap-copy)
+    endif ()
 endif ()
 
 if (BUILD_SHARED_LIBS)
@@ -351,7 +345,9 @@ endif ()
 
 # Workarounds
 if (WEB OR ANDROID)
-    target_compile_options(Urho3D PUBLIC -std=gnu++${URHO3D_CXX_STANDARD})
+    if (URHO3D_CXX_STANDARD)
+        target_compile_options(Urho3D PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++${URHO3D_CXX_STANDARD}>)
+    endif ()
 endif ()
 if (APPLE)
     target_link_options(Urho3D PUBLIC -stdlib=libc++)
@@ -373,19 +369,48 @@ if (URHO3D_CSHARP)
             NATIVE Urho3D
             SWIG CSharp/Swig/ImGui.i
             NAMESPACE ImGuiNet
+            INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/.."
         )
     endif ()
     unset (CMAKE_SWIG_OUTDIR)
     configure_file(CSharp/Managed/AssemblyInfo.cs.in ${CMAKE_CURRENT_BINARY_DIR}/Urho3DCSharp/Managed/AssemblyInfo.cs @ONLY)
     file (GLOB_RECURSE EXTRA_NATIVE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/CSharp/Native/*.h ${CMAKE_CURRENT_SOURCE_DIR}/CSharp/Native/*.cpp)
     file (GLOB_RECURSE WRAPPER_FILES )
-    target_sources(Urho3D PRIVATE ${EXTRA_NATIVE_FILES} ${CMAKE_CURRENT_BINARY_DIR}/Urho3DCSharp/Urho3DCSHARP_wrap.cxx)
+
+    # Prefer binary dir - generated msvc solution with .csproj projects included in it.
+    file (GLOB VS_SOLUTIONS ${CMAKE_BINARY_DIR}/*.sln)
+    if (NOT VS_SOLUTIONS)
+        # On unixes source directory will contain manually crafted .sln
+        file (GLOB VS_SOLUTIONS ${CMAKE_SOURCE_DIR}/*.sln)
+        if (NOT VS_SOLUTIONS)
+            # Otherwise use engine .sln
+            file (GLOB VS_SOLUTIONS ${rbfx_SOURCE_DIR}/*.sln)
+        endif ()
+    endif ()
+
+    add_msbuild_target(TARGET NugetRestore EXCLUDE_FROM_ALL ARGS ${VS_SOLUTIONS} /t:restore /m)
+    # Dummy file which is used by Urho3D target and causes nuget restore to run at
+    # least once automatically.
+    add_custom_command (OUTPUT ${CMAKE_BINARY_DIR}/NugetRestore.h
+        COMMAND ${TERM_WORKAROUND} ${MSBUILD} ${VS_SOLUTIONS} /t:restore /m /nologo
+            /p:CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR}/ /consoleloggerparameters:ErrorsOnly
+        COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_BINARY_DIR}/NugetRestore.h
+        COMMENT "Nuget restore"
+    )
+
+    target_sources(Urho3D PRIVATE ${EXTRA_NATIVE_FILES} ${CMAKE_CURRENT_BINARY_DIR}/Urho3DCSharp/Urho3DCSHARP_wrap.cxx
+        ${CMAKE_BINARY_DIR}/NugetRestore.h)
     if (URHO3D_SYSTEMUI)
         target_sources(Urho3D PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/ImGuiCSharp/ImGuiCSHARP_wrap.cxx)
     endif ()
     if (MSVC)
         target_compile_options(Urho3D PRIVATE /bigobj)
     endif ()
+
+    # TODO: Can this be automatized?
+    foreach (dll "Mono.Cecil.dll" "Mono.Cecil.Mdb.dll" "Mono.Cecil.Pdb.dll" "Mono.Cecil.Rocks.dll" "System.Numerics.Vectors.dll")
+        install(FILES "${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG}/${dll}" DESTINATION ${DEST_BIN_DIR_CONFIG} OPTIONAL)
+    endforeach ()
 endif ()
 
 ################################################### SDK preparation ####################################################
@@ -430,14 +455,14 @@ endif ()
 # SDK installation
 install(TARGETS Urho3D
     EXPORT Urho3D
-    LIBRARY DESTINATION ${DEST_LIBRARY_DIR}
-    RUNTIME DESTINATION ${DEST_BIN_DIR}
-    ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR}
+    LIBRARY DESTINATION ${DEST_LIBRARY_DIR_CONFIG}
+    RUNTIME DESTINATION ${DEST_BIN_DIR_CONFIG}
+    ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG}
 )
 
 if (URHO3D_MONOLITHIC_HEADER)
     # Generate include header with all engine headers
-    list (REMOVE_ITEM HEADER_FILES Urho3D.h DebugNew.h Precompiled.h Core/Main.h)
+    list (REMOVE_ITEM HEADER_FILES Urho3D.h DebugNew.h Precompiled.h WindowsSupport.h Core/Main.h Core/PE.h)
     string (REPLACE ";" ">\n#include <Urho3D/" HEADER_FILES "${HEADER_FILES}")
     set (HEADER_FILES "#include <Urho3D/${HEADER_FILES}>")
     configure_file (${CMAKE_CURRENT_SOURCE_DIR}/Urho3DAll.h.in ${CMAKE_CURRENT_BINARY_DIR}/Urho3DAll.h @ONLY)
@@ -446,7 +471,7 @@ endif ()
 
 # Generate import/export header with engine configuration defines
 get_property(URHO3D_ENGINE_CONFIG TARGET Urho3D PROPERTY INTERFACE_COMPILE_DEFINITIONS)
-list (REMOVE_ITEM URHO3D_ENGINE_CONFIG URHO3D_64BIT URHO3D_IS_BUILDING)
+list (REMOVE_ITEM URHO3D_ENGINE_CONFIG URHO3D_64BIT)
 # TODO: Maybe these should be directly in header?
 foreach(HAVE HAVE___SINCOSF HAVE_MALLOC_USABLE_SIZE HAVE_STDINT_H HAVE_INTTYPES_H HAVE_MALLOC_H HAVE_SINCOSF HAVE_RTL_OSVERSIONINFOW)
     if (${${HAVE}})
@@ -462,5 +487,10 @@ string (REGEX REPLACE "([^=]+)=([^;]+);" "#ifndef \\1\n#   define \\1 \\2\n#endi
 # This will be commented out line in the header.
 list (INSERT URHO3D_ENGINE_CONFIG 0 "Engine configuration")
 string (REPLACE ";" "\n" URHO3D_ENGINE_CONFIG "${URHO3D_ENGINE_CONFIG}")
-configure_file (${CMAKE_CURRENT_SOURCE_DIR}/Urho3D.h ${CMAKE_CURRENT_BINARY_DIR}/Urho3D.h @ONLY)
-install (FILES ${CMAKE_CURRENT_BINARY_DIR}/Urho3D.h DESTINATION ${DEST_INCLUDE_DIR})
+file (READ ${CMAKE_CURRENT_SOURCE_DIR}/Urho3D.h URHO3D_H_DATA)
+string (REPLACE "@URHO3D_ENGINE_CONFIG@" "${URHO3D_ENGINE_CONFIG}" URHO3D_H_DATA "${URHO3D_H_DATA}")
+foreach (config Debug RelWithDebInfo Release MinSizeRel)
+    file (MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${config})
+endforeach ()
+file (GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/Urho3D.h CONTENT ${URHO3D_H_DATA})
+install (FILES ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/Urho3D.h DESTINATION ${DEST_INCLUDE_DIR})

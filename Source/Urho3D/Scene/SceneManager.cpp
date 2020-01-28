@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,10 +26,10 @@
 #include "../Graphics/Renderer.h"
 #include "../Graphics/RenderSurface.h"
 #include "../IO/Log.h"
+#include "../Scene/CameraViewport.h"
 #include "../Scene/Scene.h"
 #include "../Scene/SceneEvents.h"
 #include "../Scene/SceneManager.h"
-#include "../Scene/SceneMetadata.h"
 
 
 namespace Urho3D
@@ -54,8 +54,8 @@ Scene* SceneManager::CreateScene(const ea::string& name)
     }
     SharedPtr<Scene> scene(context_->CreateObject<Scene>());
     scene->SetName(name);
+    scene->CreateComponentIndex<CameraViewport>();
     scene->GetOrCreateComponent<Octree>();
-    scene->GetOrCreateComponent<SceneMetadata>(LOCAL);
     scenes_.push_back(scene);
     return scene;
 }
@@ -79,18 +79,19 @@ Scene* SceneManager::GetOrCreateScene(const ea::string& name)
 
 void SceneManager::UnloadScene(Scene* scene)
 {
-    auto it = scenes_.find(SharedPtr<Scene>(scene));
-    if (it != scenes_.end())
-        scenes_.erase(it);
-    if (activeScene_.Expired())
-        UpdateViewports();
+    if (scene == nullptr)
+        return;
+
+    if (activeScene_ == scene)
+        SetActiveScene(nullptr);
+
+    scenes_.erase_first(SharedPtr<Scene>(scene));
 }
 
 void SceneManager::UnloadScene(const ea::string& name)
 {
-    scenes_.erase_first(SharedPtr<Scene>(GetScene(name)));
-    if (activeScene_.Expired())
-        UpdateViewports();
+    SharedPtr<Scene> scene(GetScene(name));
+    UnloadScene(scene);
 }
 
 void SceneManager::UnloadAll()
@@ -122,7 +123,6 @@ void SceneManager::SetActiveScene(Scene* scene)
         activeScene_->SetUpdateEnabled(false);
 
     activeScene_ = scene;
-    missingMetadataWarned_ = false;
     SendEvent(E_SCENEACTIVATED, eventData);
     UpdateViewports();
 }
@@ -141,46 +141,32 @@ void SceneManager::SetRenderSurface(RenderSurface* surface)
 void SceneManager::UpdateViewports()
 {
     if (renderSurface_.Expired())
-        GetRenderer()->SetNumViewports(0);
+        context_->GetRenderer()->SetNumViewports(0);
     else
         renderSurface_->SetNumViewports(0);
 
     if (activeScene_.Expired())
         return;
 
-    SceneMetadata* meta = activeScene_->GetComponent<SceneMetadata>();
-    if (meta == nullptr)
-    {
-        if (!missingMetadataWarned_)
-        {
-            URHO3D_LOGERRORF("Viewports can not be updated active scene does not have '%s' component.",
-                SceneMetadata::GetTypeNameStatic().c_str());
-            missingMetadataWarned_ = true;
-        }
-        return;
-    }
-
     unsigned index = 0;
-    const auto& viewportComponents = meta->GetCameraViewportComponents();
+    ea::span<Component* const> viewportComponents = activeScene_->GetComponentIndex<CameraViewport>();
     if (renderSurface_.Expired())
-        GetRenderer()->SetNumViewports(viewportComponents.size());
+        context_->GetRenderer()->SetNumViewports(viewportComponents.size());
     else
         renderSurface_->SetNumViewports(viewportComponents.size());
 
-    for (const auto& cameraViewport : viewportComponents)
+    for (Component* const component : viewportComponents)
     {
-        if (cameraViewport.Expired())
-            continue;
-
+        auto* const cameraViewport = static_cast<CameraViewport* const>(component);
         // Trigger resizing of underlying viewport
         if (renderSurface_.Expired())
-            cameraViewport->SetScreenRect({0, 0, GetGraphics()->GetWidth(), GetGraphics()->GetHeight()});
+            cameraViewport->SetScreenRect({0, 0, context_->GetGraphics()->GetWidth(), context_->GetGraphics()->GetHeight()});
         else
             cameraViewport->SetScreenRect({0, 0, renderSurface_->GetWidth(), renderSurface_->GetHeight()});
         cameraViewport->UpdateViewport();
         cameraViewport->GetViewport()->SetDrawDebug(false); // TODO: make this configurable maybe?
         if (renderSurface_.Expired())
-            GetRenderer()->SetViewport(index++, cameraViewport->GetViewport());
+            context_->GetRenderer()->SetViewport(index++, cameraViewport->GetViewport());
         else
             renderSurface_->SetViewport(index++, cameraViewport->GetViewport());
     }

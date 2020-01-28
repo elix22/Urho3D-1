@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -54,17 +54,23 @@ private:
     void OnClickSample(VariantMap& args);
     ///
     void OnKeyPress(VariantMap& args);
+    ///
+    void OnFrameStart();
     /// Add a sample to sample list.
     template<typename T> void RegisterSample();
+    /// Start execution of specified sample.
+    void StartSample(StringHash sampleType);
 
     ///
     SharedPtr<Application> runningSample_;
     ///
     SharedPtr<UIElement> listViewHolder_;
-    ///
-    float exitTime_ = 0;
     /// Logo sprite.
     SharedPtr<Sprite> logoSprite_;
+    ///
+    bool isClosing_ = false;
+    /// Sample which will be started automatically.
+    ea::string startSample_;
 };
 
 }

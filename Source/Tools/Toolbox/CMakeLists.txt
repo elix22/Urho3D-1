@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2019 Rokas Kupstys.
+# Copyright (c) 2017-2020 the rbfx project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -37,8 +37,8 @@ target_include_directories(Toolbox
 )
 
 install(TARGETS Toolbox EXPORT Urho3D
-    RUNTIME DESTINATION ${DEST_BIN_DIR}
-    ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR}
-    LIBRARY DESTINATION ${DEST_LIBRARY_DIR}
+    RUNTIME DESTINATION ${DEST_BIN_DIR_CONFIG}
+    ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG}
+    LIBRARY DESTINATION ${DEST_LIBRARY_DIR_CONFIG}
 )
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} DESTINATION ${DEST_INCLUDE_DIR} FILES_MATCHING PATTERN *.h)

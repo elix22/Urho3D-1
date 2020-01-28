@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -49,7 +49,7 @@ public:
     }
 
     /// Construct from an int array.
-    explicit IntVector3(const int* data) noexcept :
+    explicit IntVector3(const int data[]) noexcept :
         x_(data[0]),
         y_(data[1]),
         z_(data[2])
@@ -236,7 +236,7 @@ public:
     }
 
     /// Construct from a float array.
-    explicit Vector3(const float* data) noexcept :
+    explicit Vector3(const float data[]) noexcept :
         x_(data[0]),
         y_(data[1]),
         z_(data[2])
@@ -405,9 +405,9 @@ public:
     Vector3 Lerp(const Vector3& rhs, float t) const { return *this * (1.0f - t) + rhs * t; }
 
     /// Test for equality with another vector with epsilon.
-    bool Equals(const Vector3& rhs) const
+    bool Equals(const Vector3& rhs, float eps = M_EPSILON) const
     {
-        return Urho3D::Equals(x_, rhs.x_) && Urho3D::Equals(y_, rhs.y_) && Urho3D::Equals(z_, rhs.z_);
+        return Urho3D::Equals(x_, rhs.x_, eps) && Urho3D::Equals(y_, rhs.y_, eps) && Urho3D::Equals(z_, rhs.z_, eps);
     }
 
     /// Returns the angle between this vector and another vector in degrees.
@@ -423,7 +423,7 @@ public:
     /// Return normalized to unit length.
     Vector3 Normalized() const
     {
-        float lenSquared = LengthSquared();
+        const float lenSquared = LengthSquared();
         if (!Urho3D::Equals(lenSquared, 1.0f) && lenSquared > 0.0f)
         {
             float invLen = 1.0f / sqrtf(lenSquared);
@@ -434,13 +434,24 @@ public:
     }
 
     /// Return normalized to unit length or zero if length is too small.
-    Vector3 NormalizedOrZero(float eps = M_LARGE_EPSILON) const
+    Vector3 NormalizedOrDefault(const Vector3& defaultValue = Vector3::ZERO, float eps = M_LARGE_EPSILON) const
     {
-        float lenSquared = LengthSquared();
-        if (lenSquared > eps * eps)
-            return *this / sqrtf(lenSquared);
-        else
-            return Vector3::ZERO;
+        const float lenSquared = LengthSquared();
+        if (lenSquared < eps * eps)
+            return defaultValue;
+        return *this / sqrtf(lenSquared);
+    }
+
+    /// Return normalized vector with length in given range.
+    Vector3 ReNormalized(float minLength, float maxLength, const Vector3& defaultValue = Vector3::ZERO, float eps = M_LARGE_EPSILON) const
+    {
+        const float lenSquared = LengthSquared();
+        if (lenSquared < eps * eps)
+            return defaultValue;
+
+        const float len = sqrtf(lenSquared);
+        const float newLen = Clamp(len, minLength, maxLength);
+        return *this * (newLen / len);
     }
 
     /// Return float data.

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
 
 #include "ToolboxAPI.h"
 #include <Urho3D/Scene/Node.h>
-#include <ImGui/imgui.h>
+#include <Urho3D/SystemUI/SystemUI.h>
 
 
 namespace Urho3D
@@ -90,10 +90,15 @@ public:
     bool IsSelected(Node* node) const;
     /// Return list of selected nodes.
     const ea::vector<WeakPtr<Node>>& GetSelection() const { return nodeSelection_; }
-    /// Set screen rect to which gizmo rendering will be limited. Use when putting gizmo in a window.
-    void SetScreenRect(const IntVector2& pos, const IntVector2& size);
-    /// Set screen rect to which gizmo rendering will be limited. Use when putting gizmo in a window.
-    void SetScreenRect(const IntRect& rect);
+    /// Get the center of selected nodes.
+    /// \param outCenter If returns true, it gets the center, else it will be set to ZERO vector
+    /// \param nodes The nodes to be calculated.
+    /// \returns Returns the number of selected nodes.
+    const int GetSelectionCenter(Vector3& outCenter, const ea::vector<WeakPtr<Node>>& nodes) const;
+    /// Get the center of selected nodes.
+    /// \param outCenter If returns true, it gets the center, else it will be set to ZERO vector
+    /// \returns Returns the number of selected nodes.
+    const int GetSelectionCenter(Vector3& outCenter) const;
 
 protected:
 
@@ -109,10 +114,6 @@ protected:
     ea::vector<WeakPtr<Node> > nodeSelection_;
     /// Camera which is used for automatic node selection in the scene camera belongs to.
     WeakPtr<Camera> autoModeCamera_;
-    /// Position of display area gizmo is rendered in.
-    ImVec2 displayPos_{};
-    /// Size of display area gizmo is rendered in.
-    ImVec2 displaySize_{};
     /// Flag indicating that gizmo was active on the last frame.
     bool wasActive_ = false;
     /// A map of initial transforms.

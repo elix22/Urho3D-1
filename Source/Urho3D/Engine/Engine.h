@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -131,8 +131,10 @@ public:
         & GetParameter(const VariantMap& parameters, const ea::string& parameter, const Variant& defaultValue = Variant::EMPTY);
 
 private:
-    /// Handle exit requested event. Auto-exit if enabled.
+    /// Set flag indicating that exit request has to be handled.
     void HandleExitRequested(StringHash eventType, VariantMap& eventData);
+    /// Do housekeeping tasks at the end of frame. Actually handles exit requested event. Auto-exit if enabled.
+    void HandleEndFrame(StringHash eventType, VariantMap& eventData);
     /// Actually perform the exit actions.
     void DoExit();
 

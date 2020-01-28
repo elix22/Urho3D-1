@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +48,7 @@ struct URHO3D_API DecalVertex
     }
 
     /// Construct with position, normal and skinning information.
-    DecalVertex(const Vector3& position, const Vector3& normal, const float* blendWeights, const unsigned char* blendIndices) :
+    DecalVertex(const Vector3& position, const Vector3& normal, const float blendWeights[], const unsigned char blendIndices[]) :
         position_(position),
         normal_(normal)
     {

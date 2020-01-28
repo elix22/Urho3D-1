@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,6 @@
 
 #include "../Precompiled.h"
 
-#include "Container/Utility.h"
 #include "../Core/Context.h"
 #include "../Core/Profiler.h"
 #include "../IO/File.h"
@@ -40,6 +39,7 @@
 #include "../Scene/SceneEvents.h"
 #include "../Scene/SmoothedTransform.h"
 
+#include <slikenet/MessageIdentifiers.h>
 #include <slikenet/peerinterface.h>
 #include <slikenet/statistics.h>
 
@@ -116,14 +116,6 @@ void Connection::SendMessage(int msgID, bool reliable, bool inOrder, const Vecto
 void Connection::SendMessage(int msgID, bool reliable, bool inOrder, const unsigned char* data, unsigned numBytes,
     unsigned contentID)
 {
-    /* Make sure not to use SLikeNet(RakNet) internal message ID's
-     and since RakNet uses 1 byte message ID's, they cannot exceed 255 limit */
-    if (msgID <= 0x4 || msgID >= 255)
-    {
-        URHO3D_LOGERROR("Can not send message with reserved ID");
-        return;
-    }
-
     if (numBytes && !data)
     {
         URHO3D_LOGERROR("Null pointer supplied for network message data");
@@ -131,7 +123,8 @@ void Connection::SendMessage(int msgID, bool reliable, bool inOrder, const unsig
     }
     
     VectorBuffer buffer;
-    buffer.WriteUByte((unsigned char)msgID);
+    buffer.WriteUByte((unsigned char)DefaultMessageIDTypes::ID_USER_PACKET_ENUM);
+    buffer.WriteUInt((unsigned int)msgID);
     buffer.Write(data, numBytes);
     PacketReliability reliability = reliable ? (inOrder ? RELIABLE_ORDERED : RELIABLE) : (inOrder ? UNRELIABLE_SEQUENCED : UNRELIABLE);
     if (peer_) {
@@ -1198,7 +1191,7 @@ void Connection::ProcessNewNode(Node* node)
     for (auto i = dependencyNodes.begin(); i != dependencyNodes.end(); ++i)
     {
         unsigned nodeID = (*i)->GetID();
-        if (ea::contains(sceneState_.dirtyNodes_, nodeID))
+        if (sceneState_.dirtyNodes_.contains(nodeID))
             ProcessNode(nodeID);
     }
 
@@ -1257,7 +1250,7 @@ void Connection::ProcessExistingNode(Node* node, NodeReplicationState& nodeState
     for (auto i = dependencyNodes.begin(); i != dependencyNodes.end(); ++i)
     {
         unsigned nodeID = (*i)->GetID();
-        if (ea::contains(sceneState_.dirtyNodes_, nodeID))
+        if (sceneState_.dirtyNodes_.contains(nodeID))
             ProcessNode(nodeID);
     }
 

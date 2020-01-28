@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2019 Rokas Kupstys.
+# Copyright (c) 2017-2020 the rbfx project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,16 +20,17 @@
 # THE SOFTWARE.
 #
 
-if (NOT URHO3D_TOOLS OR NOT URHO3D_PLUGINS)
+if (NOT URHO3D_PLUGINS)
     return ()
 endif ()
 
 file (GLOB SOURCE_FILES *.cpp *.h)
-add_library (103_GamePlugin MODULE ${SOURCE_FILES})
+add_library (103_GamePlugin ${SOURCE_FILES})
 target_link_libraries (103_GamePlugin PUBLIC Urho3D)
 target_include_directories(103_GamePlugin PRIVATE ..)
 install(TARGETS 103_GamePlugin
-    RUNTIME DESTINATION ${DEST_SAMPLES_DIR}
-    LIBRARY DESTINATION ${DEST_SAMPLES_DIR}
-    BUNDLE DESTINATION  ${DEST_SAMPLES_DIR}
+    RUNTIME DESTINATION ${DEST_BIN_DIR_CONFIG}
+    LIBRARY DESTINATION ${DEST_LIBRARY_DIR_CONFIG}
+    ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG}
+    BUNDLE  DESTINATION ${DEST_BIN_DIR_CONFIG}
 )

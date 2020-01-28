@@ -175,9 +175,9 @@ public:
         engineParameters_[EP_WINDOW_RESIZABLE] = true;
 
         JSONFile config(context_);
-        ea::string preferencesDir = GetFileSystem()->GetAppPreferencesDir("rbfx", "Profiler");
-        if (!GetFileSystem()->DirExists(preferencesDir))
-            GetFileSystem()->CreateDir(preferencesDir);
+        ea::string preferencesDir = context_->GetFileSystem()->GetAppPreferencesDir("rbfx", "Profiler");
+        if (!context_->GetFileSystem()->DirExists(preferencesDir))
+            context_->GetFileSystem()->CreateDir(preferencesDir);
         if (config.LoadFile(preferencesDir + "Settings.json"))
         {
             const auto& root = config.GetRoot();
@@ -195,10 +195,10 @@ public:
 
     void Start() override
     {
-        GetGraphics()->SetWindowTitle(
+        context_->GetGraphics()->SetWindowTitle(
             Format("Urho3D Profiler {}.{}.{}", tracy::Version::Major, tracy::Version::Minor, tracy::Version::Patch));
-        GetInput()->SetMouseVisible(true);
-        GetInput()->SetMouseMode(MM_FREE);
+        context_->GetInput()->SetMouseVisible(true);
+        context_->GetInput()->SetMouseMode(MM_FREE);
 
         ImGui::StyleColorsDark();
         float dpiScale = GetDPIScale();
@@ -221,10 +221,11 @@ public:
         0
     };
 
-        GetSystemUI()->AddFontCompressed(tracy::Arimo_compressed_data, tracy::Arimo_compressed_size, rangesBasic, 15.0f);
-        GetSystemUI()->AddFontCompressed(tracy::FontAwesomeSolid_compressed_data, tracy::FontAwesomeSolid_compressed_size, rangesIcons, 14.0f, true);
-        fixedWidth = GetSystemUI()->AddFontCompressed(tracy::Cousine_compressed_data, tracy::Cousine_compressed_size, nullptr, 15.0f);
-        bigFont = GetSystemUI()->AddFontCompressed(tracy::Arimo_compressed_data, tracy::Cousine_compressed_size, nullptr, 20.0f);
+        context_->GetSystemUI()->AddFontCompressed(tracy::Arimo_compressed_data, tracy::Arimo_compressed_size, "Arimo", rangesBasic, 15.0f);
+        context_->GetSystemUI()->AddFontCompressed(tracy::FontAwesomeSolid_compressed_data, tracy::FontAwesomeSolid_compressed_size, "FontAwesome", rangesIcons, 14.0f, true);
+        fixedWidth = context_->GetSystemUI()->AddFontCompressed(tracy::Cousine_compressed_data, tracy::Cousine_compressed_size, "Cousine", nullptr, 15.0f);
+        bigFont = context_->GetSystemUI()->AddFontCompressed(tracy::Arimo_compressed_data, tracy::Cousine_compressed_size, "Arimo", nullptr, 20.0f);
+        smallFont = context_->GetSystemUI()->AddFontCompressed(tracy::Arimo_compressed_data, tracy::Cousine_compressed_size, "Arimo", nullptr, 10.0f);
 
         if (!readCapture.empty())
         {
@@ -239,19 +240,19 @@ public:
     void Stop() override
     {
         JSONValue root{JSON_OBJECT};
-        root["x"] = GetGraphics()->GetWindowPosition().x_;
-        root["y"] = GetGraphics()->GetWindowPosition().y_;
-        root["width"] = GetGraphics()->GetWidth();
-        root["height"] = GetGraphics()->GetHeight();
+        root["x"] = context_->GetGraphics()->GetWindowPosition().x_;
+        root["y"] = context_->GetGraphics()->GetWindowPosition().y_;
+        root["width"] = context_->GetGraphics()->GetWidth();
+        root["height"] = context_->GetGraphics()->GetHeight();
 
         JSONFile config(context_);
         config.GetRoot() = root;
-        config.SaveFile(Format("{}/Settings.json", GetFileSystem()->GetAppPreferencesDir("rbfx", "Profiler")));
+        config.SaveFile(Format("{}/Settings.json", context_->GetFileSystem()->GetAppPreferencesDir("rbfx", "Profiler")));
     }
 
     float GetDPIScale()
     {
-        return GetGraphics()->GetDisplayDPI(GetGraphics()->GetCurrentMonitor()).z_ / 96.f;
+        return context_->GetGraphics()->GetDisplayDPI(context_->GetGraphics()->GetCurrentMonitor()).z_ / 96.f;
     }
 
     void Update()
@@ -265,11 +266,10 @@ public:
             const auto time = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now().time_since_epoch() ).count();
             if( !broadcastListen )
             {
-                broadcastListen = new tracy::UdpListen();
-                if( !broadcastListen->Listen( 8086 ) )
+                broadcastListen = std::make_unique<tracy::UdpListen>();
+                if( !broadcastListen->Listen( port ) )
                 {
-                    delete broadcastListen;
-                    broadcastListen = nullptr;
+                    broadcastListen.reset();
                 }
             }
             else
@@ -375,6 +375,10 @@ public:
                 {
                     OpenWebpage( "https://www.youtube.com/watch?v=eAkgkaO8B9o" );
                 }
+                if( ImGui::Selectable( ICON_FA_VIDEO " New features in Tracy Profiler v0.5" ) )
+                {
+                    OpenWebpage( "https://www.youtube.com/watch?v=P6E7qLMmzTQ" );
+                }
                 ImGui::EndPopup();
             }
             ImGui::Separator();
@@ -423,7 +427,7 @@ public:
                 }
                 connHistVec = RebuildConnectionHistory( connHistMap );
 
-                view = std::make_unique<tracy::View>( addr, fixedWidth, bigFont, SetWindowTitleCallback );
+                view = std::make_unique<tracy::View>( addr, port, fixedWidth, smallFont, bigFont, SetWindowTitleCallback );
             }
             ImGui::SameLine( 0, ImGui::GetFontSize() * 2 );
             if( ImGui::Button( ICON_FA_FOLDER_OPEN " Open saved trace" ) && !loadThread.joinable() )
@@ -440,23 +444,29 @@ public:
                             loadThread = std::thread([this, f] {
                                 try
                                 {
-                                    view = std::make_unique<tracy::View>( *f, fixedWidth, bigFont, SetWindowTitleCallback );
+                                    view = std::make_unique<tracy::View>( *f, fixedWidth, smallFont, bigFont, SetWindowTitleCallback );
                                 }
                                 catch( const tracy::UnsupportedVersion& e )
                                 {
-                                    badVer = e.version;
+                                    badVer.state = tracy::BadVersionState::UnsupportedVersion;
+                                    badVer.version = e.version;
+                                }
+                                catch( const tracy::LegacyVersion& e )
+                                {
+                                    badVer.state = tracy::BadVersionState::LegacyVersion;
+                                    badVer.version = e.version;
                                 }
                             } );
                         }
                     }
                     catch( const tracy::NotTracyDump& )
                     {
-                        badVer = -1;
+                        badVer.state = tracy::BadVersionState::BadFile;
                     }
                 }
             }
 
-            if( badVer != 0 )
+            if( badVer.state != tracy::BadVersionState::Ok )
             {
                 if( loadThread.joinable() ) { loadThread.join(); }
                 tracy::BadVersion( badVer );
@@ -488,7 +498,7 @@ public:
                     if( badProto ) flags |= ImGuiSelectableFlags_Disabled;
                     if( ImGui::Selectable( name->second.c_str(), &sel, flags ) && !loadThread.joinable() )
                     {
-                        view = std::make_unique<tracy::View>( v.second.address.c_str(), fixedWidth, bigFont, SetWindowTitleCallback );
+                        view = std::make_unique<tracy::View>( v.second.address.c_str(), port, fixedWidth, smallFont, bigFont, SetWindowTitleCallback );
                     }
                     ImGui::NextColumn();
                     const auto acttime = ( v.second.activeTime + ( time - v.second.time ) / 1000 ) * 1000000000ll;
@@ -520,12 +530,11 @@ public:
         {
             if( broadcastListen )
             {
-                delete broadcastListen;
-                broadcastListen = nullptr;
+                broadcastListen.reset();
                 clients.clear();
             }
             if( loadThread.joinable() ) loadThread.join();
-            view->NotifyRootWindowSize(GetGraphics()->GetWidth(), GetGraphics()->GetHeight());
+            view->NotifyRootWindowSize(context_->GetGraphics()->GetWidth(), context_->GetGraphics()->GetHeight());
             if( !view->Draw() )
             {
                 viewShutdown = ViewShutdown::True;
@@ -546,7 +555,7 @@ public:
         {
             tracy::TextCentered( ICON_FA_HOURGLASS_HALF );
 
-            tracy::DrawWaitingDots(GetTime()->GetElapsedTime());
+            tracy::DrawWaitingDots(context_->GetTime()->GetElapsedTime());
 
             auto currProgress = progress.progress.load( std::memory_order_relaxed );
             if( totalProgress == 0 )
@@ -583,6 +592,12 @@ public:
             case tracy::LoadProgress::FrameImages:
                 ImGui::TextUnformatted( "Frame images..." );
                 break;
+            case tracy::LoadProgress::ContextSwitches:
+                ImGui::TextUnformatted( "Context switches..." );
+                break;
+            case tracy::LoadProgress::ContextSwitchesPerCpu:
+                ImGui::TextUnformatted( "CPU context switches..." );
+                break;
             default:
                 assert( false );
                 break;
@@ -618,26 +633,28 @@ public:
         {
             if( viewShutdown != ViewShutdown::True ) ImGui::CloseCurrentPopup();
             tracy::TextCentered( ICON_FA_BROOM );
-            tracy::DrawWaitingDots( GetTime()->GetElapsedTime() );
+            tracy::DrawWaitingDots( context_->GetTime()->GetElapsedTime() );
             ImGui::Text( "Please wait, cleanup is in progress" );
             ImGui::EndPopup();
         }
     }
+    int port = 8086;
     ea::string readCapture{};
     std::unordered_map<std::string, uint64_t> connHistMap{};
     std::vector<std::unordered_map<std::string, uint64_t>::const_iterator> connHistVec{};
     std::unique_ptr<tracy::View> view{};
+    tracy::BadVersionState badVer;
     ImFont* fixedWidth = nullptr;
     ImFont* bigFont = nullptr;
+    ImFont* smallFont = nullptr;
     char addr[16]{};
     std::thread loadThread{};
-    int badVer = 0;
-    tracy::UdpListen* broadcastListen = nullptr;
+    std::unique_ptr<tracy::UdpListen> broadcastListen{};
     enum class ViewShutdown { False, True, Join };
     ViewShutdown viewShutdown = ViewShutdown::False;
     std::mutex resolvLock;
     tracy::flat_hash_map<std::string, std::string> resolvMap;
-    ResolvService resolv;
+    ResolvService resolv{port};
     tracy::flat_hash_map<uint32_t, ClientData> clients;
 };
 

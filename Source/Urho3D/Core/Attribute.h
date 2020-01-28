@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,6 +19,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
+
+/// \file
 
 #pragma once
 
@@ -50,7 +52,7 @@ enum AttributeMode
     /// Attribute is a node ID vector where first element is the amount of nodes.
     AM_NODEIDVECTOR = 0x40,
     /// Attribute is readonly. Can't be used with binary serialized objects.
-    AM_FILEREADONLY = 0x81,
+    AM_READONLY = 0x80,
 };
 URHO3D_FLAGSET(AttributeMode, AttributeModeFlags);
 
@@ -78,6 +80,7 @@ struct AttributeInfo
     AttributeInfo(VariantType type, const char* name, const SharedPtr<AttributeAccessor>& accessor, const char** enumNames, const Variant& defaultValue, AttributeModeFlags mode) :
         type_(type),
         name_(name),
+        nameHash_(name_),
         enumNames_(enumNames),
         accessor_(accessor),
         defaultValue_(defaultValue),
@@ -89,6 +92,7 @@ struct AttributeInfo
     AttributeInfo(VariantType type, const char* name, const SharedPtr<AttributeAccessor>& accessor, const ea::vector<ea::string>& enumNames, const Variant& defaultValue, AttributeModeFlags mode) :
         type_(type),
         name_(name),
+        nameHash_(name_),
         enumNames_(nullptr),
         enumNamesStorage_(enumNames),
         accessor_(accessor),
@@ -103,6 +107,7 @@ struct AttributeInfo
     {
         type_ = other.type_;
         name_ = other.name_;
+        nameHash_ = other.nameHash_;
         enumNames_ = other.enumNames_;
         accessor_ = other.accessor_;
         defaultValue_ = other.defaultValue_;
@@ -115,18 +120,24 @@ struct AttributeInfo
             InitializeEnumNamesFromStorage();
     }
 
-    /// Get attribute metadata.
+    /// Return attribute metadata.
     const Variant& GetMetadata(const StringHash& key) const
     {
         auto elem = metadata_.find(key);
         return elem != metadata_.end() ? elem->second : Variant::EMPTY;
     }
 
-    /// Get attribute metadata of specified type.
+    /// Return attribute metadata of specified type.
     template <class T> T GetMetadata(const StringHash& key) const
     {
         return GetMetadata(key).Get<T>();
     }
+
+    /// Return whether the attribute should be saved.
+    bool ShouldSave() const { return (mode_ & AM_FILE) && !(mode_ & AM_READONLY); }
+
+    /// Return whether the attribute should be loaded.
+    bool ShouldLoad() const { return !!(mode_ & AM_FILE); }
 
     /// Instance equality operator.
     bool operator ==(const AttributeInfo& rhs) const
@@ -144,6 +155,8 @@ struct AttributeInfo
     VariantType type_ = VAR_NONE;
     /// Name.
     ea::string name_;
+    /// Name hash.
+    StringHash nameHash_;
     /// Enum names.
     const char** enumNames_ = nullptr;
     /// Helper object for accessor mode.

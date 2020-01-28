@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,7 @@
 // THE SOFTWARE.
 //
 
+#include <Urho3D/Audio/Audio.h>
 #include <Urho3D/Core/Timer.h>
 #include <Urho3D/Graphics/Graphics.h>
 #include <Urho3D/Graphics/GraphicsEvents.h>
@@ -32,7 +33,6 @@
 #include <Urho3D/Scene/CameraViewport.h>
 #include <Urho3D/Scene/Scene.h>
 #include <Urho3D/Scene/SceneEvents.h>
-#include <Urho3D/Scene/SceneMetadata.h>
 #include <Urho3D/SystemUI/Console.h>
 #include <Toolbox/SystemUI/Widgets.h>
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
@@ -51,125 +51,159 @@ PreviewTab::PreviewTab(Context* context)
     SetTitle("Game");
     isUtility_ = true;
     windowFlags_ = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
-    view_ = context_->CreateObject<Texture2D>();
+    texture_ = context_->CreateObject<Texture2D>();
+    noContentPadding_ = true;
 
-    // Ensure parts of texture are not left dirty when viewport does not cover entire texture.
-    SubscribeToEvent(E_CAMERAVIEWPORTRESIZED, [this](StringHash, VariantMap& args) { Clear(); });
-    // Ensure views are updated upon component addition or removal.
-    SubscribeToEvent(E_COMPONENTADDED, [this](StringHash, VariantMap& args) {
-        OnComponentUpdated(static_cast<Component*>(args[ComponentAdded::P_COMPONENT].GetPtr()));
-    });
-    SubscribeToEvent(E_COMPONENTREMOVED, [this](StringHash, VariantMap& args) {
-        OnComponentUpdated(static_cast<Component*>(args[ComponentRemoved::P_COMPONENT].GetPtr()));
-    });
-    // Reload viewports when renderpath or postprocess was modified.
-    SubscribeToEvent(E_RELOADFINISHED, [this](StringHash, VariantMap& args) {
-        using namespace ReloadFinished;
-        Scene* scene = GetSubsystem<SceneManager>()->GetActiveScene();
-        if (scene == nullptr)
-            return;
-
-        if (auto* resource = GetEventSender()->Cast<Resource>())
-        {
-            if (resource->GetName().starts_with("RenderPaths/") || resource->GetName().starts_with("PostProcess/"))
-            {
-                if (auto* manager = scene->GetOrCreateComponent<SceneMetadata>())
-                {
-                    auto& viewportComponents = manager->GetCameraViewportComponents();
-                    for (auto& component : viewportComponents)
-                        component->RebuildRenderPath();
-                    Clear();
-                }
-            }
-        }
-    });
-
-    // On plugin code reload all scene state is serialized, plugin library is reloaded and scene state is unserialized.
-    // This way scene recreates all plugin-provided components on reload and gets to use new versions of them.
-    SubscribeToEvent(E_EDITORUSERCODERELOADSTART, [&](StringHash, VariantMap&) {
-
-        SceneTab* tab = GetSubsystem<Editor>()->GetTab<SceneTab>();
-        if (tab == nullptr || tab->GetScene() == nullptr)
-            return;
-
-        tab->GetUndo().SetTrackingEnabled(false);
-        tab->SaveState(sceneReloadState_);
-        tab->GetScene()->RemoveAllChildren();
-        tab->GetScene()->RemoveAllComponents();
-    });
-    SubscribeToEvent(E_EDITORUSERCODERELOADEND, [&](StringHash, VariantMap&) {
-        SceneTab* tab = GetSubsystem<Editor>()->GetTab<SceneTab>();
-        if (tab == nullptr || tab->GetScene() == nullptr)
-            return;
-
-        tab->RestoreState(sceneReloadState_);
-        tab->GetUndo().SetTrackingEnabled(true);
-    });
-    SubscribeToEvent(E_ENDALLVIEWSRENDER, [this](StringHash, VariantMap&) {
-        RenderUI();
-    });
-    SubscribeToEvent(E_SCENEACTIVATED, [this](StringHash, VariantMap&) {
-        UpdateViewports();
-    });
-    SubscribeToEvent(E_ENDRENDERINGSYSTEMUI, [this](StringHash, VariantMap&) {
-        if (simulationStatus_ == SCENE_SIMULATION_STOPPED)
-            dim_ = Max(dim_ - GetTime()->GetTimeStep() * 10, 0.f);
-        else
-            dim_ = Min(dim_ + GetTime()->GetTimeStep() * 6, 1.f);
-
-        if (dim_ > M_EPSILON)
-        {
-            // Dim other windows except for preview.
-            ImGuiContext& g = *ui::GetCurrentContext();
-            const ea::string& sceneTabName = GetSubsystem<Editor>()->GetTab<SceneTab>()->GetUniqueTitle();
-            for (int i = 0; i < g.Windows.Size; i++)
-            {
-                ImGuiWindow* window = g.Windows[i];
-                if (window->ParentWindow != nullptr && window->DockNode != nullptr)
-                {
-                    // Ignore any non-leaf windows
-                    if (window->DockNode->ChildNodes[0] || window->DockNode->ChildNodes[1])
-                        continue;
-                    if (!window->DockTabIsVisible)
-                        continue;
-                    // Editor scene viewport is not dimmed.
-                    if (strcmp(window->Name, sceneTabName.c_str()) == 0)
-                        continue;
-                    // Game preview viewport is not dimmed.
-                    if (strcmp(window->Name, GetUniqueTitle().c_str()) == 0)
-                        continue;
-                    ImDrawList* drawLists = ui::GetBackgroundDrawList(window->Viewport);
-                    const ImU32 color = ui::GetColorU32(ImGuiCol_ModalWindowDimBg, dim_);
-                    drawLists->AddRectFilled(window->Pos, window->Pos + window->Size, color);
-                }
-            }
-        }
-    });
+    SubscribeToEvent(E_CAMERAVIEWPORTRESIZED, URHO3D_HANDLER(PreviewTab, OnCameraViewportResized));
+    SubscribeToEvent(E_COMPONENTADDED, URHO3D_HANDLER(PreviewTab, OnComponentAdded));
+    SubscribeToEvent(E_COMPONENTREMOVED, URHO3D_HANDLER(PreviewTab, OnComponentRemoved));
+    SubscribeToEvent(E_RELOADFINISHED, URHO3D_HANDLER(PreviewTab, OnReloadFinished));
+    SubscribeToEvent(E_EDITORUSERCODERELOADSTART, URHO3D_HANDLER(PreviewTab, OnEditorUserCodeReloadStart));
+    SubscribeToEvent(E_EDITORUSERCODERELOADEND, URHO3D_HANDLER(PreviewTab, OnEditorUserCodeReloadEnd));
+    SubscribeToEvent(E_ENDALLVIEWSRENDER, URHO3D_HANDLER(PreviewTab, OnEndAllViewsRender));
+    SubscribeToEvent(E_SCENEACTIVATED, URHO3D_HANDLER(PreviewTab, OnSceneActivated));
+    SubscribeToEvent(E_ENDRENDERINGSYSTEMUI, URHO3D_HANDLER(PreviewTab, OnEndRenderingSystemUI));
 }
 
-IntRect PreviewTab::UpdateViewRect()
+void PreviewTab::OnCameraViewportResized(StringHash type, VariantMap& args)
 {
-    IntRect tabRect = BaseClassName::UpdateViewRect();
-    if (viewRect_ != tabRect)
+    // Ensure parts of texture are not left dirty when viewport does not cover entire texture.
+    Clear();
+}
+
+void PreviewTab::OnComponentAdded(StringHash type, VariantMap& args)
+{
+    // Ensure views are updated upon component addition or removal.
+    OnComponentUpdated(static_cast<Component*>(args[ComponentAdded::P_COMPONENT].GetPtr()));
+}
+
+void PreviewTab::OnComponentRemoved(StringHash type, VariantMap& args)
+{
+    // Ensure views are updated upon component addition or removal.
+    OnComponentUpdated(static_cast<Component*>(args[ComponentRemoved::P_COMPONENT].GetPtr()));
+}
+
+void PreviewTab::OnReloadFinished(StringHash type, VariantMap& args)
+{
+    // Reload viewports when renderpath or postprocess was modified.
+    using namespace ReloadFinished;
+    Scene* scene = GetSubsystem<SceneManager>()->GetActiveScene();
+    if (scene == nullptr)
+        return;
+
+    if (auto* resource = GetEventSender()->Cast<Resource>())
     {
-        viewRect_ = tabRect;
-        view_->SetSize(tabRect.Width(), tabRect.Height(), Graphics::GetRGBFormat(), TEXTURE_RENDERTARGET);
-        view_->GetRenderSurface()->SetUpdateMode(SURFACE_UPDATEALWAYS);
-        static_cast<RootUIElement*>(GetUI()->GetRoot())->SetOffset(tabRect.Min());
-        UpdateViewports();
+        if (resource->GetName().starts_with("RenderPaths/") || resource->GetName().starts_with("PostProcess/"))
+        {
+            for (Component* const component : scene->GetComponentIndex<CameraViewport>())
+            {
+                auto* const cameraViewport = static_cast<CameraViewport* const>(component);
+                cameraViewport->RebuildRenderPath();
+            }
+            Clear();
+        }
     }
-    return tabRect;
+}
+
+void PreviewTab::OnEditorUserCodeReloadStart(StringHash type, VariantMap& args)
+{
+    // On plugin code reload all scene state is serialized, plugin library is reloaded and scene state is unserialized.
+    // This way scene recreates all plugin-provided components on reload and gets to use new versions of them.
+    auto* tab = GetSubsystem<Editor>()->GetTab<SceneTab>();
+    if (tab == nullptr || tab->GetScene() == nullptr)
+        return;
+
+    tab->GetUndo().SetTrackingEnabled(false);
+    tab->SaveState(sceneReloadState_);
+    tab->GetScene()->RemoveAllChildren();
+    tab->GetScene()->RemoveAllComponents();
+}
+
+void PreviewTab::OnEditorUserCodeReloadEnd(StringHash type, VariantMap& args)
+{
+    auto* tab = GetSubsystem<Editor>()->GetTab<SceneTab>();
+    if (tab == nullptr || tab->GetScene() == nullptr)
+        return;
+
+    tab->RestoreState(sceneReloadState_);
+    tab->GetUndo().SetTrackingEnabled(true);
+}
+
+void PreviewTab::OnEndAllViewsRender(StringHash type, VariantMap& args)
+{
+    RenderUI();
+}
+
+void PreviewTab::OnSceneActivated(StringHash type, VariantMap& args)
+{
+    UpdateViewports();
+}
+
+void PreviewTab::OnEndRenderingSystemUI(StringHash type, VariantMap& args)
+{
+    if (simulationStatus_ == SCENE_SIMULATION_STOPPED)
+        dim_ = Max(dim_ - context_->GetTime()->GetTimeStep() * 10, 0.f);
+    else
+        dim_ = Min(dim_ + context_->GetTime()->GetTimeStep() * 6, 1.f);
+
+    if (dim_ > M_EPSILON)
+    {
+        // Dim other windows except for preview.
+        ImGuiContext& g = *ui::GetCurrentContext();
+        const ea::string& sceneTabName = GetSubsystem<Editor>()->GetTab<SceneTab>()->GetUniqueTitle();
+        for (int i = 0; i < g.Windows.Size; i++)
+        {
+            ImGuiWindow* window = g.Windows[i];
+            if (window->ParentWindow != nullptr && window->DockNode != nullptr)
+            {
+                // Ignore any non-leaf windows
+                if (window->DockNode->ChildNodes[0] || window->DockNode->ChildNodes[1])
+                    continue;
+                if (!window->DockTabIsVisible)
+                    continue;
+                // Editor scene viewport is not dimmed.
+                if (strcmp(window->Name, sceneTabName.c_str()) == 0)
+                    continue;
+                // Game preview viewport is not dimmed.
+                if (strcmp(window->Name, GetUniqueTitle().c_str()) == 0)
+                    continue;
+                ImDrawList* drawLists = ui::GetBackgroundDrawList(window->Viewport);
+                const ImU32 color = ui::GetColorU32(ImGuiCol_ModalWindowDimBg, dim_);
+                drawLists->AddRectFilled(window->Pos, window->Pos + window->Size, color);
+            }
+        }
+    }
 }
 
 bool PreviewTab::RenderWindowContent()
 {
-    if (GetSubsystem<SceneManager>()->GetActiveScene() == nullptr)
+    if (GetSubsystem<SceneManager>()->GetActiveScene() == nullptr || texture_.Null())
         return true;
 
-    IntRect rect = UpdateViewRect();
-    ui::Image(view_.Get(), ImVec2{static_cast<float>(rect.Width()), static_cast<float>(rect.Height())});
+    ImGuiWindow* window = ui::GetCurrentWindow();
+    ImGuiViewport* viewport = window->Viewport;
+
+    ImRect rect = ImRound(window->ContentRegionRect);
+    IntVector2 textureSize{
+        static_cast<int>(IM_ROUND(rect.GetWidth() * viewport->DpiScale)),
+        static_cast<int>(IM_ROUND(rect.GetHeight() * viewport->DpiScale))
+    };
+    if (textureSize.x_ != texture_->GetWidth() || textureSize.y_ != texture_->GetHeight())
+    {
+        texture_->SetSize(textureSize.x_, textureSize.y_, Graphics::GetRGBFormat(), TEXTURE_RENDERTARGET);
+        if (auto* surface = texture_->GetRenderSurface())
+            surface->SetUpdateMode(SURFACE_UPDATEALWAYS);
+        UpdateViewports();
+    }
+
+    ui::Image(texture_.Get(), rect.GetSize());
+
+    ImVec2 offset = (ui::GetItemRectMin() - viewport->Pos) * viewport->DpiScale;
+    auto* root = static_cast<RootUIElement*>(context_->GetUI()->GetRoot());
+    root->SetOffset({static_cast<int>(IM_ROUND(offset.x)), static_cast<int>(IM_ROUND(offset.y))});
+
     if (!inputGrabbed_ && simulationStatus_ == SCENE_SIMULATION_RUNNING && ui::IsItemHovered() &&
-        ui::IsAnyMouseDown() && GetInput()->IsMouseVisible())
+        ui::IsAnyMouseDown() && context_->GetInput()->IsMouseVisible())
         GrabInput();
 
     return true;
@@ -177,24 +211,13 @@ bool PreviewTab::RenderWindowContent()
 
 void PreviewTab::Clear()
 {
-    if (view_->GetWidth() > 0 && view_->GetHeight() > 0)
+    if (texture_->GetWidth() > 0 && texture_->GetHeight() > 0)
     {
         Image black(context_);
-        black.SetSize(view_->GetWidth(), view_->GetHeight(), 3);
+        black.SetSize(texture_->GetWidth(), texture_->GetHeight(), 3);
         black.Clear(Color::BLACK);
-        view_->SetData(&black);
+        texture_->SetData(&black);
     }
-}
-
-void PreviewTab::OnBeforeBegin()
-{
-    // Allow viewport texture to cover entire window
-    ui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-}
-
-void PreviewTab::OnAfterEnd()
-{
-    ui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 }
 
 void PreviewTab::UpdateViewports()
@@ -204,7 +227,7 @@ void PreviewTab::UpdateViewports()
     if (GetSubsystem<SceneManager>()->GetActiveScene() == nullptr)
         return;
 
-    if (RenderSurface* surface = view_->GetRenderSurface())
+    if (RenderSurface* surface = texture_->GetRenderSurface())
         GetSubsystem<SceneManager>()->SetRenderSurface(surface);
 }
 
@@ -237,13 +260,13 @@ void PreviewTab::RenderButtons()
     {
     case SCENE_SIMULATION_RUNNING:
     {
-        float timeStep = GetTime()->GetTimeStep();
+        float timeStep = context_->GetTime()->GetTimeStep();
         scene->Update(timeStep);
-        GetUI()->Update(timeStep);
+        context_->GetUI()->Update(timeStep);
     }
     case SCENE_SIMULATION_PAUSED:
     {
-        if (GetInput()->GetKeyPress(KEY_ESCAPE))
+        if (context_->GetInput()->GetKeyPress(KEY_ESCAPE))
         {
             if (Time::GetSystemTime() - lastEscPressTime_ > 300)
                 lastEscPressTime_ = Time::GetSystemTime();
@@ -255,6 +278,7 @@ void PreviewTab::RenderButtons()
         break;
     }
 
+    ui::BeginButtonGroup();
     if (ui::EditorToolbarButton(ICON_FA_FAST_BACKWARD, "Restore"))
         Stop();
 
@@ -267,7 +291,8 @@ void PreviewTab::RenderButtons()
         Step(1.f / 60.f);
 
     if (ui::EditorToolbarButton(ICON_FA_SAVE, "Save current state as master state.\n" ICON_FA_EXCLAMATION_TRIANGLE " Clears scene undo state!"))
-    Snapshot();
+        Snapshot();
+    ui::EndButtonGroup();
 }
 
 void PreviewTab::Play()
@@ -281,7 +306,8 @@ void PreviewTab::Play()
         // Scene was not running. Allow scene to set up input parameters.
         tab->GetUndo().SetTrackingEnabled(false);
         tab->SaveState(sceneState_);
-        GetUI()->SetBlockEvents(false);
+        context_->GetUI()->SetBlockEvents(false);
+        context_->GetAudio()->Play();
         simulationStatus_ = SCENE_SIMULATION_RUNNING;
         SendEvent(E_SIMULATIONSTART);
         inputGrabbed_ = true;
@@ -292,7 +318,8 @@ void PreviewTab::Play()
     {
         // Scene was paused. When resuming restore saved scene input parameters.
         simulationStatus_ = SCENE_SIMULATION_RUNNING;
-        GetUI()->SetBlockEvents(false);
+        context_->GetUI()->SetBlockEvents(false);
+        context_->GetAudio()->Play();
         break;
     }
     default:
@@ -304,7 +331,8 @@ void PreviewTab::Pause()
 {
     if (simulationStatus_ == SCENE_SIMULATION_RUNNING)
         simulationStatus_ = SCENE_SIMULATION_PAUSED;
-    GetUI()->SetBlockEvents(true);
+    context_->GetUI()->SetBlockEvents(true);
+    context_->GetAudio()->Stop();
 }
 
 void PreviewTab::Toggle()
@@ -332,7 +360,8 @@ void PreviewTab::Step(float timeStep)
         Pause();
 
     scene->Update(timeStep);
-    GetUI()->Update(timeStep);
+    context_->GetUI()->Update(timeStep);
+    context_->GetAudio()->Update(timeStep);
 }
 
 void PreviewTab::Stop()
@@ -345,7 +374,8 @@ void PreviewTab::Stop()
         simulationStatus_ = SCENE_SIMULATION_STOPPED;
         tab->RestoreState(sceneState_);
         tab->GetUndo().SetTrackingEnabled(true);
-        GetUI()->SetBlockEvents(true);
+        context_->GetUI()->SetBlockEvents(true);
+        context_->GetAudio()->Stop();
     }
 }
 
@@ -363,9 +393,9 @@ void PreviewTab::GrabInput()
         return;
 
     inputGrabbed_ = true;
-    GetInput()->SetMouseVisible(sceneMouseVisible_);
-    GetInput()->SetMouseMode(sceneMouseMode_);
-    GetInput()->SetShouldIgnoreInput(false);
+    context_->GetInput()->SetMouseVisible(sceneMouseVisible_);
+    context_->GetInput()->SetMouseMode(sceneMouseMode_);
+    context_->GetInput()->SetShouldIgnoreInput(false);
 }
 
 void PreviewTab::ReleaseInput()
@@ -374,25 +404,25 @@ void PreviewTab::ReleaseInput()
         return;
 
     inputGrabbed_ = false;
-    sceneMouseVisible_ = GetInput()->IsMouseVisible();
-    sceneMouseMode_ = GetInput()->GetMouseMode();
-    GetInput()->SetMouseVisible(true);
-    GetInput()->SetMouseMode(MM_ABSOLUTE);
-    GetInput()->SetShouldIgnoreInput(true);
+    sceneMouseVisible_ = context_->GetInput()->IsMouseVisible();
+    sceneMouseMode_ = context_->GetInput()->GetMouseMode();
+    context_->GetInput()->SetMouseVisible(true);
+    context_->GetInput()->SetMouseMode(MM_ABSOLUTE);
+    context_->GetInput()->SetShouldIgnoreInput(true);
 }
 
 void PreviewTab::RenderUI()
 {
-    Graphics* graphics = GetGraphics();
+    Graphics* graphics = context_->GetGraphics();
 
-    if (RenderSurface* surface = view_->GetRenderSurface())
+    if (RenderSurface* surface = texture_->GetRenderSurface())
     {
-        GetUI()->SetCustomSize(surface->GetWidth(), surface->GetHeight());
+        context_->GetUI()->SetCustomSize(surface->GetWidth(), surface->GetHeight());
         graphics->ResetRenderTargets();
         graphics->SetDepthStencil(surface->GetLinkedDepthStencil());
         graphics->SetRenderTarget(0, surface);
         graphics->SetViewport(IntRect(0, 0, surface->GetWidth(), surface->GetHeight()));
-        GetUI()->Render();
+        context_->GetUI()->Render();
     }
 }
 

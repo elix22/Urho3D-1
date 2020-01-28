@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,8 @@
 namespace Urho3D
 {
 
+class Archive;
+class ArchiveBlock;
 class ValueAnimation;
 class ValueAnimationInfo;
 class XMLElement;
@@ -45,6 +47,11 @@ public:
     ~ObjectAnimation() override;
     /// Register object factory.
     static void RegisterObject(Context* context);
+
+    /// Serialize from/to archive. Return true if successful.
+    bool Serialize(Archive& archive) override;
+    /// Serialize content from/to archive. Return true if successful.
+    bool Serialize(Archive& archive, ArchiveBlock& block);
 
     /// Load resource from stream. May be called from a worker thread. Return true if successful.
     bool BeginLoad(Deserializer& source) override;

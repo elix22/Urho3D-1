@@ -34,7 +34,7 @@ elseif (GCC OR WEB)
     target_compile_options(EASTL PUBLIC -Wno-literal-suffix)
 endif ()
 
-target_include_directories(EASTL
+target_include_directories(EASTL SYSTEM
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/test/packages/EABase/include/Common>
            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/test/packages/EAAssert/include>
@@ -51,5 +51,5 @@ install (DIRECTORY test/packages/EABase/include/Common/ DESTINATION ${DEST_THIRD
 install (DIRECTORY test/packages/EAAssert/include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.h)
 install (DIRECTORY test/packages/EAStdC/include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.h)
 if (NOT URHO3D_MERGE_STATIC_LIBS)
-    install(TARGETS EASTL EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
+    install(TARGETS EASTL EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG})
 endif ()

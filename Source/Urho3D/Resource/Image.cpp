@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -51,9 +51,9 @@
 #define FOURCC_DXT5 (MAKEFOURCC('D','X','T','5'))
 #define FOURCC_DX10 (MAKEFOURCC('D','X','1','0'))
 
-#define FOURCC_ETC1 (MAKEFOURCC('E', 'T', 'C', '1'))
-#define FOURCC_ETC2 (MAKEFOURCC('E', 'T', 'C', '2'))
-#define FOURCC_ETC2A (MAKEFOURCC('E', 'T', '2', 'A'))
+#define FOURCC_ETC1 (MAKEFOURCC('E','T','C','1'))
+#define FOURCC_ETC2 (MAKEFOURCC('E','T','C','2'))
+#define FOURCC_ETC2A (MAKEFOURCC('E','T','2','A'))
 
 static const unsigned DDSCAPS_COMPLEX = 0x00000008U;
 static const unsigned DDSCAPS_TEXTURE = 0x00001000U;
@@ -226,14 +226,15 @@ bool CompressedLevel::Decompress(unsigned char* dest)
     case CF_DXT5:
         DecompressImageDXT(dest, data_, width_, height_, depth_, format_);
         return true;
-
+	
+    // ETC2 format is compatible with ETC1, so we just use the same function.
     case CF_ETC1:
-        DecompressImageETC(dest, data_, width_, height_);
-        return true;
-
     case CF_ETC2_RGB:
+        DecompressImageETC(dest, data_, width_, height_, false);
+        return true;
     case CF_ETC2_RGBA:
-        return false;
+        DecompressImageETC(dest, data_, width_, height_, true);
+        return true;
 
     case CF_PVRTC_RGB_2BPP:
     case CF_PVRTC_RGBA_2BPP:
@@ -377,7 +378,7 @@ bool Image::BeginLoad(Deserializer& source)
         unsigned dataSize = 0;
         if (compressedFormat_ != CF_RGBA)
         {
-            const unsigned blockSize = compressedFormat_ == CF_DXT1 ? 8 : 16; //DXT1/BC1 is 8 bytes, DXT3/BC2 and DXT5/BC3 are 16 bytes
+            const unsigned blockSize = (compressedFormat_ == CF_DXT1 || compressedFormat_ == CF_ETC1 || compressedFormat_ == CF_ETC2_RGB) ? 8 : 16; //DXT1/BC1, ETC1 and ETC2 are 8 bytes, DXT3/BC2, DXT5/BC3 and ETC2A are 16 bytes
             // Add 3 to ensure valid block: ie 2x2 fits uses a whole 4x4 block
             unsigned blocksWide = (ddsd.dwWidth_ + 3) / 4;
             unsigned blocksHeight = (ddsd.dwHeight_ + 3) / 4;
@@ -735,6 +736,7 @@ bool Image::BeginLoad(Deserializer& source)
             components_ = 4;
             break;
 
+        // .pvr files also support ETC2 texture format.
         case 22:
             compressedFormat_ = CF_ETC2_RGB;
             components_ = 3;

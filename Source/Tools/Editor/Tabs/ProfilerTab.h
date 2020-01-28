@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -42,6 +42,7 @@ public:
     std::unique_ptr<tracy::View> view_;
 #endif
     ea::string connectTo_{"127.0.0.1"};
+    int port_ = 8086;
 };
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,12 +30,12 @@
 #include <Urho3D/Graphics/Material.h>
 #include <Urho3D/Graphics/Octree.h>
 #include <Urho3D/Graphics/RenderPath.h>
+#include <Urho3D/Graphics/Terrain.h>
 #include <Urho3D/IO/FileSystem.h>
 #include <Urho3D/IO/Log.h>
 #include <Urho3D/Resource/ResourceCache.h>
 #include <Urho3D/Scene/SceneEvents.h>
 #include <Urho3D/Scene/SceneManager.h>
-#include <Urho3D/Scene/SceneMetadata.h>
 #include <Urho3D/SystemUI/DebugHud.h>
 
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
@@ -58,8 +58,6 @@
 namespace Urho3D
 {
 
-using namespace ui::litterals;
-
 static const IntVector2 cameraPreviewSize{320, 200};
 
 SceneTab::SceneTab(Context* context)
@@ -72,6 +70,7 @@ SceneTab::SceneTab(Context* context)
     SetTitle("Scene");
     windowFlags_ = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
     isUtility_ = true;
+    noContentPadding_ = true;
 
     // Main viewport
     viewport_ = new Viewport(context_);
@@ -101,76 +100,17 @@ SceneTab::SceneTab(Context* context)
     cameraPreviewtexture_->GetRenderSurface()->SetViewport(0, cameraPreviewViewport_);
 
     // Events
-    SubscribeToEvent(this, E_EDITORSELECTIONCHANGED, std::bind(&SceneTab::OnNodeSelectionChanged, this));
-    SubscribeToEvent(E_UPDATE, std::bind(&SceneTab::OnUpdate, this, _2));
+    SubscribeToEvent(this, E_EDITORSELECTIONCHANGED, [this](StringHash, VariantMap&) { OnNodeSelectionChanged(); });
+    SubscribeToEvent(E_UPDATE, [this](StringHash, VariantMap& args) { OnUpdate(args); });
     SubscribeToEvent(E_POSTRENDERUPDATE, [&](StringHash, VariantMap&) { RenderDebugInfo(); });
-    SubscribeToEvent(&inspector_, E_INSPECTORRENDERSTART, [this](StringHash, VariantMap& args) {
-        Serializable* serializable = static_cast<Serializable*>(args[InspectorRenderStart::P_SERIALIZABLE].GetPtr());
-        if (serializable->GetType() == Node::GetTypeStatic())
-        {
-            UI_UPIDSCOPE(1)
-                ui::Columns(2);
-            Node* node = static_cast<Node*>(serializable);
-            ui::TextUnformatted("ID");
-            ui::NextColumn();
-            ui::Text("%u", node->GetID());
-            if (node->IsReplicated())
-            {
-                ui::SameLine();
-                ui::TextUnformatted(ICON_FA_WIFI);
-                ui::SetHelpTooltip("Replicated over the network.", KEY_UNKNOWN);
-            }
-            ui::NextColumn();
-        }
-    });
     SubscribeToEvent(E_ENDFRAME, [this](StringHash, VariantMap&) { UpdateCameras(); });
-    SubscribeToEvent(E_SCENEACTIVATED, [this](StringHash, VariantMap& args) {
-        using namespace SceneActivated;
-        if (Scene* scene = static_cast<Scene*>(args[P_NEWSCENE].GetPtr()))
-        {
-            SubscribeToEvent(scene, E_COMPONENTADDED, [this](StringHash, VariantMap& args) { OnComponentAdded(args); });
-            SubscribeToEvent(scene, E_COMPONENTREMOVED, [this](StringHash, VariantMap& args) { OnComponentRemoved(args); });
-            SubscribeToEvent(scene, E_TEMPORARYCHANGED, [this](StringHash, VariantMap& args) { OnTemporaryChanged(args); });
-
-            undo_.Clear();
-            undo_.Connect(scene);
-
-            cameraPreviewViewport_->SetScene(scene);
-            viewport_->SetScene(scene);
-            selectedComponents_.clear();
-            gizmo_.UnselectAll();
-        }
-    });
-    SubscribeToEvent(E_EDITORPROJECTCLOSING, [this](StringHash, VariantMap&) {
-        if (texture_.Null())
-            return;
-
-        // Also crop image to a square.
-        SharedPtr<Image> snapshot(texture_->GetImage());
-        int w = snapshot->GetWidth();
-        int h = snapshot->GetHeight();
-        int side = Min(w, h);
-        IntRect rect{0, 0, w, h};
-        if (w > h)
-        {
-            rect.left_ = ((w - side) / 2);
-            rect.right_ = rect.left_ + side;
-        }
-        else if (h > w)
-        {
-            rect.top_ = ((w - side) / 2);
-            rect.bottom_ = rect.top_ + side;
-        }
-        SharedPtr<Image> cropped = snapshot->GetSubimage(rect);
-        cropped->SavePNG(GetSubsystem<Project>()->GetProjectPath() + ".snapshot.png");
-    });
+    SubscribeToEvent(E_SCENEACTIVATED, [this](StringHash, VariantMap& args) { OnSceneActivated(args); });
+    SubscribeToEvent(E_EDITORPROJECTCLOSING, [this](StringHash, VariantMap&) { OnEditorProjectClosing(); });
 
     undo_.Connect(&inspector_);
     undo_.Connect(&gizmo_);
 
-    SubscribeToEvent(GetScene(), E_ASYNCLOADFINISHED, [&](StringHash, VariantMap&) {
-        undo_.Clear();
-    });
+    SubscribeToEvent(GetScene(), E_ASYNCLOADFINISHED, [&](StringHash, VariantMap&) { undo_.Clear(); });
 
     undo_.Clear();
 
@@ -185,30 +125,61 @@ SceneTab::~SceneTab()
 
 bool SceneTab::RenderWindowContent()
 {
+    ImGuiContext& g = *GImGui;
+    bool open = true;
+
     if (GetScene() == nullptr)
         return true;
-
-    if (GetInput()->IsMouseVisible())
-        lastMousePosition_ = GetInput()->GetMousePosition();
-    bool open = true;
 
     // Focus window when appearing
     if (!isRendered_)
         ui::SetWindowFocus();
 
+    if (!ui::BeginChild("Scene view", g.CurrentWindow->ContentRegionRect.GetSize(), false, windowFlags_))
+    {
+        ui::EndChild();
+        return open;
+    }
+
+    ImGuiWindow* window = g.CurrentWindow;
+    ImGuiViewport* viewport = window->Viewport;
+
+    ImRect rect = ImRound(window->ContentRegionRect);
+    IntVector2 textureSize{
+        static_cast<int>(IM_ROUND(rect.GetWidth() * viewport->DpiScale)),
+        static_cast<int>(IM_ROUND(rect.GetHeight() * viewport->DpiScale))
+    };
+    if (textureSize.x_ != texture_->GetWidth() || textureSize.y_ != texture_->GetHeight())
+    {
+        viewport_->SetRect(IntRect(IntVector2::ZERO, textureSize));
+        texture_->SetSize(textureSize.x_, textureSize.y_, Graphics::GetRGBFormat(), TEXTURE_RENDERTARGET);
+        texture_->GetRenderSurface()->SetViewport(0, viewport_);
+        texture_->GetRenderSurface()->SetUpdateMode(SURFACE_UPDATEALWAYS);
+    }
+
+    Input* input = GetSubsystem<Input>();
+    bool wasActive = isViewportActive_;
+    bool isClickedLeft = false;
+    bool isClickedRight = false;
+
+    // Buttons must render above the viewport, but they also should be rendered first in order to take precedence in
+    // item activation.
+    viewportSplitter_.Split(window->DrawList, 3);
+    viewportSplitter_.SetCurrentChannel(window->DrawList, 2);
     RenderToolbarButtons();
-    IntRect tabRect = UpdateViewRect();
-    ui::SetCursorScreenPos(ToImGui(tabRect.Min()));
-    ImVec2 contentSize = ToImGui(tabRect.Size());
-    ui::BeginChild("Scene view", contentSize, false, windowFlags_);
-    ui::Image(texture_, contentSize);
+    viewportSplitter_.SetCurrentChannel(window->DrawList, 1);
     gizmo_.ManipulateSelection(GetCamera());
+    viewportSplitter_.SetCurrentChannel(window->DrawList, 0);
+    ui::SetCursorPos({0, 0});
+    ui::ImageItem(texture_, rect.GetSize());
+    isViewportActive_ = ui::ItemMouseActivation(MOUSEB_RIGHT) && ui::IsMouseDragging(MOUSEB_RIGHT);
+    isClickedLeft = ui::IsItemHovered() && ui::IsMouseClicked(MOUSEB_LEFT);
+    isClickedRight = ui::IsItemHovered() && ui::IsMouseReleased(MOUSEB_RIGHT) && input->IsMouseVisible();
+    ImRect viewportRect{ui::GetItemRectMin(), ui::GetItemRectMax()};
+    viewportSplitter_.Merge(window->DrawList);
 
-    if (GetInput()->IsMouseVisible())
-        mouseHoversViewport_ = ui::IsItemHovered();
-
-    bool isClickedLeft = GetInput()->GetMouseButtonClick(MOUSEB_LEFT) && ui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
-    bool isClickedRight = GetInput()->GetMouseButtonClick(MOUSEB_RIGHT) && ui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+    if (wasActive != isViewportActive_)
+        GetSubsystem<Input>()->SetMouseVisible(!isViewportActive_);
 
     // Render camera preview
     if (cameraPreviewViewport_->GetCamera() != nullptr)
@@ -216,7 +187,7 @@ bool SceneTab::RenderWindowContent()
         float border = 1;
         ui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, border);
         ui::PushStyleColor(ImGuiCol_Border, ui::GetColorU32(ImGuiCol_Border, 255.f));                                   // Make a border opaque, otherwise it is barely visible.
-        ui::SetCursorScreenPos(ToImGui(tabRect.Max() - cameraPreviewSize - IntVector2{10, 10}));
+        ui::SetCursorScreenPos(rect.Max - ToImGui(cameraPreviewSize) - ImVec2{10, 10});
 
         ui::Image(cameraPreviewtexture_.Get(), ToImGui(cameraPreviewSize));
         ui::RenderFrameBorder(ui::GetItemRectMin() - ImVec2{border, border}, ui::GetItemRectMax() + ImVec2{border, border});
@@ -231,13 +202,13 @@ bool SceneTab::RenderWindowContent()
     else
         windowFlags_ &= ~ImGuiWindowFlags_NoMove;
 
-    if (!gizmo_.IsActive() && (isClickedLeft || isClickedRight) && GetInput()->IsMouseVisible())
+    if (!gizmo_.IsActive() && (isClickedLeft || isClickedRight) && context_->GetInput()->IsMouseVisible())
     {
         // Handle object selection.
-        IntVector2 pos = GetInput()->GetMousePosition();
-        pos -= tabRect.Min();
-
-        Ray cameraRay = GetCamera()->GetScreenRay((float)pos.x_ / tabRect.Width(), (float)pos.y_ / tabRect.Height());
+        ImGuiIO& io = ui::GetIO();
+        Ray cameraRay = GetCamera()->GetScreenRay(
+            (io.MousePos.x - viewportRect.Min.x) / viewportRect.GetWidth(),
+            (io.MousePos.y - viewportRect.Min.y) / viewportRect.GetHeight());
         // Pick only geometry objects, not eg. zones or lights, only get the first (closest) hit
         ea::vector<RayQueryResult> results;
 
@@ -264,7 +235,7 @@ bool SceneTab::RenderWindowContent()
 
             if (isClickedLeft)
             {
-                if (!GetInput()->GetKeyDown(KEY_CTRL))
+                if (!context_->GetInput()->GetKeyDown(KEY_CTRL))
                     UnselectAll();
 
                 if (clickNode == GetScene())
@@ -275,7 +246,7 @@ bool SceneTab::RenderWindowContent()
                 else
                     ToggleSelection(clickNode);
             }
-            else if (isClickedRight)
+            else if (isClickedRight && ImLengthSqr(ui::GetMouseDragDelta(MOUSEB_RIGHT)) == 0.0f)
             {
                 if (clickNode == GetScene())
                 {
@@ -303,44 +274,26 @@ bool SceneTab::RenderWindowContent()
 
     RenderNodeContextMenu();
 
+    if (debugHudVisible_)
+    {
+        if (auto* hud = GetSubsystem<DebugHud>())
+        {
+            ImFont* monospaceFont = GetSubsystem<Editor>()->GetMonoSpaceFont();
+            ui::PushFont(monospaceFont);
+            ImGuiWindow* window = ui::GetCurrentWindow();
+            // FIXME: Without this FPS has extra space below.
+            ui::GetCurrentWindow()->DC.CurrLineSize.y = monospaceFont->FontSize;
+            ui::SetCursorScreenPos(rect.Min + ImVec2{10, 10 + ui::GetIO().Fonts->Fonts[0]->FontSize});
+            hud->RenderUI(DEBUGHUD_SHOW_ALL);
+            ui::PopFont();
+        }
+    }
+
     ui::EndChild(); // Scene view
 
+    BaseClassName::RenderWindowContent();
+
     return open;
-}
-
-void SceneTab::OnBeforeBegin()
-{
-    // Allow viewport texture to cover entire window
-    ui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-}
-
-void SceneTab::OnAfterBegin()
-{
-    ui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
-    // Inner part of window should have a proper padding, context menu and other controls might depend on it.
-    if (ui::BeginPopupContextItem("SceneTab context menu"))
-    {
-        if (ui::MenuItem("Save"))
-            SaveResource();
-
-        ui::Separator();
-
-        if (ui::MenuItem("Close"))
-            open_ = false;
-
-        ui::EndPopup();
-    }
-}
-
-void SceneTab::OnBeforeEnd()
-{
-    BaseClassName::OnBeforeEnd();
-    ui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-}
-
-void SceneTab::OnAfterEnd()
-{
-    ui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 }
 
 bool SceneTab::LoadResource(const ea::string& resourcePath)
@@ -361,19 +314,19 @@ bool SceneTab::LoadResource(const ea::string& resourcePath)
     bool loaded = false;
     if (resourcePath.ends_with(".xml", false))
     {
-        auto* file = GetCache()->GetResource<XMLFile>(resourcePath);
+        auto* file = context_->GetCache()->GetResource<XMLFile>(resourcePath);
         loaded = file && scene->LoadXML(file->GetRoot());
     }
     else if (resourcePath.ends_with(".json", false))
     {
-        auto* file = GetCache()->GetResource<JSONFile>(resourcePath);
+        auto* file = context_->GetCache()->GetResource<JSONFile>(resourcePath);
         loaded = file && scene->LoadJSON(file->GetRoot());
     }
     else
     {
         URHO3D_LOGERRORF("Unknown scene file format %s", GetExtension(resourcePath).c_str());
         manager->UnloadScene(scene);
-        GetCache()->ReleaseResource(XMLFile::GetTypeStatic(), resourcePath, true);
+        context_->GetCache()->ReleaseResource(XMLFile::GetTypeStatic(), resourcePath, true);
         return false;
     }
 
@@ -381,14 +334,13 @@ bool SceneTab::LoadResource(const ea::string& resourcePath)
     {
         URHO3D_LOGERRORF("Loading scene %s failed", GetFileName(resourcePath).c_str());
         manager->UnloadScene(scene);
-        GetCache()->ReleaseResource(XMLFile::GetTypeStatic(), resourcePath, true);
+        context_->GetCache()->ReleaseResource(XMLFile::GetTypeStatic(), resourcePath, true);
         return false;
     }
 
     manager->UnloadAllButActiveScene();
     scene->SetUpdateEnabled(false);    // Scene is updated manually.
     scene->GetOrCreateComponent<Octree>();
-    scene->GetOrCreateComponent<SceneMetadata>(LOCAL);
     scene->GetOrCreateComponent<EditorSceneSettings>(LOCAL);
 
     undo_.Clear();
@@ -401,12 +353,15 @@ bool SceneTab::LoadResource(const ea::string& resourcePath)
 
 bool SceneTab::SaveResource()
 {
+    if (GetScene() == nullptr)
+        return false;
+
     if (!BaseClassName::SaveResource())
         return false;
 
-    GetCache()->ReleaseResource(XMLFile::GetTypeStatic(), resourceName_, true);
+    context_->GetCache()->ReleaseResource(XMLFile::GetTypeStatic(), resourceName_, true);
 
-    auto fullPath = GetCache()->GetResourceFileName(resourceName_);
+    auto fullPath = context_->GetCache()->GetResourceFileName(resourceName_);
     if (fullPath.empty())
         return false;
 
@@ -516,6 +471,7 @@ void SceneTab::ToggleSelection(Component* component)
 
 void SceneTab::UnselectAll()
 {
+    selectionRect_ = {ui::GetMousePos(), ui::GetMousePos()};
     bool hadComponents = !selectedComponents_.empty();
     selectedComponents_.clear();
     if (gizmo_.UnselectAll() || hadComponents)
@@ -532,7 +488,7 @@ const ea::vector<WeakPtr<Node>>& SceneTab::GetSelection() const
 
 void SceneTab::RenderToolbarButtons()
 {
-    ui::SetCursorPos(ui::GetCursorPos() + ImVec2{4_dpx, 4_dpy});
+    ui::SetCursorPos({4, 4});
 
     if (ui::EditorToolbarButton(ICON_FA_SAVE, "Save"))
         SaveResource();
@@ -559,7 +515,7 @@ void SceneTab::RenderToolbarButtons()
 
     ui::SameLine(0, 3.f);
 
-    if (EditorSceneSettings* settings = GetScene()->GetComponent<EditorSceneSettings>())
+    if (auto* settings = GetScene()->GetComponent<EditorSceneSettings>())
     {
         ui::BeginButtonGroup();
         if (ui::EditorToolbarButton("3D", "3D mode in editor viewport.", !settings->GetCamera2D()))
@@ -572,8 +528,8 @@ void SceneTab::RenderToolbarButtons()
 
     if (auto* hud = GetSubsystem<DebugHud>())
     {
-        if (ui::EditorToolbarButton(ICON_FA_BUG, "Display debug hud.", hud->GetMode() == DEBUGHUD_SHOW_ALL))
-            hud->SetMode(hud->GetMode() == DEBUGHUD_SHOW_ALL ? DEBUGHUD_SHOW_NONE : DEBUGHUD_SHOW_ALL);
+        if (ui::EditorToolbarButton(ICON_FA_BUG, "Display debug hud.", debugHudVisible_))
+            debugHudVisible_ ^= true;
     }
 
     ui::SameLine(0, 3.f);
@@ -581,7 +537,6 @@ void SceneTab::RenderToolbarButtons()
     SendEvent(E_EDITORTOOLBARBUTTONS);
 
     ui::SameLine(0, 3.f);
-    ui::SetCursorPosY(ui::GetCursorPosY() + 4_dpx);
 }
 
 bool SceneTab::IsSelected(Node* node) const
@@ -604,53 +559,57 @@ void SceneTab::OnNodeSelectionChanged()
 {
     using namespace EditorSelectionChanged;
     auto* editor = GetSubsystem<Editor>();
-    editor->GetTab<InspectorTab>()->SetProvider(this);
+
+    editor->ClearInspector();
+    int inspectedNodes = 0;
+    int inspectedComponents = 0;
+    Node* lastInspectedNode = nullptr;
+
+    // Inspect all selected nodes.
+    for (Node* node : gizmo_.GetSelection())
+    {
+        if (node)
+        {
+            editor->Inspect(node);
+            inspectedNodes++;
+            lastInspectedNode = node;
+        }
+    }
+    // And all selected components.
+    for (Component* component : selectedComponents_)
+    {
+        if (component)
+        {
+            editor->Inspect(component);
+            inspectedComponents++;
+        }
+    }
+    // However if we selected a single node and no components - inspect all components of that node for convenience.
+    if (inspectedNodes == 1 && inspectedComponents == 0)
+    {
+        for (Component* component : lastInspectedNode->GetComponents())
+            editor->Inspect(component);
+    }
+
     editor->GetTab<HierarchyTab>()->SetProvider(this);
-}
-
-void SceneTab::ClearSelection()
-{
-    UnselectAll();
-}
-
-void SceneTab::RenderInspector(const char* filter)
-{
-    const auto& selection = GetSelection();
-    bool singleNodeMode = selection.size() == 1 && selectedComponents_.empty();
-    for (auto& node : GetSelection())
-    {
-        if (node.Expired())
-            continue;
-        RenderAttributes(node.Get(), filter, &inspector_);
-        if (singleNodeMode)
-        {
-            for (auto& component : node->GetComponents())
-            {
-                if (!component->IsTemporary())
-                    RenderAttributes(component.Get(), filter, &inspector_);
-            }
-        }
-    }
-
-    if (!singleNodeMode)
-    {
-        for (auto& component : selectedComponents_)
-        {
-            if (component.Expired())
-                continue;
-            RenderAttributes(component.Get(), filter, &inspector_);
-        }
-    }
 }
 
 void SceneTab::RenderHierarchy()
 {
+    if (performRangeSelectionFrame_ != ui::GetFrameCount())
+        selectionRect_ = {ui::GetMousePos(), ui::GetMousePos()};
+
     if (auto* scene = GetScene())
     {
         ui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 10);
         RenderNodeTree(scene);
         ui::PopStyleVar();
     }
+
+    // Perform range selection on next frame. Only then we can have a rectangle covering selection ends
+    // which we need to do range selection.
+    if (ui::IsMouseClicked(MOUSEB_LEFT) && ui::IsKeyDown(SCANCODE_SHIFT) && !GetSelection().empty())
+        performRangeSelectionFrame_ = ui::GetFrameCount() + 1;
 }
 
 void SceneTab::RenderNodeTree(Node* node)
@@ -669,15 +628,14 @@ void SceneTab::RenderNodeTree(Node* node)
         ui::SetScrollHereY();
 
     ea::string name = node->GetName().empty() ? ToString("%s %d", node->GetTypeName().c_str(), node->GetID()) : node->GetName();
-    bool isSelected = IsSelected(node);
-
-    if (isSelected)
+    if (IsSelected(node))
         flags |= ImGuiTreeNodeFlags_Selected;
 
     ui::Image("Node");
     ui::SameLine();
     ui::PushID((void*)node);
     auto opened = ui::TreeNodeEx(name.c_str(), flags);
+    ImRect treeNodeRect = {ui::GetItemRectMin(), ui::GetItemRectMax()};
     auto it = openHierarchyNodes_.find(node);
     if (it != openHierarchyNodes_.end())
     {
@@ -728,11 +686,16 @@ void SceneTab::RenderNodeTree(Node* node)
     {
         if (ui::IsMouseClicked(MOUSEB_LEFT))
         {
-            if (!GetInput()->GetKeyDown(KEY_CTRL))
+            // Select single node.
+            if (!ui::IsKeyDown(SCANCODE_SHIFT) && !ui::IsKeyDown(SCANCODE_CTRL))
                 UnselectAll();
-            ToggleSelection(node);
+
+            if (ui::IsKeyDown(SCANCODE_SHIFT))
+                Select(node);
+            else
+                ToggleSelection(node);
         }
-        else if (ui::IsMouseClicked(MOUSEB_RIGHT))
+        else if (ui::IsMouseReleased(MOUSEB_RIGHT) && ImLengthSqr(ui::GetMouseDragDelta(MOUSEB_RIGHT)) == 0.0f)
         {
             if (!IsSelected(node))
             {
@@ -740,6 +703,19 @@ void SceneTab::RenderNodeTree(Node* node)
                 ToggleSelection(node);
             }
             ui::OpenPopupEx(ui::GetID("Node context menu"));
+        }
+    }
+
+    if (IsSelected(node))
+        selectionRect_.Add(treeNodeRect);
+
+    // Range-select by shift-clicking an item.
+    if (performRangeSelectionFrame_ == ui::GetFrameCount())
+    {
+        if (selectionRect_.Contains(treeNodeRect.Min))
+        {
+            Select(node);
+            selectionRect_.Add(treeNodeRect.Min);
         }
     }
 
@@ -767,11 +743,11 @@ void SceneTab::RenderNodeTree(Node* node)
                 {
                     if (ui::IsMouseClicked(MOUSEB_LEFT))
                     {
-                        if (!GetInput()->GetKeyDown(KEY_CTRL))
+                        if (!ui::IsKeyDown(SCANCODE_CTRL))
                             UnselectAll();
                         Select(component);
                     }
-                    else if (ui::IsMouseClicked(MOUSEB_RIGHT))
+                    else if (ui::IsMouseReleased(MOUSEB_RIGHT) && ImLengthSqr(ui::GetMouseDragDelta(MOUSEB_RIGHT)) == 0.0f)
                     {
                         if (!IsSelected(component))
                         {
@@ -791,7 +767,7 @@ void SceneTab::RenderNodeTree(Node* node)
             // Do not use element->GetChildren() because child may be deleted during this loop.
             ea::vector<Node*> children;
             node->GetChildren(children);
-            for (Node* child : children) 
+            for (Node* child : children)
             {
                 // ensure the tree is expanded to the currently selected node if there is one node selected.
                 if (GetSelection().size() == 1)
@@ -843,21 +819,6 @@ Scene* SceneTab::GetScene()
     return GetSubsystem<SceneManager>()->GetActiveScene();
 }
 
-IntRect SceneTab::UpdateViewRect()
-{
-    IntRect tabRect = BaseClassName::UpdateViewRect();
-    // Correct content rect to not overlap buttons. Ideally this should be in Tab.cpp but for some reason it creates
-    // unused space at the bottom of PreviewTab.
-    tabRect.top_ += static_cast<int>(ui::GetCursorPosY());
-    ResizeMainViewport(tabRect);
-    gizmo_.SetScreenRect(tabRect);
-
-    if (auto* hud = GetSubsystem<DebugHud>())
-        hud->SetExtents(tabRect.Min(), tabRect.Size());
-
-    return tabRect;
-}
-
 void SceneTab::OnUpdate(VariantMap& args)
 {
     Scene* scene = GetScene();
@@ -866,14 +827,31 @@ void SceneTab::OnUpdate(VariantMap& args)
 
     float timeStep = args[Update::P_TIMESTEP].GetFloat();
     bool isMode3D_ = !scene->GetComponent<EditorSceneSettings>()->GetCamera2D();
-    StringHash cameraControllerType = isMode3D_ ? DebugCameraController::GetTypeStatic() : DebugCameraController2D::GetTypeStatic();
+    StringHash cameraControllerType = isMode3D_ ? DebugCameraController3D::GetTypeStatic() : DebugCameraController2D::GetTypeStatic();
     if (Camera* camera = GetCamera())
     {
-        LogicComponent* component = static_cast<LogicComponent*>(camera->GetComponent(cameraControllerType));
+        auto* component = static_cast<DebugCameraController*>(camera->GetComponent(cameraControllerType));
         if (component != nullptr)
         {
-            if (mouseHoversViewport_)
-                component->Update(timeStep);
+            if (isViewportActive_)
+            {
+                ui::SetMouseCursor(ImGuiMouseCursor_None);
+                if (isMode3D_)
+                {
+                    auto* controller3D = static_cast<DebugCameraController3D*>(component);
+                    Vector3 center;
+                    int selectionCount = gizmo_.GetSelectionCenter(center);
+                    if (selectionCount > 0)
+                    {
+                        controller3D->SetRotationCenter(center);
+                    }
+                    else
+                    {
+                        controller3D->ClearRotationCenter();
+                    }
+                }
+                component->RunFrame(timeStep);
+            }
         }
     }
 
@@ -885,22 +863,42 @@ void SceneTab::OnUpdate(VariantMap& args)
             if (!ui::IsAnyItemActive())
             {
                 // Global view hotkeys
-                if (GetInput()->GetKeyPress(KEY_DELETE))
+                if (context_->GetInput()->GetKeyPress(KEY_DELETE))
                     RemoveSelection();
-                else if (GetInput()->GetKeyDown(KEY_CTRL))
+                else if (context_->GetInput()->GetKeyDown(KEY_CTRL))
                 {
-                    if (GetInput()->GetKeyPress(KEY_C))
+                    if (context_->GetInput()->GetKeyPress(KEY_C))
                         CopySelection();
-                    else if (GetInput()->GetKeyPress(KEY_V))
+                    else if (context_->GetInput()->GetKeyPress(KEY_V))
                     {
-                        if (GetInput()->GetKeyDown(KEY_SHIFT))
+                        if (context_->GetInput()->GetKeyDown(KEY_SHIFT))
                             PasteIntoSelection();
                         else
                             PasteIntuitive();
                     }
                 }
-                else if (GetInput()->GetKeyPress(KEY_ESCAPE))
+                else if (context_->GetInput()->GetKeyPress(KEY_ESCAPE))
                     UnselectAll();
+            }
+        }
+
+        if (tab == this)
+        {
+            Input* input = context_->GetInput();
+            if (input->IsMouseVisible())
+            {
+                if (input->GetKeyPress(KEY_W))
+                {
+                    gizmo_.SetOperation(GIZMOOP_TRANSLATE);
+                }
+                else if (input->GetKeyPress(KEY_E))
+                {
+                    gizmo_.SetOperation(GIZMOOP_ROTATE);
+                }
+                else if (input->GetKeyPress(KEY_R))
+                {
+                    gizmo_.SetOperation(GIZMOOP_SCALE);
+                }
             }
         }
     }
@@ -954,7 +952,7 @@ void SceneTab::RestoreState(SceneState& source)
         editorObjects->Save(editorObjectsState);
     }
 
-    source.Load(rootElement_);
+    source.Load(GetScene(), rootElement_);
     GetSubsystem<SceneManager>()->UnloadAllButActiveScene();
 
     if (editorObjectsState.GetSize() > 0)
@@ -986,7 +984,7 @@ void SceneTab::RenderNodeContextMenu()
     if ((!GetSelection().empty() || !selectedComponents_.empty()) && ui::BeginPopup("Node context menu"))
     {
         Input* input = GetSubsystem<Input>();
-        if (input->GetKeyPress(KEY_ESCAPE) || !input->IsMouseVisible())
+        if (ui::IsKeyPressed(KEY_ESCAPE) || !input->IsMouseVisible())
         {
             // Close when interacting with scene camera.
             ui::CloseCurrentPopup();
@@ -996,7 +994,7 @@ void SceneTab::RenderNodeContextMenu()
 
         if (!GetSelection().empty())
         {
-            bool alternative = input->GetKeyDown(KEY_SHIFT);
+            bool alternative = ui::IsKeyDown(KEY_SHIFT);
 
             if (ui::MenuItem(alternative ? "Create Child (Local)" : "Create Child"))
             {
@@ -1021,6 +1019,7 @@ void SceneTab::RenderNodeContextMenu()
                 auto* editor = GetSubsystem<Editor>();
                 auto categories = context_->GetObjectCategories().keys();
                 categories.erase_first("UI");
+                ea::quick_sort(categories.begin(), categories.end());
 
                 for (const ea::string& category : categories)
                 {
@@ -1042,8 +1041,7 @@ void SceneTab::RenderNodeContextMenu()
                                 {
                                     if (!selectedNode.Expired())
                                     {
-                                        if (selectedNode->CreateComponent(StringHash(component),
-                                                                          alternative ? LOCAL : REPLICATED))
+                                        if (selectedNode->CreateComponent(StringHash(component), alternative ? LOCAL : REPLICATED))
                                             openHierarchyNodes_.push_back(selectedNode);
                                     }
                                 }
@@ -1178,6 +1176,58 @@ void SceneTab::OnTemporaryChanged(VariantMap& args)
     }
 }
 
+void SceneTab::OnSceneActivated(VariantMap& args)
+{
+    using namespace SceneActivated;
+    if (auto* scene = static_cast<Scene*>(args[P_NEWSCENE].GetPtr()))
+    {
+        SubscribeToEvent(scene, E_COMPONENTADDED, [this](StringHash, VariantMap& args) { OnComponentAdded(args); });
+        SubscribeToEvent(scene, E_COMPONENTREMOVED, [this](StringHash, VariantMap& args) { OnComponentRemoved(args); });
+        SubscribeToEvent(scene, E_TEMPORARYCHANGED, [this](StringHash, VariantMap& args) { OnTemporaryChanged(args); });
+
+        undo_.Clear();
+        undo_.Connect(scene);
+
+        // If application logic switches to another scene it will have updates enabled. Ensure they are disabled so we do not get double
+        // updates per frame.
+        scene->SetUpdateEnabled(false);
+        cameraPreviewViewport_->SetScene(scene);
+        viewport_->SetScene(scene);
+        selectedComponents_.clear();
+        gizmo_.UnselectAll();
+    }
+}
+
+void SceneTab::OnEditorProjectClosing()
+{
+    ea::string snapshotPath = GetSubsystem<Project>()->GetProjectPath() + ".snapshot.png";
+
+    if (texture_.Null() || GetScene() == nullptr)
+    {
+        GetSubsystem<FileSystem>()->Delete(snapshotPath);
+        return;
+    }
+
+    // Also crop image to a square.
+    SharedPtr<Image> snapshot(texture_->GetImage());
+    int w = snapshot->GetWidth();
+    int h = snapshot->GetHeight();
+    int side = Min(w, h);
+    IntRect rect{0, 0, w, h};
+    if (w > h)
+    {
+        rect.left_ = ((w - side) / 2);
+        rect.right_ = rect.left_ + side;
+    }
+    else if (h > w)
+    {
+        rect.top_ = ((w - side) / 2);
+        rect.bottom_ = rect.top_ + side;
+    }
+    SharedPtr<Image> cropped = snapshot->GetSubimage(rect);
+    cropped->SavePNG(snapshotPath);
+}
+
 void SceneTab::AddComponentIcon(Component* component)
 {
     if (component == nullptr || component->IsTemporary())
@@ -1185,40 +1235,49 @@ void SceneTab::AddComponentIcon(Component* component)
 
     Node* node = component->GetNode();
 
-    if (node->IsTemporary() || node->HasTag("__EDITOR_OBJECT__") ||
+    if (node == nullptr || node->IsTemporary() || node->HasTag("__EDITOR_OBJECT__") ||
         (node->GetName().starts_with("__") && node->GetName().ends_with("__")))
         return;
 
-    auto* material = GetCache()->GetResource<Material>("Materials/Editor/DebugIcon" + component->GetTypeName() + ".xml", false);
+    auto* material = context_->GetCache()->GetResource<Material>(Format("Materials/Editor/DebugIcon{}.xml", component->GetTypeName()), false);
     if (material != nullptr)
     {
-        if (node->GetChildrenWithTag("DebugIcon" + component->GetTypeName()).size() > 0)
-            return;
-
         auto iconTag = "DebugIcon" + component->GetTypeName();
-        if (node->GetChildrenWithTag(iconTag).empty())
-        {
-            Undo::SetTrackingScoped tracking(undo_, false);
-            int count = node->GetChildrenWithTag("DebugIcon").size();
-            node = node->CreateChild();
-            node->AddTag("DebugIcon");
-            node->AddTag("DebugIcon" + component->GetTypeName());
-            node->AddTag("__EDITOR_OBJECT__");
-            node->SetVar("ComponentType", component->GetType());
-            node->SetTemporary(true);
+        if (!node->GetChildrenWithTag(iconTag).empty())
+            return;                                                 // Icon for component of this type is already added
 
-            auto* billboard = node->CreateComponent<BillboardSet>();
-            billboard->SetFaceCameraMode(FaceCameraMode::FC_LOOKAT_XYZ);
-            billboard->SetNumBillboards(1);
-            billboard->SetMaterial(material);
-            billboard->SetViewMask(EDITOR_VIEW_LAYER);
-            if (auto* bb = billboard->GetBillboard(0))
+        Undo::SetTrackingScoped tracking(undo_, false);
+        int count = node->GetChildrenWithTag("DebugIcon").size();
+        node = node->CreateChild();                                 // !! from now on `node` is a container for debug icon
+        node->AddTag("DebugIcon");
+        node->AddTag(iconTag);
+        node->AddTag("__EDITOR_OBJECT__");
+        node->SetVar("ComponentType", component->GetType());
+        node->SetTemporary(true);
+
+        auto* billboard = node->CreateComponent<BillboardSet>();
+        billboard->SetFaceCameraMode(FaceCameraMode::FC_LOOKAT_XYZ);
+        if (auto* settings = GetScene()->GetComponent<EditorSceneSettings>())
+        {
+            bool is2D = settings->GetCamera2D();
+            if (is2D)
             {
-                bb->size_ = Vector2::ONE * 0.2f;
-                bb->enabled_ = true;
-                bb->position_ = {0, count * 0.4f, 0};
+                node->LookAt(node->GetWorldPosition() + Vector3::FORWARD);
+                billboard->SetFaceCameraMode(FaceCameraMode::FC_NONE);
             }
-            billboard->Commit();
+        }
+
+        billboard->SetNumBillboards(1);
+        billboard->SetMaterial(material);
+        billboard->SetViewMask(EDITOR_VIEW_LAYER);
+
+        if (auto* bb = billboard->GetBillboard(0))
+        {
+            auto* graphics = context_->GetGraphics();
+            float scale = graphics->GetDisplayDPI(graphics->GetCurrentMonitor()).z_ / 96.f;
+            bb->size_ = Vector2::ONE * 0.2f * scale;
+            bb->enabled_ = true;
+            bb->position_ = {0, (float)count * 0.4f * scale, 0};
         }
     }
 }
@@ -1321,7 +1380,7 @@ void SceneTab::PasteNextToSelection()
         Select(node);
 
     for (Component* component : result.components_)
-        selectedComponents_.insert(WeakPtr<Component>(component));
+        Select(component);
 }
 
 void SceneTab::PasteIntoSelection()
@@ -1339,7 +1398,7 @@ void SceneTab::PasteIntoSelection()
         Select(node);
 
     for (Component* component : result.components_)
-        selectedComponents_.insert(WeakPtr<Component>(component));
+        Select(WeakPtr<Component>(component));
 }
 
 void SceneTab::PasteIntuitive()
@@ -1348,21 +1407,6 @@ void SceneTab::PasteIntuitive()
         PasteNextToSelection();
     else if (clipboard_.HasComponents())
         PasteIntoSelection();
-}
-
-void SceneTab::ResizeMainViewport(const IntRect& rect)
-{
-    if (rect_ == rect)
-        return;
-
-    rect_ = rect;
-    viewport_->SetRect(IntRect(IntVector2::ZERO, rect.Size()));
-    if (rect.Width() > 0 && rect.Height() > 0 && (rect.Width() != texture_->GetWidth() || rect.Height() != texture_->GetHeight()))
-    {
-        texture_->SetSize(rect.Width(), rect.Height(), Graphics::GetRGBFormat(), TEXTURE_RENDERTARGET);
-        texture_->GetRenderSurface()->SetViewport(0, viewport_);
-        texture_->GetRenderSurface()->SetUpdateMode(SURFACE_UPDATEALWAYS);
-    }
 }
 
 Camera* SceneTab::GetCamera()
@@ -1390,7 +1434,7 @@ void SceneTab::RenderDebugInfo()
             light->DrawDebugGeometry(debug, true);
         else if (auto* drawable = component->Cast<Drawable>())
             debug->AddBoundingBox(drawable->GetWorldBoundingBox(), Color::WHITE);
-        else
+        else if (!component->IsInstanceOf<Terrain>())
             component->DrawDebugGeometry(debug, true);
     };
 
@@ -1426,13 +1470,11 @@ void SceneTab::Close()
 {
     Undo::SetTrackingScoped noTrack(undo_, false);
 
-    BaseClassName::Close();
-
     SceneManager* manager = GetSubsystem<SceneManager>();
-    manager->SetActiveScene(nullptr);
-    manager->UnloadAllButActiveScene();
+    manager->UnloadScene(GetScene());
+
+    BaseClassName::Close();
 
     GetSubsystem<Editor>()->UpdateWindowTitle();
 }
-
 }

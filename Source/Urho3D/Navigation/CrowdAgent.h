@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,6 +19,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
+
+/// \file
 
 #pragma once
 
@@ -74,7 +76,7 @@ class URHO3D_API CrowdAgent : public Component
     URHO3D_OBJECT(CrowdAgent, Component);
 
     friend class CrowdManager;
-    friend void CrowdAgentUpdateCallback(dtCrowdAgent* ag, float dt);
+    friend void CrowdAgentUpdateCallback(bool positionUpdate, dtCrowdAgent* ag, float* pos, float dt);
 
 public:
     /// Construct.
@@ -178,8 +180,10 @@ public:
     bool IsInCrowd() const;
 
 protected:
+    /// Handle crowd agent pre-update. 
+    virtual void OnCrowdVelocityUpdate(dtCrowdAgent* ag, float* pos, float dt);
     /// Handle crowd agent being updated. It is called by CrowdManager::Update() via callback.
-    virtual void OnCrowdUpdate(dtCrowdAgent* ag, float dt);
+    virtual void OnCrowdPositionUpdate(dtCrowdAgent* ag, float* pos, float dt);
     /// Handle node being assigned.
     void OnNodeSet(Node* node) override;
     /// Handle node being assigned.

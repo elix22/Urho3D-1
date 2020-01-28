@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Rokas Kupstys
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@
 #include <Urho3D/SystemUI/SystemUI.h>
 #include <ImGui/imgui_stdlib.h>
 #if URHO3D_PROFILING
+#include <server/TracyBadVersion.hpp>
 #include <server/TracyView.hpp>
 #endif
 #include "ProfilerTab.h"
@@ -50,7 +51,7 @@ bool ProfilerTab::RenderWindowContent()
     }
     else
     {
-        const ImRect& rect = ui::GetCurrentWindow()->ContentsRegionRect;
+        const ImRect& rect = ui::GetCurrentWindow()->ContentRegionRect;
         ui::SetCursorPosY(rect.GetHeight() / 2 + ui::CalcTextSize("C").y / 2);
 
         ui::TextUnformatted("Connect to: ");
@@ -59,7 +60,7 @@ bool ProfilerTab::RenderWindowContent()
         ui::SameLine();
         connect |= ui::Button(ICON_FA_WIFI " Connect");
         if (connect)
-            view_ = std::make_unique<tracy::View>(connectTo_.c_str());
+            view_ = std::make_unique<tracy::View>(connectTo_.c_str(), port_);
     }
 #else
     ui::TextUnformatted("Built without profiling support.");

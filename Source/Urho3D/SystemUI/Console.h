@@ -23,11 +23,12 @@
 
 #pragma once
 
-#include <EASTL/unique_ptr.h>
-#include <EASTL/hash_set.h>
-
 #include "../Core/Object.h"
 #include "../IO/Log.h"
+
+#include <EASTL/bonus/ring_buffer.h>
+#include <EASTL/hash_set.h>
+#include <EASTL/unique_ptr.h>
 
 namespace Urho3D
 {
@@ -53,6 +54,8 @@ public:
     void SetCommandInterpreter(const ea::string& interpreter);
     /// Set command history maximum size, 0 disables history.
     void SetNumHistoryRows(unsigned rows);
+    /// Set console height.
+    void SetConsoleHeight(unsigned height);
     /// Return whether is visible.
     bool IsVisible() const;
     /// Return true when console is set to automatically visible when receiving an error log message.
@@ -85,6 +88,8 @@ private:
     void HandleLogMessage(StringHash eventType, VariantMap& eventData);
     /// Render system ui.
     void RenderUi(StringHash eventType, VariantMap& eventData);
+    /// Scroll console to the end.
+    void ScrollToEnd() { scrollToEnd_ = 2; }
 
     struct LogEntry
     {
@@ -107,7 +112,7 @@ private:
     /// Last used command interpreter.
     int currentInterpreter_ = 0;
     /// Command history.
-    ea::vector<LogEntry> history_{};
+    ea::ring_buffer<LogEntry> history_{2000};
     /// Command history maximum rows.
     unsigned historyRows_ = 512;
     /// Is console window open.
@@ -116,8 +121,8 @@ private:
     char inputBuffer_[0x1000]{};
     /// Console window size.
     IntVector2 windowSize_{M_MAX_INT, 200};
-    /// Flag indicating that console should scroll to end of the log on the next frame.
-    bool scrollToEnd_ = false;
+    /// Number of frames to attempt scrolling to the end. Usually two tries are required to properly complete the action (for some reason).
+    int scrollToEnd_ = 0;
     ///Flag indicating that console input should be focused on the next frame.
     bool focusInput_ = false;
     /// Set of loggers to be omitted from rendering.
@@ -134,6 +139,12 @@ private:
         true,   // LOG_WARNING
         true    // LOG_ERROR
     };
+    /// Current selection in console window. This range denote start and end of selected characters and may span multiple log lines.
+    IntVector2 selection_{};
+    /// Temporary variable for accumulating selection in order to copy it to clipboard.
+    ea::string copyBuffer_{};
+    /// When set to true scrollbar of messages panel is at the bottom.
+    bool isAtEnd_ = true;
 };
 
 }

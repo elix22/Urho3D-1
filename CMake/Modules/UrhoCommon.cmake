@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2019 the Urho3D project.
+# Copyright (c) 2008-2020 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,9 @@ include(ucm)
 
 # Set compiler variable
 set ("${CMAKE_CXX_COMPILER_ID}" ON)
-set (CMAKE_INSTALL_RPATH "$ORIGIN")
+if (NOT WEB)
+    set (CMAKE_INSTALL_RPATH "$ORIGIN")
+endif ()
 
 # Configure variables
 set (URHO3D_URL "https://github.com/urho3d/Urho3D")
@@ -45,9 +47,6 @@ endif ()
 set (DEST_BASE_INCLUDE_DIR include)
 set (DEST_INCLUDE_DIR ${DEST_BASE_INCLUDE_DIR}/Urho3D)
 set (DEST_BIN_DIR bin)
-set (DEST_BIN_DIR_CONFIG ${DEST_BIN_DIR})
-set (DEST_TOOLS_DIR ${DEST_BIN_DIR})
-set (DEST_SAMPLES_DIR ${DEST_BIN_DIR})
 set (DEST_SHARE_DIR share)
 set (DEST_RESOURCE_DIR ${DEST_BIN_DIR})
 set (DEST_BUNDLE_DIR ${DEST_SHARE_DIR}/Applications)
@@ -59,14 +58,18 @@ if (ANDROID)
 else ()
     set (DEST_LIBRARY_DIR bin)
 endif ()
-set (DEST_LIBRARY_DIR_CONFIG ${DEST_LIBRARY_DIR})
 
 if (MSVC OR "${CMAKE_GENERATOR}" STREQUAL "Xcode")
     set (MULTI_CONFIG_PROJECT ON)
 endif ()
 if (MULTI_CONFIG_PROJECT)
-    set (DEST_BIN_DIR_CONFIG ${DEST_BIN_DIR_CONFIG}/$<CONFIG>)
+    set (DEST_BIN_DIR_CONFIG ${DEST_BIN_DIR}/$<CONFIG>)
     set (DEST_LIBRARY_DIR_CONFIG ${DEST_LIBRARY_DIR}/$<CONFIG>)
+    set (DEST_ARCHIVE_DIR_CONFIG ${DEST_ARCHIVE_DIR}/$<CONFIG>)
+else ()
+    set (DEST_BIN_DIR_CONFIG ${DEST_BIN_DIR})
+    set (DEST_LIBRARY_DIR_CONFIG ${DEST_LIBRARY_DIR})
+    set (DEST_ARCHIVE_DIR_CONFIG ${DEST_ARCHIVE_DIR})
 endif ()
 if (WIN32)
     set (WINVER 0x0601)
@@ -80,8 +83,8 @@ set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${DEST_BIN_DIR})
 set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${DEST_LIBRARY_DIR})
 set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${DEST_ARCHIVE_DIR})
 
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DURHO3D_DEBUG")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DURHO3D_DEBUG")
+set (VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+
 if (NOT DEFINED URHO3D_64BIT)
     if (CMAKE_SIZEOF_VOID_P MATCHES 8)
         set(URHO3D_64BIT ON)
@@ -97,9 +100,9 @@ if (MINGW)
     foreach (DLL_FILE_PATH ${DLL_FILE_PATH_1} ${DLL_FILE_PATH_2} ${DLL_FILE_PATH_3})
         if (DLL_FILE_PATH)
             # Copies dlls to bin or tools.
-            file (COPY ${DLL_FILE_PATH} DESTINATION ${CMAKE_BINARY_DIR}/${DEST_TOOLS_DIR})
+            file (COPY ${DLL_FILE_PATH} DESTINATION ${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG})
             if (NOT URHO3D_STATIC_RUNTIME)
-                file (COPY ${DLL_FILE_PATH} DESTINATION ${CMAKE_BINARY_DIR}/${DEST_SAMPLES_DIR})
+                file (COPY ${DLL_FILE_PATH} DESTINATION ${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG})
             endif ()
         endif ()
     endforeach ()
@@ -262,7 +265,7 @@ endfunction()
 
 function (add_msbuild_target)
     if (URHO3D_CSHARP)
-        cmake_parse_arguments(MSBUILD "AUTORUN_AT_CONFIGURE;EXCLUDE_FROM_ALL" "TARGET;DEPENDS" "ARGS;BYPRODUCTS" ${ARGN})
+        cmake_parse_arguments(MSBUILD "EXCLUDE_FROM_ALL" "TARGET;DEPENDS" "ARGS;BYPRODUCTS" ${ARGN})
 
         find_program(MSBUILD msbuild PATHS /Library/Frameworks/Mono.framework/Versions/Current/bin ${MONO_PATH}/bin)
         if (NOT MSBUILD)
@@ -279,16 +282,11 @@ function (add_msbuild_target)
         add_custom_target(${MSBUILD_TARGET} ALL
             COMMAND ${TERM_WORKAROUND} ${MSBUILD} ${MSBUILD_ARGS}
             /p:CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR}/
-            /consoleloggerparameters:ErrorsOnly
+            /consoleloggerparameters:ErrorsOnly /nologo
             BYPRODUCTS ${MSBUILD_BYPRODUCTS}
             DEPENDS ${MSBUILD_DEPENDS})
         if (MSBUILD_EXCLUDE_FROM_ALL)
-            set_property(TARGET ${MSBUILD_TARGET} PROPERTY EXCLUDE_FROM_ALL ON)
-        endif ()
-        if (MSBUILD_AUTORUN_AT_CONFIGURE)
-            execute_process(COMMAND ${TERM_WORKAROUND} ${MSBUILD} ${MSBUILD_ARGS}
-                /p:CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR}/
-                /consoleloggerparameters:ErrorsOnly)
+            set_target_properties(${MSBUILD_TARGET} PROPERTIES EXCLUDE_FROM_ALL ON EXCLUDE_FROM_DEFAULT_BUILD ON)
         endif ()
     endif ()
 endfunction ()
@@ -311,16 +309,6 @@ if (URHO3D_CSHARP)
         set (CSHARP_PLATFORM x64)
     else ()
         set (CSHARP_PLATFORM x86)
-    endif ()
-    if (MSVC)
-        file (GLOB CSHARP_SOLUTION ${CMAKE_BINARY_DIR}/*.sln)
-    else ()
-        set (CSHARP_SOLUTION ${rbfx_SOURCE_DIR}/rbfx.unix.sln)
-    endif ()
-
-    if (NOT MSVC)
-        add_msbuild_target(TARGET NugetRestore EXCLUDE_FROM_ALL AUTORUN_AT_CONFIGURE ARGS
-            ${CSHARP_SOLUTION} /t:restore /m)
     endif ()
 
     # Strong name signatures
@@ -409,7 +397,7 @@ function (csharp_bind_target)
         return ()
     endif ()
 
-    cmake_parse_arguments(BIND "" "TARGET;CSPROJ;SWIG;NAMESPACE;NATIVE" "" ${ARGN})
+    cmake_parse_arguments(BIND "" "TARGET;CSPROJ;SWIG;NAMESPACE;NATIVE" "INCLUDE_DIRS" ${ARGN})
 
     get_target_property(BIND_SOURCE_DIR ${BIND_TARGET} SOURCE_DIR)
 
@@ -442,7 +430,7 @@ function (csharp_bind_target)
         if (EQUALITY_INDEX EQUAL -1)
             set (item "${item}=1")
         endif ()
-        list(APPEND GENERATOR_OPTIONS -D${item})
+        list(APPEND GENERATOR_OPTIONS "-D\"${item}\"")
     endforeach()
 
     if (NOT BIND_NATIVE)
@@ -462,7 +450,7 @@ function (csharp_bind_target)
     endforeach()
 
     # Finalize option list
-    list (APPEND GENERATOR_OPTIONS ${BIND_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/Swig)
+    list (APPEND GENERATOR_OPTIONS ${BIND_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/CSharp/Swig)
     set (CSHARP_BINDING_GENERATOR_OPTIONS "${CMAKE_CURRENT_BINARY_DIR}/generator_options_${BIND_TARGET}.txt")
     file (WRITE ${CSHARP_BINDING_GENERATOR_OPTIONS} "")
     foreach (opt ${GENERATOR_OPTIONS})
@@ -470,6 +458,9 @@ function (csharp_bind_target)
     endforeach ()
 
     set (SWIG_SYSTEM_INCLUDE_DIRS "${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES};${CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES};${CMAKE_SYSTEM_INCLUDE_PATH};${CMAKE_EXTRA_GENERATOR_CXX_SYSTEM_INCLUDE_DIRS}")
+    if (BIND_INCLUDE_DIRS)
+        list (APPEND SWIG_SYSTEM_INCLUDE_DIRS ${BIND_INCLUDE_DIRS})
+    endif ()
     string (REPLACE ";" ";-I" SWIG_SYSTEM_INCLUDE_DIRS "${SWIG_SYSTEM_INCLUDE_DIRS}")
 
     set_source_files_properties(${BIND_SWIG} PROPERTIES
@@ -496,7 +487,7 @@ function (csharp_bind_target)
             PROJECT ${BIND_CSPROJ}
             OUTPUT ${NET_OUTPUT_DIRECTORY}/${BIND_MANAGED_TARGET}.dll)
         add_dependencies(${BIND_MANAGED_TARGET} ${BIND_TARGET})
-        install (FILES ${NET_OUTPUT_DIRECTORY}/${BIND_MANAGED_TARGET}.dll DESTINATION ${DEST_LIBRARY_DIR})
+        install (FILES ${NET_OUTPUT_DIRECTORY}/${BIND_MANAGED_TARGET}.dll DESTINATION ${DEST_LIBRARY_DIR_CONFIG})
     endif ()
 endfunction ()
 
@@ -533,7 +524,10 @@ macro(web_executable TARGET)
         if (EMSCRIPTEN_MEMORY_GROWTH)
             target_link_libraries(${TARGET} PRIVATE "-s ALLOW_MEMORY_GROWTH=1")
         endif ()
-        target_link_libraries(${TARGET} PRIVATE "-s NO_EXIT_RUNTIME=1" "-s MAIN_MODULE=1" "-s FORCE_FILESYSTEM=1")
+        target_link_libraries(${TARGET} PRIVATE "-s NO_EXIT_RUNTIME=1" "-s FORCE_FILESYSTEM=1")
+        if (BUILD_SHARED_LIBS)
+            target_link_libraries(${TARGET} PRIVATE "-s MAIN_MODULE=1")
+        endif ()
     endif ()
 endmacro()
 
@@ -542,7 +536,7 @@ function (package_resources_web)
         return ()
     endif ()
 
-    cmake_parse_arguments(PAK "" "RELATIVE_DIR;OUTPUT" "FILES" ${ARGN})
+    cmake_parse_arguments(PAK "" "RELATIVE_DIR;OUTPUT;INSTALL_TO" "FILES" ${ARGN})
     if (NOT "${PAK_RELATIVE_DIR}" MATCHES "/$")
         set (PAK_RELATIVE_DIR "${PAK_RELATIVE_DIR}/")
     endif ()
@@ -568,34 +562,16 @@ function (package_resources_web)
     else ()
         add_dependencies("${PAK_OUTPUT}" PackageTool)
     endif ()
+    if (PAK_INSTALL_TO)
+        install(FILES "${PAK_RELATIVE_DIR}${PAK_OUTPUT}" "${PAK_RELATIVE_DIR}${PAK_OUTPUT}.data" DESTINATION ${PAK_INSTALL_TO})
+    endif ()
 endfunction ()
 
 function (web_link_resources TARGET RESOURCES)
     if (NOT WEB)
         return ()
     endif ()
-    file (WRITE "${CMAKE_CURRENT_BINARY_DIR}/${RESOURCES}.load.js" "var Module;if(typeof Module==='undefined')Module=eval('(function(){try{return Module||{}}catch(e){return{}}})()');var s=document.createElement('script');s.src='${RESOURCES}';document.body.appendChild(s);Module['preRun'].push(function(){Module['addRunDependency']('${RESOURCES}.loader')});s.onload=function(){Module['removeRunDependency']('${RESOURCES}.loader')};")
+    file (WRITE "${CMAKE_CURRENT_BINARY_DIR}/${RESOURCES}.load.js" "var Module;if(typeof Module==='undefined')Module=eval('(function(){try{return Module||{}}catch(e){return{}}})()');var s=document.createElement('script');s.src='${RESOURCES}';document.body.appendChild(s);Module['preRun'].push(function(){Module['addRunDependency']('${RESOURCES}.loader')});s.onload=function(){if (Module.finishedDataFileDownloads < Module.expectedDataFileDownloads) setTimeout(s.onload, 100); else Module['removeRunDependency']('${RESOURCES}.loader')};")
     target_link_libraries(${TARGET} PRIVATE "--pre-js ${CMAKE_CURRENT_BINARY_DIR}/${RESOURCES}.load.js")
     add_dependencies(${TARGET} ${RESOURCES})
 endfunction ()
-
-# Configure for MingW
-if (CMAKE_CROSSCOMPILING AND MINGW)
-    # Symlink windows libraries and headers to appease some libraries that do not use all-lowercase names and break on
-    # case-sensitive file systems.
-    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/workaround)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/include/windows.h workaround/Windows.h)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/include/shobjidl.h workaround/ShObjIdl.h)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/include/strsafe.h workaround/Strsafe.h)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/include/psapi.h workaround/Psapi.h)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/include/sddl.h workaround/Sddl.h)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/include/accctrl.h workaround/AccCtrl.h)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/include/aclapi.h workaround/Aclapi.h)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/include/oleidl.h workaround/OleIdl.h)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/include/shlobj.h workaround/Shlobj.h)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/lib/libws2_32.a workaround/libWs2_32.a)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/lib/libiphlpapi.a workaround/libIphlpapi.a)
-    create_symlink(/usr/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/lib/libwldap32.a workaround/libWldap32.a)
-    include_directories(${CMAKE_BINARY_DIR}/workaround)
-    link_libraries(-L${CMAKE_BINARY_DIR}/workaround)
-endif ()

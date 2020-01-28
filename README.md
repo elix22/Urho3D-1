@@ -2,6 +2,8 @@
 
 ![Windows](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Windows&label=Windows) ![Linux](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Linux&label=Linux) ![MacOS](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=MacOS&label=MacOS) ![Web](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Web&label=Web) ![Android](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Android&label=Android) ![iOS](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=iOS&label=iOS)
 
+[![Join the chat at https://gitter.im/rokups/rbfx](https://badges.gitter.im/rokups/rbfx.svg)](https://gitter.im/rokups/rbfx?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 **rbfx** is a free lightweight, cross-platform 2D and 3D game engine implemented in C++ and released under the MIT license. Greatly inspired by OGRE and Horde3D.
 
 This project is a fork of [urho3d.github.io](http://urho3d.github.io/).
@@ -86,7 +88,7 @@ rbfx uses the following third-party libraries:
 - pugixml 1.9 (http://pugixml.org)
 - rapidjson 1.1.0 (https://github.com/miloyip/rapidjson)
 - Recast/Detour (https://github.com/recastnavigation/recastnavigation)
-- SDL 2.0.7 (https://www.libsdl.org)
+- SDL 2.0.10+ (https://www.libsdl.org)
 - StanHull (https://codesuppository.blogspot.com/2006/03/john-ratcliffs-code-suppository-blog.html)
 - stb_image 2.18 (https://nothings.org)
 - stb_image_write 1.08 (https://nothings.org)
@@ -95,16 +97,16 @@ rbfx uses the following third-party libraries:
 - stb_truetype 1.15 (https://nothings.org)
 - stb_vorbis 1.13b (https://nothings.org)
 - WebP (https://chromium.googlesource.com/webm/libwebp)
-- imgui 1.70 (https://github.com/ocornut/imgui/tree/docking)
+- ETCPACK (https://github.com/Ericsson/ETCPACK)
+- imgui 1.74 (https://github.com/ocornut/imgui/tree/docking)
 - tracy (https://bitbucket.org/wolfpld/tracy/)
 - nativefiledialog (https://github.com/mlabbe/nativefiledialog)
 - IconFontCppHeaders (https://github.com/juliettef/IconFontCppHeaders)
 - ImGuizmo 1.61 (https://github.com/CedricGuillemet/ImGuizmo)
-- cr (https://github.com/fungos/cr)
 - crunch (https://github.com/Unity-Technologies/crunch/)
 - CLI11 v1.5.1 (https://github.com/CLIUtils/CLI11/)
-- fmt 4.1.0 (http://fmtlib.net)
-- spdlog 1.3.1 (https://github.com/gabime/spdlog)
+- fmt 6.0.0 (http://fmtlib.net/)
+- spdlog 1.4.2 (https://github.com/gabime/spdlog/)
 - EASTL 3.13.04 (https://github.com/electronicarts/EASTL/)
 - SWIG 4.0 (http://swig.org/)
 

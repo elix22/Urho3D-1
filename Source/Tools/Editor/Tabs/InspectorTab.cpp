@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,8 +21,7 @@
 //
 
 #include <Urho3D/IO/Log.h>
-#include <ImGui/imgui.h>
-#include <ImGui/imgui_stdlib.h>
+#include <Urho3D/SystemUI/SystemUI.h>
 #include "EditorEvents.h"
 #include "InspectorTab.h"
 #include "Editor.h"
@@ -47,24 +46,19 @@ bool InspectorTab::RenderWindowContent()
     if (ui::IsItemHovered())
         ui::SetTooltip("Filter attributes by name.");
 
-    if (provider_.first.NotNull())
-        provider_.second->RenderInspector(filter_.c_str());
+    for (InspectorProvider* provider : providers_)
+    {
+        if (provider)
+            provider->RenderInspector(filter_.c_str());
+    }
 
     return true;
 }
 
-void InspectorTab::SetProvider(IInspectorProvider* provider)
+void InspectorTab::AddProvider(InspectorProvider* provider)
 {
-    if (provider_.first.NotNull() && provider_.second != provider)
-        provider_.second->ClearSelection();
-
-    if (auto* ptr = dynamic_cast<RefCounted*>(provider))
-    {
-        provider_.first = ptr;
-        provider_.second = provider;
-    }
-    else
-        URHO3D_LOGERROR("Classes that inherit IInspectorProvider must also inherit RefCounted.");
+    assert(provider != nullptr);
+    providers_.push_back(SharedPtr(provider));
 }
 
 }

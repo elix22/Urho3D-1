@@ -4430,10 +4430,17 @@ public:
       Printf(director_callbacks, "    SWIG_Callback%s_t swig_callback%s;\n", methid, overloaded_name);
 
       Printf(director_delegate_definitions, " SwigDelegate%s_%s(%s);\n", classname, methid, delegate_parms);
+#ifndef WITHOUT_RBFX
+      Printf(director_delegate_instances, "  [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]\n");
+#endif
       Printf(director_delegate_instances, "  private SwigDelegate%s_%s swigDelegate%s;\n", classname, methid, methid);
+#ifndef WITHOUT_RBFX
+      Printf(director_method_types, "  [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]\n");
+#endif
       Printf(director_method_types, "  private static global::System.Type[] swigMethodTypes%s = new global::System.Type[] { %s };\n", methid, proxy_method_types);
 #ifndef WITHOUT_RBFX
       String *method = Getattr(udata, "method");
+      Printf(director_override_status, "  [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]\n");
       Printf(director_override_status, "  private bool swigMethodOverriden%s;\n", methid);
       Printf(director_override_status_init, "    swigMethodOverriden%s = %s.SwigDerivedClassHasMethod(this, \"%s\", classType, swigMethodTypes%s);\n", methid, imclass_name, method, methid);
 #endif
@@ -4626,9 +4633,6 @@ public:
       Printf(w->def, "%s::~%s() {\n", dirclassname, dirclassname);
     }
 
-// #ifndef WITHOUT_RBFX
-//     Printv(w->code, "SWIG_csharp_free_gchandle_callback(swig_managedObjectHandle);\n", NIL);
-// #endif
     Printv(w->code, "}\n", NIL);
 
     Wrapper_print(w, f_directors);

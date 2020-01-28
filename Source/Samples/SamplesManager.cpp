@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,8 @@
 // THE SOFTWARE.
 //
 #include <Urho3D/Engine/EngineDefs.h>
+#include <Urho3D/Core/CoreEvents.h>
+#include <Urho3D/Core/CommandLine.h>
 #include <Urho3D/Core/StringUtils.h>
 #include <Urho3D/Input/Input.h>
 #include <Urho3D/Input/InputEvents.h>
@@ -42,46 +44,77 @@
 #include "08_Decals/Decals.h"
 #include "09_MultipleViewports/MultipleViewports.h"
 #include "10_RenderToTexture/RenderToTexture.h"
+#if URHO3D_PHYSICS
 #include "11_Physics/Physics.h"
 #include "12_PhysicsStressTest/PhysicsStressTest.h"
 #include "13_Ragdolls/Ragdolls.h"
+#endif
 #include "14_SoundEffects/SoundEffects.h"
+#if URHO3D_NAVIGATION
 #include "15_Navigation/Navigation.h"
+#endif
+#if URHO3D_NETWORK
 #include "16_Chat/Chat.h"
 #include "17_SceneReplication/SceneReplication.h"
+#endif
+#if URHO3D_PHYSICS
 #include "18_CharacterDemo/CharacterDemo.h"
 #include "19_VehicleDemo/VehicleDemo.h"
+#endif
 #include "20_HugeObjectCount/HugeObjectCount.h"
 #include "23_Water/Water.h"
+#if URHO3D_URHO2D
 #include "24_Urho2DSprite/Urho2DSprite.h"
 #include "25_Urho2DParticle/Urho2DParticle.h"
 #include "26_ConsoleInput/ConsoleInput.h"
 #include "27_Urho2DPhysics/Urho2DPhysics.h"
 #include "28_Urho2DPhysicsRope/Urho2DPhysicsRope.h"
+#endif
 #include "29_SoundSynthesis/SoundSynthesis.h"
 #include "30_LightAnimation/LightAnimation.h"
 #include "31_MaterialAnimation/MaterialAnimation.h"
+#if URHO3D_URHO2D
 #include "32_Urho2DConstraints/Urho2DConstraints.h"
 #include "33_Urho2DSpriterAnimation/Urho2DSpriterAnimation.h"
+#endif
 #include "34_DynamicGeometry/DynamicGeometry.h"
 #include "35_SignedDistanceFieldText/SignedDistanceFieldText.h"
+#if URHO3D_URHO2D
 #include "36_Urho2DTileMap/Urho2DTileMap.h"
+#endif
 #include "37_UIDrag/UIDrag.h"
 #include "38_SceneAndUILoad/SceneAndUILoad.h"
+#if URHO3D_NAVIGATION
 #include "39_CrowdNavigation/CrowdNavigation.h"
+#endif
 #include "40_Localization/L10n.h"
+#if !__EMSCRIPTEN__
 #include "42_PBRMaterials/PBRMaterials.h"
+#endif
+#if URHO3D_NETWORK
 #include "43_HttpRequestDemo/HttpRequestDemo.h"
+#endif
 #include "44_RibbonTrailDemo/RibbonTrailDemo.h"
+#if URHO3D_PHYSICS
+#if URHO3D_IK
 #include "45_InverseKinematics/InverseKinematics.h"
+#endif
 #include "46_RaycastVehicle/RaycastVehicleDemo.h"
+#endif
 #include "47_Typography/Typography.h"
 #include "48_Hello3DUI/Hello3DUI.h"
+#if URHO3D_URHO2D
 #include "49_Urho2DIsometricDemo/Urho2DIsometricDemo.h"
 #include "50_Urho2DPlatformer/Urho2DPlatformer.h"
+#endif
+#if URHO3D_NETWORK
 #include "52_NATPunchtrough/NATPunchtrough.h"
 #include "53_LANDiscovery/LANDiscovery.h"
+#endif
+#if URHO3D_SYSTEMUI
 #include "100_HelloSystemUI/HelloSystemUI.h"
+#endif
+#include "105_Serialization/Serialization.h"
 #include "Rotator.h"
 
 #include "SamplesManager.h"
@@ -105,30 +138,38 @@ void SamplesManager::Setup()
     engineParameters_[EP_FULL_SCREEN]  = false;
     engineParameters_[EP_HEADLESS]     = false;
     engineParameters_[EP_SOUND]        = true;
+    engineParameters_[EP_HIGH_DPI]     = false;
 #if MOBILE
     engineParameters_[EP_ORIENTATIONS] = "Portrait";
-#else
-    engineParameters_[EP_WINDOW_WIDTH] = 1440;
-    engineParameters_[EP_WINDOW_HEIGHT] = 900;
 #endif
     if (!engineParameters_.contains(EP_RESOURCE_PREFIX_PATHS))
         engineParameters_[EP_RESOURCE_PREFIX_PATHS] = ";..;../..";
+
+    GetCommandLineParser().add_option("--sample", startSample_);
 }
 
 void SamplesManager::Start()
 {
+    Input* input = context_->GetInput();
+    UI* ui = context_->GetUI();
+
     // Register an object factory for our custom Rotator component so that we can create them to scene nodes
     context_->RegisterFactory<Rotator>();
 
-    GetInput()->SetMouseMode(MM_FREE);
-    GetInput()->SetMouseVisible(true);
+    input->SetMouseMode(MM_FREE);
+    input->SetMouseVisible(true);
+
+#if URHO3D_SYSTEMUI
+    context_->GetEngine()->CreateDebugHud()->ToggleAll();
+#endif
 
     SubscribeToEvent(E_RELEASED, [this](StringHash, VariantMap& args) { OnClickSample(args); });
     SubscribeToEvent(E_KEYUP, [this](StringHash, VariantMap& args) { OnKeyPress(args); });
+    SubscribeToEvent(E_BEGINFRAME, [this](StringHash, VariantMap& args) { OnFrameStart(); });
 
-    GetUI()->GetRoot()->SetDefaultStyle(GetCache()->GetResource<XMLFile>("UI/DefaultStyle.xml"));
+    ui->GetRoot()->SetDefaultStyle(context_->GetCache()->GetResource<XMLFile>("UI/DefaultStyle.xml"));
 
-    auto* layout = GetUI()->GetRoot()->CreateChild<UIElement>();
+    auto* layout = ui->GetRoot()->CreateChild<UIElement>();
     listViewHolder_ = layout;
     layout->SetLayoutMode(LM_VERTICAL);
     layout->SetAlignment(HA_CENTER, VA_CENTER);
@@ -148,7 +189,6 @@ void SamplesManager::Start()
     if (!logoTexture)
         return;
 
-    UI* ui = GetSubsystem<UI>();
     logoSprite_ = ui->GetRoot()->CreateChild<Sprite>();
     logoSprite_->SetTexture(logoTexture);
 
@@ -184,8 +224,10 @@ void SamplesManager::Start()
     RegisterSample<Chat>();
     RegisterSample<SceneReplication>();
 #endif
+#if URHO3D_PHYSICS
     RegisterSample<CharacterDemo>();
     RegisterSample<VehicleDemo>();
+#endif
     RegisterSample<HugeObjectCount>();
     RegisterSample<Water>();
 #if URHO3D_URHO2D
@@ -217,7 +259,7 @@ void SamplesManager::Start()
     RegisterSample<CrowdNavigation>();
 #endif
     RegisterSample<L10n>();
-#if !WEB
+#if !__EMSCRIPTEN__
     RegisterSample<PBRMaterials>();
 #endif
 #if URHO3D_NETWORK
@@ -243,6 +285,10 @@ void SamplesManager::Start()
 #if URHO3D_SYSTEMUI
     RegisterSample<HelloSystemUi>();
 #endif
+    RegisterSample<Serialization>();
+
+    if (!startSample_.empty())
+        StartSample(startSample_);
 }
 
 void SamplesManager::Stop()
@@ -257,16 +303,26 @@ void SamplesManager::OnClickSample(VariantMap& args)
     if (!sampleType)
         return;
 
-    GetUI()->GetRoot()->RemoveAllChildren();
-    GetUI()->SetFocusElement(nullptr);
+    StartSample(sampleType);
+}
+
+void SamplesManager::StartSample(StringHash sampleType)
+{
+    UI* ui = context_->GetUI();
+    ui->GetRoot()->RemoveAllChildren();
+    ui->SetFocusElement(nullptr);
 
 #if MOBILE
-    GetGraphics()->SetOrientations("LandscapeLeft LandscapeRight");
-    IntVector2 screenSize = GetGraphics()->GetSize();
-    GetGraphics()->SetMode(Max(screenSize.x_, screenSize.y_), Min(screenSize.x_, screenSize.y_));
+    Graphics* graphics = context_->GetGraphics();
+    graphics->SetOrientations("LandscapeLeft LandscapeRight");
+    IntVector2 screenSize = graphics->GetSize();
+    graphics->SetMode(Max(screenSize.x_, screenSize.y_), Min(screenSize.x_, screenSize.y_));
 #endif
     runningSample_.StaticCast<Object>(context_->CreateObject(sampleType));
-    runningSample_->Start();
+    if (runningSample_.NotNull())
+        runningSample_->Start();
+    else
+        ErrorExit("Specified sample does not exist.");
 }
 
 void SamplesManager::OnKeyPress(VariantMap& args)
@@ -276,34 +332,47 @@ void SamplesManager::OnKeyPress(VariantMap& args)
     int key = args[P_KEY].GetInt();
 
     // Close console (if open) or exit when ESC is pressed
-    if (key == KEY_ESCAPE && (GetTime()->GetElapsedTime() - exitTime_) > 0.1f)
+    if (key == KEY_ESCAPE)
+        isClosing_ = true;
+}
+
+void SamplesManager::OnFrameStart()
+{
+    if (isClosing_)
     {
+        isClosing_ = false;
         if (runningSample_.NotNull())
         {
+            Input* input = context_->GetInput();
+            UI* ui = context_->GetUI();
             runningSample_->Stop();
             runningSample_ = nullptr;
-            GetInput()->SetMouseMode(MM_FREE);
-            GetInput()->SetMouseVisible(true);
-            GetUI()->SetCursor(nullptr);
-            GetUI()->GetRoot()->RemoveAllChildren();
-            GetUI()->GetRoot()->AddChild(listViewHolder_);
-            GetUI()->GetRoot()->AddChild(logoSprite_);
-            exitTime_ = GetTime()->GetElapsedTime();
+            input->SetMouseMode(MM_FREE);
+            input->SetMouseVisible(true);
+            ui->SetCursor(nullptr);
+            ui->GetRoot()->RemoveAllChildren();
+            ui->GetRoot()->AddChild(listViewHolder_);
+            ui->GetRoot()->AddChild(logoSprite_);
 #if MOBILE
-            GetGraphics()->SetOrientations("Portrait");
-            IntVector2 screenSize = GetGraphics()->GetSize();
-            GetGraphics()->SetMode(Min(screenSize.x_, screenSize.y_), Max(screenSize.x_, screenSize.y_));
+            Graphics* graphics = context_->GetGraphics();
+            graphics->SetOrientations("Portrait");
+            IntVector2 screenSize = graphics->GetSize();
+            graphics->SetMode(Min(screenSize.x_, screenSize.y_), Max(screenSize.x_, screenSize.y_));
 #endif
         }
         else
         {
 #if URHO3D_SYSTEMUI
-            Console* console = GetSubsystem<Console>();
-            if (console->IsVisible())
-                console->SetVisible(false);
-            else
+            if (auto* console = GetSubsystem<Console>())
+            {
+                if (console->IsVisible())
+                {
+                    console->SetVisible(false);
+                    return;
+                }
+            }
 #endif
-                GetEngine()->Exit();
+            context_->GetEngine()->Exit();
         }
     }
 }
@@ -321,9 +390,10 @@ void SamplesManager::RegisterSample()
     auto* title = button->CreateChild<Text>();
     title->SetAlignment(HA_CENTER, VA_CENTER);
     title->SetText(T::GetTypeNameStatic());
-    title->SetFont(GetCache()->GetResource<Font>("Fonts/Anonymous Pro.ttf"), 30);
+    title->SetFont(context_->GetCache()->GetResource<Font>("Fonts/Anonymous Pro.ttf"), 30);
     title->SetStyleAuto();
 
-    GetUI()->GetRoot()->GetChildStaticCast<ListView>("SampleList", true)->AddItem(button);
+    context_->GetUI()->GetRoot()->GetChildStaticCast<ListView>("SampleList", true)->AddItem(button);
 }
+
 }

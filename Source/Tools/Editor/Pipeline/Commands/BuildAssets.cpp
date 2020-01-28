@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,12 +20,10 @@
 // THE SOFTWARE.
 //
 
-#include <Urho3D/Core/WorkQueue.h>
 #include <Urho3D/Engine/EngineDefs.h>
-#include <Urho3D/IO/Log.h>
 #include "Project.h"
 #include "Editor.h"
-#include "BuildAssets.h"
+#include "Pipeline/Commands/BuildAssets.h"
 
 
 namespace Urho3D
@@ -63,8 +61,9 @@ void BuildAssets::Execute()
     if (!full_)
         flags |= PipelineBuildFlag::SKIP_UP_TO_DATE;
 
-    project->GetPipeline().BuildCache(flavor_, flags);
-    project->GetPipeline().WaitForCompletion();
+    auto* pipeline = GetSubsystem<Pipeline>();
+    pipeline->BuildCache(pipeline->GetFlavor(flavor_), flags);
+    pipeline->WaitForCompletion();
 }
 
 }

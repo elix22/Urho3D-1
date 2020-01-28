@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -69,9 +69,13 @@ static const StringVector obstacleAvoidanceTypesStructureElementNames =
     "   Adaptive Depth"
 };
 
-void CrowdAgentUpdateCallback(dtCrowdAgent* ag, float dt)
+void CrowdAgentUpdateCallback(bool positionUpdate, dtCrowdAgent* ag, float* pos, float dt)
 {
-    static_cast<CrowdAgent*>(ag->params.userData)->OnCrowdUpdate(ag, dt);
+    auto crowdAgent = static_cast<CrowdAgent*>(ag->params.userData);
+    if (positionUpdate)
+        crowdAgent->OnCrowdPositionUpdate(ag, pos, dt);
+    else
+        crowdAgent->OnCrowdVelocityUpdate(ag, pos, dt);
 }
 
 CrowdManager::CrowdManager(Context* context) :

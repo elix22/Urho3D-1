@@ -20,7 +20,15 @@
 # THE SOFTWARE.
 #
 
+# Third party warnings are irrelevant to us.
+if (MSVC)
+	ucm_add_flags("/W0")
+else ()
+	ucm_add_flags("-w")
+endif ()
+
 add_subdirectory(EASTL)
+add_subdirectory(entt)
 add_subdirectory(LZ4)
 add_subdirectory(PugiXml)
 add_subdirectory(rapidjson)
@@ -31,10 +39,7 @@ add_subdirectory(fmt)
 add_subdirectory(spdlog)
 add_subdirectory(SDL)
 add_subdirectory(crunch)
-
-if (URHO3D_PLUGINS)
-    add_subdirectory(cr)
-endif ()
+add_subdirectory(ETCPACK)
 
 if (NOT MINI_URHO)
     add_subdirectory(FreeType)

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -34,6 +34,13 @@ URHO3D_EVENT(E_CONSOLECOMMAND, ConsoleCommand)
     URHO3D_PARAM(P_ID, Id);                        // String
 }
 
+/// A command has been entered on the console.
+URHO3D_EVENT(E_CONSOLEURICLICK, ConsoleUriClick)
+{
+    URHO3D_PARAM(P_ADDRESS, Address);              // String
+    URHO3D_PARAM(P_PROTOCOL, Protocol);            // String
+}
+
 /// Engine finished initialization, but Application::Start() was not claled yet.
 URHO3D_EVENT(E_ENGINEINITIALIZED, EngineInitialized)
 {
@@ -41,6 +48,31 @@ URHO3D_EVENT(E_ENGINEINITIALIZED, EngineInitialized)
 
 /// Application started, but first frame was not executed yet.
 URHO3D_EVENT(E_APPLICATIONSTARTED, ApplicationStarted)
+{
+}
+
+/// Plugin::Load() is about to get called.
+URHO3D_EVENT(E_PLUGINLOAD, PluginLoad)
+{
+}
+
+/// Plugin::Unload() is about to get called.
+URHO3D_EVENT(E_PLUGINUNLOAD, PluginUnload)
+{
+}
+
+/// Plugin::Start() is about to get called.
+URHO3D_EVENT(E_PLUGINSTART, PluginStart)
+{
+}
+
+/// Plugin::Stop() is about to get called.
+URHO3D_EVENT(E_PLUGINSTOP, PluginStop)
+{
+}
+
+/// A request for user to manually register static plugins.
+URHO3D_EVENT(E_REGISTERSTATICPLUGINS, RegisterStaticPlugins)
 {
 }
 

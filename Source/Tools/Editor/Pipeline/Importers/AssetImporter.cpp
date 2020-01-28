@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,8 +20,10 @@
 // THE SOFTWARE.
 //
 
+#include <Urho3D/IO/ArchiveSerialization.h>
 #include <Urho3D/IO/FileSystem.h>
 
+#include "EditorEvents.h"
 #include "Project.h"
 #include "Pipeline/Importers/AssetImporter.h"
 #include "Pipeline/Pipeline.h"
@@ -33,10 +35,9 @@ namespace Urho3D
 AssetImporter::AssetImporter(Context* context)
     : Serializable(context)
 {
-    SubscribeToEvent(&inspector_, E_ATTRIBUTEINSPECTVALUEMODIFIED, [this](StringHash, VariantMap& args) {
+    SubscribeToEvent(this, E_ATTRIBUTEINSPECTVALUEMODIFIED, [this](StringHash, VariantMap& args) {
         using namespace AttributeInspectorValueModified;
         const AttributeInfo& attr = *reinterpret_cast<AttributeInfo*>(args[P_ATTRIBUTEINFO].GetVoidPtr());
-        attributesModified_ = true;
         // Set to true when modified and to false when reset
         AttributeInspectorModifiedFlags flags(args[P_MODIFIED].GetUInt());
 
@@ -48,84 +49,77 @@ AssetImporter::AssetImporter(Context* context)
                 isAttributeSet_[attr.name_] = inherited != attr.defaultValue_;
             else
                 isAttributeSet_[attr.name_] = false;
-
-            if (isAttributeSet_[attr.name_])
-                SetInheritedDefaults(attr, GetAttribute(attr.name_));
-            else
-                SetInheritedDefaults(attr, GetInstanceDefault(attr.name_));
         }
         else if (flags & AttributeInspectorModified::SET_INHERITED)
         {
             isAttributeSet_[attr.name_] = false;
-            SetInheritedDefaults(attr, GetInstanceDefault(attr.name_));
         }
 
+        if (flavor_->IsDefault())
+            asset_->ReimportOutOfDateRecursive();
     });
-    SubscribeToEvent(&inspector_, E_ATTRIBUTEINSPECTOATTRIBUTE, [this](StringHash, VariantMap& args) {
+    SubscribeToEvent(this, E_ATTRIBUTEINSPECTOATTRIBUTE, [this](StringHash, VariantMap& args) {
         using namespace AttributeInspectorAttribute;
         if (isAttributeSet_[reinterpret_cast<AttributeInfo*>(args[P_ATTRIBUTEINFO].GetVoidPtr())->name_])
             args[P_COLOR] = Color::WHITE;
     });
 }
 
-void AssetImporter::RenderInspector(const char* filter)
+bool AssetImporter::Execute(Urho3D::Asset* input, const ea::string& outputPath)
 {
-    RenderAttributes(this, filter, &inspector_);
-}
-
-bool AssetImporter::SaveJSON(JSONValue& dest) const
-{
-    if (!Serializable::SaveJSON(dest))
-        return false;
-
-    JSONValue& byproductsDest = dest["byproducts"];
-    byproductsDest.SetType(JSON_ARRAY);
-    for (const ea::string& byproduct : byproducts_)
-        byproductsDest.Push(byproduct);
-
-    const_cast<AssetImporter*>(this)->attributesModified_ = false;   // TODO: sucks
+    lastAttributeHash_ = HashEffectiveAttributeValues();
+    ClearByproducts();
     return true;
 }
 
-bool AssetImporter::LoadJSON(const JSONValue& source)
+bool AssetImporter::Serialize(Archive& archive, ArchiveBlock& block)
 {
-    if (!Serializable::LoadJSON(source))
+    if (!BaseClassName::Serialize(archive, block))
         return false;
 
-    const JSONValue& byproductsSrc = source["byproducts"];
-    if (byproductsSrc.IsArray())
+    if (!SerializeVector(archive, "byproducts", "resourceName", byproducts_))
+        return false;
+
+    lastAttributeHash_ = HashEffectiveAttributeValues();
+    return true;
+}
+
+bool AssetImporter::IsModified() const
+{
+    for (const auto& nameStatus : isAttributeSet_)
     {
-        auto* project = GetSubsystem<Project>();
-        auto* fs = GetFileSystem();
-
-        for (int i = 0; i < byproductsSrc.Size(); i++)
-        {
-            ea::string resourceName = byproductsSrc[i].GetString();
-            if (fs->FileExists(project->GetCachePath() + resourceName))
-                byproducts_.push_back(resourceName);
-        }
+        if (nameStatus.second)
+            return true;
     }
-
-    return true;
+    return false;
 }
 
-bool AssetImporter::IsModified()
+bool AssetImporter::IsOutOfDate() const
 {
-    if (!byproducts_.empty())
+    if (!Accepts(asset_->GetResourcePath()))
+        return false;
+
+    if (byproducts_.empty())
         return true;
 
-    bool isModified = false;
-    if (const ea::vector<AttributeInfo>* attributes = GetAttributes())
+    if (lastAttributeHash_ != HashEffectiveAttributeValues())
+        return true;
+
+    auto* fs = context_->GetFileSystem();
+    auto* project = GetSubsystem<Project>();
+
+    unsigned mtime = fs->GetLastModifiedTime(asset_->GetResourcePath());
+    for (const ea::string& byproduct : byproducts_)
     {
-        for (const AttributeInfo& info : *attributes)
-        {
-            Variant value;
-            // Side-step attribute inheritance.
-            Serializable::OnGetAttribute(info, value);
-            isModified |= value != GetAttributeDefault(info.name_);
-        }
+        ea::string byproductPath = project->GetCachePath() + byproduct;
+        if (!fs->FileExists(byproductPath))
+            return true;
+
+        if (fs->GetLastModifiedTime(byproductPath) < mtime)
+            return true;
     }
-    return isModified;
+
+    return false;
 }
 
 void AssetImporter::OnGetAttribute(const AttributeInfo& attr, Variant& dest) const
@@ -141,102 +135,25 @@ void AssetImporter::OnSetAttribute(const AttributeInfo& attr, const Variant& src
 {
     isAttributeSet_[attr.name_] = true;
     Serializable::OnSetAttribute(attr, src);
-    SetInheritedDefaults(attr, src);
-    if (!asset_->IsMetaAsset() && flavor_ == DEFAULT_PIPELINE_FLAVOR)
-        GetSubsystem<Project>()->GetPipeline().ScheduleImport(asset_);
+
+    using namespace EditorImporterAttributeModified;
+    VariantMap& args = GetEventDataMap();
+    args[P_ASSET] = asset_;
+    args[P_IMPORTER] = this;
+    args[P_ATTRINFO] = (void*)&attr;
+    args[P_NEWVALUE] = src;
+    SendEvent(E_EDITORIMPORTERATTRIBUTEMODIFIED, args);
 }
 
-void AssetImporter::SetInheritedDefaults(const AttributeInfo& attr, const Variant& src)
-{
-    bool isDefaultFlavor = flavor_ == DEFAULT_PIPELINE_FLAVOR;
-    if (isDefaultFlavor)
-    {
-        // Set defaults to sibling flavors
-        for (const auto& flavor : asset_->GetImporters())
-        {
-            if (flavor.first == flavor_)
-                continue;
-
-            for (const auto& importer : flavor.second)
-                importer->SetInstanceDefault(attr.name_, src);
-        }
-    }
-
-    bool modified = false;
-    for (const auto& flavor : asset_->GetImporters())
-    {
-        if (!isDefaultFlavor)
-        {
-            // default = set all, otherwise set only that flavor
-            if (flavor.first != flavor_)
-                continue;
-        }
-
-        for (const auto& importer : flavor.second)
-            modified |= importer->SetInheritedDefaultsForImporter(attr, src);
-    }
-}
-
-void AssetImporter::SetInheritedDefaultsIfSet()
-{
-    if (const auto* attributes = GetAttributes())
-    {
-        for (const AttributeInfo& attr : *attributes)
-        {
-            if (isAttributeSet_[attr.name_])
-                SetInheritedDefaults(attr, GetAttribute(attr.name_));
-        }
-    }
-}
-
-bool AssetImporter::SetInheritedDefaultsForImporter(const AttributeInfo& attr, const Variant& src)
-{
-    auto* fs = GetFileSystem();
-    auto* project = GetSubsystem<Project>();
-
-    // If this is not a meta-asset - it's attibutes cant be inherited.
-    if (!asset_->IsMetaAsset())
-        return false;
-
-    // Set downstream defaults.
-    StringVector resourceNames;
-    fs->ScanDir(resourceNames, asset_->GetResourcePath(), "", SCAN_FILES|SCAN_DIRS, false);
-    resourceNames.erase_first(".");
-    resourceNames.erase_first("..");
-
-    bool modified = false;
-    for (const ea::string& resourceName : resourceNames)
-    {
-        if (Asset* asset = project->GetPipeline().GetAsset(asset_->GetName() + resourceName))
-        {
-            auto it = asset->GetImporters().find(flavor_);
-            for (const auto& importer : it->second)
-            {
-                if (importer->GetInstanceDefault(attr.name_) != src)
-                {
-                    importer->SetInstanceDefault(attr.name_, src);
-                    modified = true;
-                }
-                if (!importer->isAttributeSet_[attr.name_])
-                    modified |= importer->SetInheritedDefaultsForImporter(attr, src);
-
-                if (modified && flavor_ == DEFAULT_PIPELINE_FLAVOR)
-                    GetSubsystem<Project>()->GetPipeline().ScheduleImport(asset);
-            }
-        }
-    }
-    return modified;
-}
-
-void AssetImporter::Initialize(Asset* asset, const ea::string& flavor)
+void AssetImporter::Initialize(Asset* asset, Flavor* flavor)
 {
     asset_ = asset;
-    flavor_ = flavor;
+    flavor_ = WeakPtr(flavor);
 }
 
 void AssetImporter::ClearByproducts()
 {
-    auto* fs = GetFileSystem();
+    auto* fs = context_->GetFileSystem();
     auto* project = GetSubsystem<Project>();
     for (const ea::string& byproduct : byproducts_)
         fs->Delete(project->GetCachePath() + byproduct);
@@ -256,9 +173,92 @@ void AssetImporter::AddByproduct(const ea::string& byproduct)
     }
 }
 
+void AssetImporter::RemoveByproduct(const ea::string& byproduct)
+{
+    auto* project = GetSubsystem<Project>();
+    if (byproduct.starts_with(project->GetCachePath()))
+        // Byproducts should contain resource names. Trim if this is a full path.
+        byproducts_.erase_first(byproduct.substr(project->GetCachePath().size()));
+    else
+    {
+        assert(!IsAbsolutePath(byproduct));
+        byproducts_.erase_first(byproduct);
+    }
+}
+
 bool AssetImporter::SaveDefaultAttributes(const AttributeInfo& attr) const
 {
     auto it = isAttributeSet_.find(attr.name_);
+    return it != isAttributeSet_.end() && it->second;
+}
+
+Variant AssetImporter::GetInstanceDefault(const ea::string& name) const
+{
+    Pipeline* pipeline = GetSubsystem<Pipeline>();
+    if (!flavor_->IsDefault())
+    {
+        // Attempt inheriting value from a sibling default flavor.
+        Flavor* defaultFlavor = pipeline->GetDefaultFlavor();
+        if (AssetImporter* importer = asset_->GetImporter(defaultFlavor, GetType()))
+        {
+            if (importer->isAttributeSet_[name])
+                return importer->GetAttribute(name);
+        }
+    }
+
+    ea::string resourceName = asset_->GetName();
+
+    if (resourceName.ends_with("/"))
+        resourceName.resize(resourceName.length() - 1);         // Meta assets always end with /, remove it so we can "cd .."
+
+    if (!resourceName.contains('/'))                            // Top level asset
+        return Variant::EMPTY;
+
+    resourceName.resize(resourceName.find_last_of('/') + 1);    // cd ..
+
+    // Get value from same importer at meta asset of parent path.
+    if (Asset* asset = pipeline->GetAsset(resourceName))
+    {
+        if (AssetImporter* importer = asset->GetImporter(flavor_, GetType()))
+        {
+            auto it = importer->isAttributeSet_.find(name);
+            if (it != importer->isAttributeSet_.cend() && it->second)
+                return importer->GetAttribute(name);
+            return importer->GetInstanceDefault(name);
+        }
+    }
+
+    return Variant::EMPTY;
+}
+
+unsigned AssetImporter::HashEffectiveAttributeValues() const
+{
+    unsigned hash = 16777619;
+    Variant value;
+
+    if (const ea::vector<AttributeInfo>* attributes = GetAttributes())
+    {
+        for (const AttributeInfo& attr : *attributes)
+        {
+            if (IsAttributeSet(attr.name_))
+                OnGetAttribute(attr, value);
+            else
+            {
+                value = GetInstanceDefault(attr.name_);
+                if (value.IsEmpty())
+                    value = attr.defaultValue_;
+            }
+
+            hash = hash * 31 + value.ToHash();
+        }
+    }
+
+    return hash;
+}
+
+bool AssetImporter::IsAttributeSet(const eastl::string& name) const
+{
+    auto it = isAttributeSet_.find(name);
     return it != isAttributeSet_.end() && it->second;
 }
 

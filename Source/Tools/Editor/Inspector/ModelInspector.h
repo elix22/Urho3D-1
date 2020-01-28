@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,11 +25,12 @@
 
 #include <Toolbox/Graphics/SceneView.h>
 #include "PreviewInspector.h"
-#include "ResourceInspector.h"
 
 
 namespace Urho3D
 {
+
+struct InspectArgs;
 
 /// Renders a model preview in attribute inspector.
 class ModelInspector : public PreviewInspector
@@ -38,12 +39,10 @@ class ModelInspector : public PreviewInspector
 public:
     /// Construct.
     explicit ModelInspector(Context* context);
-    ///
-    static void RegisterObject(Context* context);
-    ///
-    void SetResource(const ea::string& resourceName) override;
+    /// Set currently inspected object.
+    void SetInspected(Object* inspected) override;
 
-    /// Render inspector window.
+    /// Render inspector UI.
     void RenderInspector(const char* filter) override;
 };
 

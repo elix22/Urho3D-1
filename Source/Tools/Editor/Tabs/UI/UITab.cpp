@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,21 +27,18 @@
 #include <Urho3D/IO/Log.h>
 #include <Urho3D/Input/Input.h>
 #include <Urho3D/Resource/ResourceCache.h>
+#include <Urho3D/SystemUI/SystemUI.h>
 #include <Urho3D/UI/Window.h>
 #include <Urho3D/UI/UI.h>
 #include <Toolbox/IO/ContentUtilities.h>
 #include <Toolbox/SystemUI/Widgets.h>
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
-#include <ImGui/imgui.h>
-#include <ImGui/imgui_internal.h>
 #include "EditorEvents.h"
 #include "Editor.h"
 #include "Widgets.h"
 #include "UITab.h"
 #include "Tabs/HierarchyTab.h"
 #include "Tabs/InspectorTab.h"
-
-using namespace ui::litterals;
 
 namespace Urho3D
 {
@@ -52,6 +49,7 @@ UITab::UITab(Context* context)
     SetID(GenerateUUID());
     SetTitle("New UI Layout");
     windowFlags_ = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+    noContentPadding_ = true;
 
     texture_ = new Texture2D(context_);
     texture_->SetFilterMode(FILTER_BILINEAR);
@@ -62,6 +60,7 @@ UITab::UITab(Context* context)
     rootElement_ = new RootUIElement(context_);
     rootElement_->SetTraversalMode(TM_BREADTH_FIRST);
     rootElement_->SetEnabled(true);
+    rootElement_->SetElementEventSender(true);
 
     offScreenUI_ = new UI(context_);
     offScreenUI_->SetRoot(rootElement_);
@@ -168,7 +167,7 @@ void UITab::RenderNodeTree(UIElement* element)
 
     ImRect bb{ui::GetItemRectMin(), ui::GetItemRectMax()};
     bb.Min.y = bb.Max.y;
-    bb.Max.y += 2_dpy;
+    bb.Max.y += 2;
     if (ui::BeginDragDropTargetCustom(bb, ui::GetID("reorder")))
     {
         // Reparent by drag&drop between elements, insert after current item
@@ -187,32 +186,39 @@ void UITab::RenderNodeTree(UIElement* element)
     }
 }
 
-void UITab::ClearSelection()
-{
-    selectedElement_ = nullptr;
-}
-
-void UITab::RenderInspector(const char* filter)
-{
-    if (auto selected = GetSelected())
-        RenderAttributes(selected, filter, &inspector_);
-}
-
 bool UITab::RenderWindowContent()
 {
     RenderToolbarButtons();
-    IntRect tabRect = UpdateViewRect();
 
-    ui::SetCursorScreenPos(ToImGui(tabRect.Min()));
-    ImVec2 contentSize = ToImGui(tabRect.Size());
+    ImGuiWindow* window = ui::GetCurrentWindow();
+    ImGuiViewport* viewport = window->Viewport;
+    ImRect rect = ImRound(window->ContentRegionRect);
+    // Correct content rect to not overlap buttons.
+    rect.Min.y += ui::GetCursorPosY();
+    IntVector2 textureSize{
+        static_cast<int>(IM_ROUND(rect.GetWidth() * viewport->DpiScale)),
+        static_cast<int>(IM_ROUND(rect.GetHeight() * viewport->DpiScale))
+    };
+    if (textureSize.x_ != texture_->GetWidth() || textureSize.y_ != texture_->GetHeight())
+    {
+        ImVec2 offset = (rect.Min - viewport->Pos) * viewport->DpiScale;
+        rootElement_->SetOffset({static_cast<int>(IM_ROUND(offset.x)), static_cast<int>(IM_ROUND(offset.y))});
+        offScreenUI_->SetCustomSize(textureSize);
+    }
+
+    ui::SetCursorScreenPos(rect.Min);
+    ImVec2 contentSize = rect.GetSize();
     ui::BeginChild("UI view", contentSize, false, windowFlags_);
     ui::Image(texture_, contentSize);
 
     if (auto selected = GetSelected())
     {
         // Render element selection rect, resize handles, and handle element transformations.
-        IntRect delta;
-        IntRect screenRect(selected->GetScreenPosition() + tabRect.Min(), selected->GetScreenPosition() + selected->GetSize() + tabRect.Min());
+        ImVec2 elementPos(Vector2(selected->GetScreenPosition()) / viewport->DpiScale);
+        ImVec2 elementSize(Vector2(selected->GetSize()) / viewport->DpiScale);
+        ImRect screenRect{elementPos + rect.Min, elementPos + rect.Min + elementSize};
+        ImRect delta;
+
         ui::TransformSelectorFlags flags = ui::TSF_NONE;
         if (hideResizeHandles_)
             flags |= ui::TSF_HIDEHANDLES;
@@ -237,8 +243,14 @@ bool UITab::RenderWindowContent()
                 s->resizeStartPos_ = selected->GetPosition();
                 s->resizeStartSize_ = selected->GetSize();
             }
-            selected->SetPosition(selected->GetPosition() + delta.Min());
-            selected->SetSize(selected->GetSize() + delta.Size());
+            IntRect pixelDelta{
+                static_cast<int>(IM_ROUND(delta.Min.x * viewport->DpiScale)),
+                static_cast<int>(IM_ROUND(delta.Min.y * viewport->DpiScale)),
+                static_cast<int>(IM_ROUND(delta.GetWidth() * viewport->DpiScale)),
+                static_cast<int>(IM_ROUND(delta.GetHeight() * viewport->DpiScale)),
+            };
+            selected->SetPosition(selected->GetPosition() + pixelDelta.Min());
+            selected->SetSize(selected->GetSize() + pixelDelta.Max());
         }
 
         if (s->resizeActive_ && !ui::IsItemActive())
@@ -252,12 +264,14 @@ bool UITab::RenderWindowContent()
     RenderRectSelector();
     ui::EndChild();
 
+    BaseClassName::RenderWindowContent();
+
     return true;
 }
 
 void UITab::RenderToolbarButtons()
 {
-    ui::SetCursorPos(ui::GetCursorPos() + ImVec2{4_dpx, 4_dpy});
+    ui::SetCursorPos(ui::GetCursorPos() + ImVec2{4, 4});
 
     if (ui::EditorToolbarButton(ICON_FA_SAVE, "Save"))
         SaveResource();
@@ -269,29 +283,29 @@ void UITab::RenderToolbarButtons()
     ui::Checkbox("Hide Resize Handles", &hideResizeHandles_);
 
     ui::SameLine(0, 3.f);
-    ui::SetCursorPosY(ui::GetCursorPosY() + 4_dpx);
+    ui::SetCursorPosY(ui::GetCursorPosY() + 4);
 }
 
 void UITab::OnActiveUpdate()
 {
-    Input* input = GetSubsystem<Input>();
     if (!ui::IsAnyItemActive())
     {
         if (auto selected = GetSelected())
         {
-            if (input->GetKeyPress(KEY_DELETE))
+            if (ui::IsKeyPressed(KEY_DELETE))
             {
                 selected->Remove();
-                SelectItem(nullptr);    // Undo system still holds a reference to removed element therefore we must
-                                        // manually clear selectedElement_
+                SelectItem(nullptr);    // Undo system still holds a reference to removed element therefore we
+                                                // must manually clear selectedElement_.
             }
         }
     }
 
     if (!ui::IsAnyItemActive() && !ui::IsAnyItemHovered())
     {
-        if (input->GetMouseButtonPress(MOUSEB_LEFT) || input->GetMouseButtonPress(MOUSEB_RIGHT))
+        if (ui::IsMouseReleased(MOUSEB_LEFT) || ui::IsMouseReleased(MOUSEB_RIGHT))
         {
+            Input* input = GetSubsystem<Input>();
             IntVector2 pos = rootElement_->ScreenToElement(input->GetMousePosition());
             UIElement* clicked = offScreenUI_->GetElementAt(pos, false);
             if (!clicked && rootElement_->GetCombinedScreenRect().IsInside(pos) == INSIDE && !ui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow))
@@ -301,29 +315,13 @@ void UITab::OnActiveUpdate()
             {
                 SelectItem(clicked);
 
-                if (input->GetMouseButtonPress(MOUSEB_RIGHT))
+                if (ui::IsMouseReleased(MOUSEB_RIGHT))
                     ui::OpenPopup("Element Context Menu");
             }
         }
     }
 
     RenderElementContextMenu();
-}
-
-IntRect UITab::UpdateViewRect()
-{
-    IntRect rect = BaseClassName::UpdateViewRect();
-    // Correct content rect to not overlap buttons. Ideally this should be in Tab.cpp but for some reason it creates
-    // unused space at the bottom of PreviewTab.
-    rect.top_ += static_cast<int>(ui::GetCursorPosY());
-
-    if (rect.Width() != texture_->GetWidth() || rect.Height() != texture_->GetHeight())
-    {
-        rootElement_->SetOffset(rect.Min());
-        offScreenUI_->SetCustomSize(rect.Width(), rect.Height());
-    }
-
-    return rect;
 }
 
 bool UITab::LoadResource(const ea::string& resourcePath)
@@ -483,7 +481,8 @@ void UITab::SelectItem(UIElement* current)
     selectedElement_ = current;
 
     auto* editor = GetSubsystem<Editor>();
-    editor->GetTab<InspectorTab>()->SetProvider(this);
+    editor->ClearInspector();
+    editor->Inspect(current);
     editor->GetTab<HierarchyTab>()->SetProvider(this);
 }
 
@@ -533,7 +532,7 @@ void UITab::RenderElementContextMenu()
             for (const ea::string& component : components)
             {
                 // TODO: element creation with custom styles more usable.
-                if (GetSubsystem<Input>()->GetKeyDown(KEY_SHIFT))
+                if (ui::IsKeyDown(KEY_SHIFT))
                 {
                     ui::Image(component);
                     ui::SameLine();
@@ -595,6 +594,7 @@ ea::string UITab::GetAppliedStyle(UIElement* element)
 
 void UITab::RenderRectSelector()
 {
+    const ImGuiStyle& style = ui::GetStyle();
     auto* selected = GetSelected() ? GetSelected()->Cast<BorderImage>() : nullptr;
 
     if (textureSelectorAttribute_.empty() || selected == nullptr)
@@ -604,25 +604,27 @@ void UITab::RenderRectSelector()
     {
         bool isResizing_ = false;
         IntRect startRect_;
+        ImRect rect_;
         int textureScale_ = 1;
         int windowFlags_ = ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar;
-        IntRect rectWindowDeltaAccumulator_;
     };
     auto* s = ui::GetUIState<State>();
 
     bool open = true;
-    auto texture = selected->GetTexture();
+    auto* texture = static_cast<Texture2D*>(selected->GetTexture());
     texture->SetFilterMode(FILTER_NEAREST);    // Texture is better visible this way when zoomed in.
-    auto padding = ImGui::GetStyle().WindowPadding;
-    ui::SetNextWindowPos(ImVec2(texture->GetWidth() + padding.x * 2, texture->GetHeight() + padding.y * 2),
-        ImGuiCond_FirstUseEver);
     if (ui::Begin("Select Rect", &open, s->windowFlags_))
     {
+        ImGuiWindow* window = ui::GetCurrentWindow();
+        ImGuiViewport* viewport = window->Viewport;
+
         ui::SliderInt("Zoom", &s->textureScale_, 1, 5);
-        auto windowPos = ui::GetWindowPos();
-        auto imagePos = ui::GetCursorPos();
-        ui::Image(texture, ImVec2(texture->GetWidth() * s->textureScale_,
-            texture->GetHeight() * s->textureScale_));
+        ImVec2 imageSize{
+            (float)texture->GetWidth() * (float)s->textureScale_ / viewport->DpiScale,
+            (float)texture->GetHeight() * (float)s->textureScale_ / viewport->DpiScale,
+        };
+        ui::Image(texture, imageSize);
+        ImVec2 imagePos = ui::GetItemRectMin();
 
         // Disable dragging of window if mouse is hovering texture.
         if (ui::IsItemHovered())
@@ -631,54 +633,44 @@ void UITab::RenderRectSelector()
             s->windowFlags_ &= ~ImGuiWindowFlags_NoMove;
 
         IntRect rect = selectedElement_->GetAttribute(textureSelectorAttribute_).GetIntRect();
-        IntRect originalRect = rect;
-        // Upscale selection rect if texture is upscaled.
-        rect *= s->textureScale_;
+        ImRect selectorRect;
+        if (s->isResizing_)
+            selectorRect = s->rect_;
+        else
+        {
+            selectorRect = {
+                imagePos + ImVec2(Vector2(rect.Min()) * (float)s->textureScale_ / viewport->DpiScale),
+                imagePos + ImVec2(Vector2(rect.Max()) * (float)s->textureScale_ / viewport->DpiScale)
+            };
+        }
 
         ui::TransformSelectorFlags flags = ui::TSF_NONE;
         if (hideResizeHandles_)
             flags |= ui::TSF_HIDEHANDLES;
 
-        IntRect screenRect(
-            rect.Min() + ToIntVector2(imagePos) + ToIntVector2(windowPos),
-            IntVector2(rect.right_ - rect.left_, rect.bottom_ - rect.top_)
-        );
-        // Essentially screenRect().Max() += screenRect().Min()
-        screenRect.bottom_ += screenRect.top_;
-        screenRect.right_ += screenRect.left_;
-
-        IntRect delta;
-        if (ui::TransformRect(screenRect, delta, flags))
+        ImRect delta;
+        if (ui::TransformRect(selectorRect, delta, flags))
         {
             if (!s->isResizing_)
             {
                 s->isResizing_ = true;
-                s->startRect_ = originalRect;
+                s->startRect_ = rect;
+                s->rect_ = selectorRect;
             }
-            // Accumulate delta value. This is required because resizing upscaled rect does not work
-            // with small increments when rect values are integers.
-            s->rectWindowDeltaAccumulator_ += delta;
-        }
 
-        if (ui::IsItemActive())
-        {
-            // Downscale and add accumulated delta to the original rect value
-            rect = originalRect + s->rectWindowDeltaAccumulator_ / s->textureScale_;
-
-            // If downscaled rect size changed compared to original value - set attribute and
-            // reset delta accumulator.
-            if (rect != originalRect)
+            if (ui::IsItemActive())
             {
-                selectedElement_->SetAttribute(textureSelectorAttribute_, rect);
-                // Keep remainder in accumulator, otherwise resizing will cause cursor to drift from
-                // the handle over time.
-                s->rectWindowDeltaAccumulator_.left_ %= s->textureScale_;
-                s->rectWindowDeltaAccumulator_.top_ %= s->textureScale_;
-                s->rectWindowDeltaAccumulator_.right_ %= s->textureScale_;
-                s->rectWindowDeltaAccumulator_.bottom_ %= s->textureScale_;
+                ImVec2 min = (selectorRect.Min - imagePos) / (float)s->textureScale_ * viewport->DpiScale;
+                ImVec2 max = (selectorRect.Max - imagePos) / (float)s->textureScale_ * viewport->DpiScale;
+                IntRect currentRect{
+                    IntVector2(Round(min.x), Round(min.y)),
+                    IntVector2(Round(max.x), Round(max.y))
+                };
+                selectedElement_->SetAttribute(textureSelectorAttribute_, currentRect);
+                s->rect_ = selectorRect;
             }
         }
-        else if (s->isResizing_)
+        else if (!ui::IsItemActive() && s->isResizing_)
         {
             s->isResizing_ = false;
             undo_.Track<Undo::EditAttributeAction>(selected, textureSelectorAttribute_, s->startRect_,
@@ -822,28 +814,6 @@ void UITab::OnFocused()
 {
     auto* editor = GetSubsystem<Editor>();
     editor->GetTab<HierarchyTab>()->SetProvider(this);
-}
-
-void UITab::OnBeforeBegin()
-{
-    // Allow viewport texture to cover entire window
-    ui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-}
-
-void UITab::OnAfterBegin()
-{
-    ui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
-}
-
-void UITab::OnBeforeEnd()
-{
-    BaseClassName::OnBeforeEnd();
-    ui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-}
-
-void UITab::OnAfterEnd()
-{
-    ui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 }
 
 }

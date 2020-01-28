@@ -1,7 +1,100 @@
 %module(directors="1", dirprot="1", allprotected="1", naturalvar=1) Urho3D
 
-%include "Common.i"
+#define final
+#define static_assert(...)
 
+%include "stl.i"
+%include "stdint.i"
+%include "typemaps.i"
+%include "arrays_csharp.i"
+%include "cmalloc.i"
+%include "swiginterface.i"
+%include "attribute.i"
+
+%include "InstanceCache.i"
+
+%apply bool* INOUT                  { bool&, bool* };
+%apply signed char* INOUT           { signed char&/*, signed char**/ };
+%apply unsigned char* INOUT         { unsigned char&/*, unsigned char**/ };
+%apply short* INOUT                 { short&, short* };
+%apply unsigned short* INOUT        { unsigned short&, unsigned short* };
+%apply int* INOUT                   { int&, int* };
+%apply unsigned int* INOUT          { unsigned int&, unsigned int* };
+%apply long long* INOUT             { long long&, long long* };
+%apply unsigned long long* INOUT    { unsigned long long&, unsigned long long* };
+%apply float* INOUT                 { float&, float* };
+%apply double* INOUT                { double&, double* };
+
+%apply bool FIXED[]                 { bool[] };
+%apply signed char FIXED[]          { signed char[] };
+%apply unsigned char FIXED[]        { unsigned char[] };
+%apply short FIXED[]                { short[] };
+%apply unsigned short FIXED[]       { unsigned short[] };
+%apply int FIXED[]                  { int[] };
+%apply unsigned int FIXED[]         { unsigned int[] };
+%apply long long FIXED[]            { long long[] };
+%apply unsigned long long FIXED[]   { unsigned long long[] };
+%apply float FIXED[]                { float[] };
+%apply double FIXED[]               { double[] };
+
+%typemap(csvarout) void* VOID_INT_PTR %{
+  get {
+    var ret = $imcall;$excode
+    return ret;
+  }
+%}
+
+%apply void* VOID_INT_PTR {
+	void*,
+	signed char*,
+	unsigned char*
+}
+
+%typemap(csvarin, excode=SWIGEXCODE2) void* VOID_INT_PTR %{
+  set {
+    $imcall;$excode
+  }
+%}
+
+%apply void* { std::uintptr_t, uintptr_t };
+%apply unsigned { time_t };
+%typemap(csvarout, excode=SWIGEXCODE2) float INOUT[] "get { var ret = $imcall;$excode return ret; }"
+%typemap(ctype)   const char* INPUT[] "char**"
+%typemap(cstype)  const char* INPUT[] "string[]"
+%typemap(imtype, inattributes="[global::System.Runtime.InteropServices.In, global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPUTF8Str)]") const char* INPUT[] "string[]"
+%typemap(csin)    const char* INPUT[] "$csinput"
+%typemap(in)      const char* INPUT[] "$1 = $input;"
+%typemap(freearg) const char* INPUT[] ""
+%typemap(argout)  const char* INPUT[] ""
+%apply const char* INPUT[]   { char const *const items[] };
+
+// ref global::System.IntPtr
+%typemap(ctype, out="void *")                 void*& "void *"
+%typemap(imtype, out="global::System.IntPtr") void*& "ref global::System.IntPtr"
+%typemap(cstype, out="$csclassname")          void*& "ref global::System.IntPtr"
+%typemap(csin)                                void*& "ref $csinput"
+%typemap(in)                                  void*& %{ $1 = ($1_ltype)$input; %}
+%typecheck(SWIG_TYPECHECK_CHAR_PTR)           void*& ""
+
+// Speed boost
+%pragma(csharp) imclassclassmodifiers="[System.Security.SuppressUnmanagedCodeSecurity]\ninternal unsafe class"
+%pragma(csharp) moduleclassmodifiers="[System.Security.SuppressUnmanagedCodeSecurity]\npublic unsafe partial class"
+%typemap(csclassmodifiers) SWIGTYPE "public unsafe partial class"
+
+%{
+#if _WIN32
+#   include <Urho3D/WindowsSupport.h>
+#endif
+#include <Urho3D/Urho3DAll.h>   // If this include is missing please build with -DURHO3D_MONOLITHIC_HEADER=ON
+#include <SDL/SDL_joystick.h>
+#include <SDL/SDL_gamecontroller.h>
+#include <SDL/SDL_keycode.h>
+#include <EASTL/unordered_map.h>
+#include <Urho3D/CSharp/Native/SWIGHelpers.h>
+%}
+
+%include "Helpers.i"
+%include "Operators.i"
 namespace eastl{}
 namespace ea = eastl;
 
@@ -12,29 +105,25 @@ namespace ea = eastl;
 #   define URHO3D_API
 #endif
 
-%{
-#include <Urho3D/Urho3DAll.h>
-#include <SDL/SDL_joystick.h>
-#include <SDL/SDL_gamecontroller.h>
-#include <SDL/SDL_keycode.h>
-#include <EASTL/unordered_map.h>
-%}
+#define URHO3D_TYPE_TRAIT(...)
 
 %apply void* VOID_INT_PTR {
 	SDL_Cursor*,
 	SDL_Surface*,
 	SDL_Window*,
 	Urho3D::GraphicsImpl*,
-    ImFont*
+    ImFont*,
+    tracy::SourceLocationData*
 }
-
-// String typemap returns 0 if null string is passed. This fails to initialize SafeArray.
-%ignore Urho3D::Node::GetChildrenWithTag(const String& tag, bool recursive = false) const;
-%ignore Urho3D::UIElement::GetChildrenWithTag(const String& tag, bool recursive = false) const;
-%ignore Urho3D::XMLElement::GetBuffer;
 
 %include "StringHash.i"
 %include "eastl_string.i"
+
+%rename("%(camelcase)s", %$isenumitem) "";
+%rename("%(camelcase)s", %$isvariable, %$ispublic) "";
+
+// --------------------------------------- Math ---------------------------------------
+%include "Math.i"
 
 %include "_constants.i"
 %include "_events.i"
@@ -56,14 +145,22 @@ namespace ea = eastl;
 %ignore Urho3D::M_DEGTORAD_2;
 %ignore Urho3D::M_RADTODEG;
 
-%ignore Urho3D::begin;
-%ignore Urho3D::end;
-
+%ignore Urho3D::Frustum::planes_;
+%ignore Urho3D::Frustum::vertices_;
 // These should be implemented in C# anyway.
 %ignore Urho3D::Polyhedron::Polyhedron(const Vector<eastl::vector<Vector3> >& faces);
 %ignore Urho3D::Polyhedron::faces_;
 
+%include "Urho3D/Math/MathDefs.h"
+%include "Urho3D/Math/Polyhedron.h"
+%include "Urho3D/Math/Frustum.h"
+
+CSHARP_ARRAYS_FIXED(Urho3D::Vector4, global::Urho3DNet.Vector4)
+%apply Urho3D::Vector4 FIXED[] { Urho3D::Vector4[] };
+
 // ---------------------------------------  ---------------------------------------
+%ignore Urho3D::begin;
+%ignore Urho3D::end;
 
 %ignore Urho3D::textureFilterModeNames;
 %ignore Urho3D::textureUnitNames;
@@ -73,27 +170,21 @@ namespace ea = eastl;
 %ignore Urho3D::compareModeNames;
 %ignore Urho3D::lightingModeNames;
 
-%ignore Urho3D::Frustum::planes_;
-%ignore Urho3D::Frustum::vertices_;
-
 %include "RefCounted.i"
 %include "Vector.i"
 %include "HashMap.i"
 // Declare inheritable classes in this file
 %include "Context.i"
 
-%rename("%(camelcase)s", %$isenumitem) "";
-%rename("%(camelcase)s", %$isvariable, %$ispublic) "";
-
 %rename(VarVoidPtr) VAR_VOIDPTR;
 %rename(VarResourceRef) VAR_RESOURCEREF;
 %rename(VarResourceRefList) VAR_RESOURCEREFLIST;
-%rename(VarVariantVector) VAR_VARIANTVECTOR;
+%rename(VarVariantList) VAR_VARIANTVECTOR;
 %rename(VarVariantMap) VAR_VARIANTMAP;
 %rename(VarIntRect) VAR_INTRECT;
 %rename(VarIntVector2) VAR_INTVECTOR2;
 %rename(VarMatrix3x4) VAR_MATRIX3X4;
-%rename(VarStringVector) VAR_STRINGVECTOR;
+%rename(VarStringList) VAR_STRINGVECTOR;
 %rename(VarIntVector3) VAR_INTVECTOR3;
 
 AddEqualityOperators(Urho3D::ResourceRef);
@@ -118,10 +209,6 @@ AddEqualityOperators(Urho3D::CustomGeometryVertex);
 AddEqualityOperators(Urho3D::ColorFrame);
 AddEqualityOperators(Urho3D::TextureFrame);
 AddEqualityOperators(Urho3D::Variant);
-
-%include "Urho3D/Math/MathDefs.h"
-%include "Urho3D/Math/Polyhedron.h"
-%include "Urho3D/Math/Frustum.h"
 
 %ignore Urho3D::GPUObject::OnDeviceLost;
 %ignore Urho3D::GPUObject::OnDeviceReset;
@@ -186,6 +273,8 @@ namespace SDL
 %ignore Urho3D::AttributeInfo::enumNamesPointers_;
 %ignore Urho3D::AttributeInfo::enumNames_;
 
+%ignore Urho3D::Detail::CriticalSection;
+%ignore Urho3D::MutexLock;
 %include "Urho3D/Core/Variant.h"
 %include "Object.i"
 %director Urho3D::AttributeAccessor;
@@ -205,7 +294,9 @@ namespace SDL
 
 %ignore Urho3D::Application::engine_;
 %ignore Urho3D::Application::GetCommandLineParser;
-%ignore Urho3D::PluginApplication::PluginMain;
+%ignore Urho3D::PluginApplication::PluginApplicationMain;
+%ignore Urho3D::PluginApplication::InitializeReloadablePlugin;
+%ignore Urho3D::PluginApplication::UninitializeReloadablePlugin;
 %include "Urho3D/Engine/Application.h"
 %include "Urho3D/Engine/PluginApplication.h"
 #if URHO3D_CSHARP
@@ -238,6 +329,16 @@ namespace SDL
 %include "_properties_io.i"
 %ignore Urho3D::GetWideNativePath;
 %ignore Urho3D::logLevelNames;
+%ignore Urho3D::LOG_LEVEL_COLORS;
+
+%extend Urho3D::Log {
+public:
+    static void Trace(const char* message)   { Log::GetLogger().Write(LOG_TRACE, message); }
+    static void Debug(const char* message)   { Log::GetLogger().Write(LOG_DEBUG, message); }
+    static void Info(const char* message)    { Log::GetLogger().Write(LOG_INFO, message); }
+    static void Warning(const char* message) { Log::GetLogger().Write(LOG_WARNING, message); }
+    static void Error(const char* message)   { Log::GetLogger().Write(LOG_ERROR, message); }
+}
 
 %interface_custom("%s", "I%s", Urho3D::Serializer);
 %include "Urho3D/IO/Serializer.h"
@@ -252,6 +353,17 @@ namespace SDL
 %include "Urho3D/IO/PackageFile.h"
 %include "Urho3D/IO/VectorBuffer.h"
 %include "Urho3D/IO/FileSystem.h"
+
+%ignore Urho3D::NonCopyable;
+%ignore Urho3D::ArchiveBase;
+%ignore Urho3D::Archive::OpenBlock;
+%ignore Urho3D::Archive::OpenSequentialBlock;
+%ignore Urho3D::Archive::OpenUnorderedBlock;
+%ignore Urho3D::Archive::OpenArrayBlock;
+%ignore Urho3D::Archive::OpenMapBlock;
+%ignore Urho3D::Archive::OpenSafeSequentialBlock;
+%ignore Urho3D::Archive::OpenSafeUnorderedBlock;
+%include "Urho3D/IO/Archive.h"
 
 // --------------------------------------- Resource ---------------------------------------
 %include "_properties_resource.i"
@@ -314,6 +426,10 @@ public:
 %ignore Urho3D::Scene::CleanupConnection;
 %ignore Urho3D::Node::CleanupConnection;
 %ignore Urho3D::NodeImpl;
+%ignore Urho3D::Node::GetEntity;
+%ignore Urho3D::Node::SetEntity;
+%ignore Urho3D::Scene::GetRegistry;
+%ignore Urho3D::Scene::GetComponentIndex;
 
 %include "Urho3D/Scene/AnimationDefs.h"
 %include "Urho3D/Scene/ValueAnimationInfo.h"
@@ -333,11 +449,6 @@ public:
 
 // --------------------------------------- Audio ---------------------------------------
 %include "_properties_audio.i"
-%apply int FIXED[]  { int *dest }
-%apply int* OUTPUT  { int& x, int& y }
-%typemap(cstype) int *dest "ref int[]"
-%typemap(imtype) int *dest "global::System.IntPtr"
-%csmethodmodifiers Urho3D::SoundSource::Mix "public unsafe";
 %ignore Urho3D::BufferedSoundStream::AddData(const ea::shared_array<signed char>& data, unsigned numBytes);
 %ignore Urho3D::BufferedSoundStream::AddData(const ea::shared_array<signed short>& data, unsigned numBytes);
 %ignore Urho3D::Sound::GetData;
@@ -402,6 +513,7 @@ public:
 %ignore Urho3D::ShaderProgram::GetVertexAttributes;
 %ignore Urho3D::ShaderVariation::elementSemanticNames;
 %ignore Urho3D::CustomGeometry::DrawOcclusion;
+%ignore Urho3D::CustomGeometry::MakeCircleGraph;
 %ignore Urho3D::CustomGeometry::ProcessRayQuery;
 %ignore Urho3D::OcclusionBufferData::dataWithSafety_;
 %ignore Urho3D::ScenePassInfo::batchQueue_;
@@ -409,11 +521,6 @@ public:
 %ignore Urho3D::View::GetLightQueues;
 %rename(DrawableFlags) Urho3D::DrawableFlag;
 
-
-%apply unsigned *OUTPUT { unsigned& minVertex, unsigned& vertexCount };
-%apply unsigned *INOUT  { unsigned& index };
-%apply float INPUT[]    { const float* };
-%apply unsigned char INPUT[] { const unsigned char* blendIndices };
 %apply void* VOID_INT_PTR {
     int *data_,
     int *Urho3D::OcclusionBuffer::GetBuffer
@@ -497,6 +604,7 @@ public:
 	rcPolyMesh*,
 	rcPolyMeshDetail*
 }
+%ignore Urho3D::CrowdManager::SetVelocityShader;
 %ignore Urho3D::NavBuildData::navAreas_;
 %ignore Urho3D::NavigationMesh::FindPath;
 %include "Urho3D/Navigation/CrowdAgent.h"

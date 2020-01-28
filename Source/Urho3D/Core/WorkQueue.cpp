@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -47,7 +47,7 @@ public:
     /// Process work items until stopped.
     void ThreadFunction() override
     {
-        URHO3D_PROFILE_THREAD("WorkerThread");
+        URHO3D_PROFILE_THREAD(Format("WorkerThread {}", (uint64_t)GetCurrentThreadID()).c_str());
         // Init FPU state first
         InitFPU();
         owner_->ProcessItems(index_);
@@ -174,9 +174,9 @@ void WorkQueue::AddWorkItem(const SharedPtr<WorkItem>& item)
     }
 }
 
-WorkItem* WorkQueue::AddWorkItem(std::function<void()> workFunction, unsigned priority)
+SharedPtr<WorkItem> WorkQueue::AddWorkItem(std::function<void()> workFunction, unsigned priority)
 {
-    auto item = GetFreeItem();
+    SharedPtr<WorkItem> item = GetFreeItem();
     item->workLambda_ = std::move(workFunction);
     item->workFunction_ = [](const WorkItem* item, unsigned) { item->workLambda_(); };
     item->priority_ = priority;

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -50,12 +50,12 @@
 #include <Urho3D/Urho2D/PhysicsEvents2D.h>
 #include <Urho3D/Core/Profiler.h>
 
-#include <Urho3D/DebugNew.h>
-
 #include "Character2D.h"
 #include "Utilities2D/Sample2D.h"
 #include "Utilities2D/Mover.h"
 #include "Urho2DIsometricDemo.h"
+
+#include <Urho3D/DebugNew.h>
 
 Urho2DIsometricDemo::Urho2DIsometricDemo(Context* context) :
     Sample(context),

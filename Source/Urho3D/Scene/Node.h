@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,11 +20,16 @@
 // THE SOFTWARE.
 //
 
+/// \file
+
 #pragma once
 
 #include "../IO/VectorBuffer.h"
 #include "../Math/Matrix3x4.h"
 #include "../Scene/Animatable.h"
+
+#include <entt/entity/entity.hpp>
+#include <entt/entity/fwd.hpp>
 
 namespace Urho3D
 {
@@ -83,6 +88,12 @@ public:
     ~Node() override;
     /// Register object factory.
     static void RegisterObject(Context* context);
+
+    /// Serialize from/to archive. Return true if successful.
+    bool Serialize(Archive& archive) override;
+    /// Serialize content from/to archive. Return true if successful.
+    bool Serialize(Archive& archive, ArchiveBlock& block, SceneResolver* resolver,
+        bool serializeChildren = true, bool rewriteIDs = false, CreateMode mode = REPLICATED);
 
     /// Load from binary data. Return true if successful.
     bool Load(Deserializer& source) override;
@@ -157,9 +168,9 @@ public:
 
     /// Set both position and rotation in parent space as an atomic operation. This is faster than setting position and rotation separately.
     void SetTransform(const Vector3& position, const Quaternion& rotation);
-    /// Set both position, rotation and uniform scale in parent space as an atomic operation.
+    /// Set position, rotation, and uniform scale in parent space as an atomic operation.
     void SetTransform(const Vector3& position, const Quaternion& rotation, float scale);
-    /// Set both position, rotation and scale in parent space as an atomic operation.
+    /// Set position, rotation, and scale in parent space as an atomic operation.
     void SetTransform(const Vector3& position, const Quaternion& rotation, const Vector3& scale);
     /// Set node transformation in parent space as an atomic operation.
     void SetTransform(const Matrix3x4& matrix);
@@ -167,13 +178,13 @@ public:
     /// Set both position and rotation in parent space as an atomic operation (for Urho2D).
     void SetTransform2D(const Vector2& position, float rotation) { SetTransform(Vector3(position), Quaternion(rotation)); }
 
-    /// Set both position, rotation and uniform scale in parent space as an atomic operation (for Urho2D).
+    /// Set position, rotation, and uniform scale in parent space as an atomic operation (for Urho2D).
     void SetTransform2D(const Vector2& position, float rotation, float scale)
     {
         SetTransform(Vector3(position), Quaternion(rotation), scale);
     }
 
-    /// Set both position, rotation and scale in parent space as an atomic operation (for Urho2D).
+    /// Set position, rotation, and scale in parent space as an atomic operation (for Urho2D).
     void SetTransform2D(const Vector2& position, float rotation, const Vector2& scale)
     {
         SetTransform(Vector3(position), Quaternion(rotation), Vector3(scale, 1.0f));
@@ -209,10 +220,12 @@ public:
 
     /// Set both position and rotation in world space as an atomic operation.
     void SetWorldTransform(const Vector3& position, const Quaternion& rotation);
-    /// Set both position, rotation and uniform scale in world space as an atomic operation.
+    /// Set position, rotation, and uniform scale in world space as an atomic operation.
     void SetWorldTransform(const Vector3& position, const Quaternion& rotation, float scale);
-    /// Set both position, rotation and scale in world space as an atomic opration.
+    /// Set position, rotation, and scale in world space as an atomic opration.
     void SetWorldTransform(const Vector3& position, const Quaternion& rotation, const Vector3& scale);
+    /// Set position, rotation, and scale in world space as an atomic operation from a transformation matrix
+    void SetWorldTransform(const Matrix3x4& worldTransform);
 
     /// Set both position and rotation in world space as an atomic operation (for Urho2D).
     void SetWorldTransform2D(const Vector2& position, float rotation)
@@ -220,13 +233,13 @@ public:
         SetWorldTransform(Vector3(position), Quaternion(rotation));
     }
 
-    /// Set both position, rotation and uniform scale in world space as an atomic operation (for Urho2D).
+    /// Set position, rotation, and uniform scale in world space as an atomic operation (for Urho2D).
     void SetWorldTransform2D(const Vector2& position, float rotation, float scale)
     {
         SetWorldTransform(Vector3(position), Quaternion(rotation), scale);
     }
 
-    /// Set both position, rotation and scale in world space as an atomic opration (for Urho2D).
+    /// Set position, rotation, and scale in world space as an atomic opration (for Urho2D).
     void SetWorldTransform2D(const Vector2& position, float rotation, const Vector2& scale)
     {
         SetWorldTransform(Vector3(position), Quaternion(rotation), Vector3(scale, 1.0f));
@@ -336,6 +349,8 @@ public:
 
     /// Return ID.
     unsigned GetID() const { return id_; }
+    /// Return entity.
+    entt::entity GetEntity() const { return entity_; }
     /// Return whether the node is replicated or local to a scene.
     bool IsReplicated() const;
 
@@ -574,6 +589,8 @@ public:
 
     /// Set ID. Called by Scene.
     void SetID(unsigned id);
+    /// Set entity. Called by Scene.
+    void SetEntity(entt::entity entity);
     /// Set scene. Called by Scene.
     void SetScene(Scene* scene);
     /// Reset scene, ID and owner. Called by Scene.
@@ -682,6 +699,8 @@ private:
     Node* parent_;
     /// Scene (root node.)
     Scene* scene_;
+    /// Entity ID within registry.
+    entt::entity entity_{ entt::null };
     /// Unique ID within the scene.
     unsigned id_;
     /// Position.

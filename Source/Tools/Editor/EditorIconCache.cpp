@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -72,10 +72,15 @@ EditorIconCache::EditorIconCache(Context* context)
 
 EditorIconCache::IconData* EditorIconCache::GetIconData(const ea::string& name)
 {
-    auto it = iconCache_.find(name);
-    if (it != iconCache_.end())
-        return &it->second;
-    return &iconCache_.find("Unknown")->second;
+    const auto iterIcon = iconCache_.find(name);
+    if (iterIcon != iconCache_.end())
+        return &iterIcon->second;
+
+    const auto iterUnknown = iconCache_.find("Unknown");
+    if (iterUnknown != iconCache_.end())
+        return &iterUnknown->second;
+
+    return nullptr;
 }
 
 }

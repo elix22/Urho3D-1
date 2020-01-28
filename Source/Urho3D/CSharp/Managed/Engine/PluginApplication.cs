@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,21 +20,39 @@
 // THE SOFTWARE.
 //
 using System;
+using System.Reflection;
 using Urho3DNet.CSharp;
 
 namespace Urho3DNet
 {
     public partial class PluginApplication
     {
+        private Assembly _hostAssembly;
+        /// Sets assembly that is being managed by this plugin.
+        internal void SetHostAssembly(Assembly assembly)
+        {
+            _hostAssembly = assembly;
+        }
+
         private void OnSetupInstance()
         {
-            // Register factories marked with attributes
-            var context = Context;
-            foreach (var pair in GetType().Assembly.GetTypesWithAttribute<ObjectFactoryAttribute>())
+            _hostAssembly = GetType().Assembly;
+            SubscribeToEvent(E.PluginLoad, this, map =>
             {
-                context.RegisterFactory(pair.Item1, pair.Item2.Category);
-                RecordPluginFactory(pair.Item1, pair.Item2.Category);
-            }
+                // Register factories marked with attributes
+                if (_hostAssembly != null)
+                {
+                    foreach ((Type type, ObjectFactoryAttribute attr) in _hostAssembly.GetTypesWithAttribute<ObjectFactoryAttribute>())
+                        RegisterFactory(type, attr.Category);
+                }
+                UnsubscribeFromEvent(E.PluginLoad);
+            });
+        }
+
+        public void RegisterFactory(Type type, string category = "")
+        {
+            Context.RegisterFactory(type, category);
+            RecordPluginFactory(type, category);
         }
     }
 }

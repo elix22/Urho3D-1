@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -55,7 +55,7 @@ StringHash StringHashRegister::RegisterString(const StringHash& hash, const char
     {
         map_.populate(hash, string);
     }
-    else if (iter->second.comparei(string) != 0)
+    else if (iter->second != string)
     {
         URHO3D_LOGWARNINGF("StringHash collision detected! Both \"%s\" and \"%s\" have hash #%s",
             string, iter->second.c_str(), hash.ToString().c_str());

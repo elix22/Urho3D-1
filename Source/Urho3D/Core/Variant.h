@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,8 @@
 // THE SOFTWARE.
 //
 
+/// \file
+
 #pragma once
 
 #include <EASTL/vector.h>
@@ -27,6 +29,7 @@
 #include <EASTL/unique_ptr.h>
 
 #include "../Container/Ptr.h"
+#include "../Core/TypeTrait.h"
 #include "../Math/Color.h"
 #include "../Math/Matrix3.h"
 #include "../Math/Matrix3x4.h"
@@ -38,8 +41,10 @@
 namespace Urho3D
 {
 
+class Archive;
+
 /// Variant's supported types.
-enum VariantType
+enum VariantType : unsigned char
 {
     VAR_NONE = 0,
     VAR_INT,
@@ -85,6 +90,9 @@ using StringVector = ea::vector<ea::string>;
 /// Map of variants.
 using VariantMap = ea::unordered_map<StringHash, Variant>;
 
+/// Byte buffer used by variant.
+using VariantBuffer = ea::vector<unsigned char>;
+
 /// Typed resource reference.
 struct URHO3D_API ResourceRef
 {
@@ -121,6 +129,12 @@ struct URHO3D_API ResourceRef
     /// Construct from another ResourceRef.
     ResourceRef(const ResourceRef& rhs) = default;
 
+    /// Return hash value for HashSet & HashMap.
+    unsigned ToHash() const
+    {
+        return type_.ToHash() * 31 + ea::hash<ea::string>()(name_);
+    }
+
     /// Object type.
     StringHash type_;
     /// Object name.
@@ -150,6 +164,12 @@ struct URHO3D_API ResourceRefList
         type_(type),
         names_(names)
     {
+    }
+
+    /// Return hash value for HashSet & HashMap.
+    unsigned ToHash() const
+    {
+        return type_.ToHash() * 31 + ea::hash<StringVector>()(names_);
     }
 
     /// Object type.
@@ -198,28 +218,85 @@ public:
     virtual unsigned GetSize() const { return sizeof(CustomVariantValue); }
 
     /// Compare to another custom value.
-    virtual bool Compare(const CustomVariantValue& rhs) const { (void)rhs; return false; }
+    virtual bool Compare(const CustomVariantValue& /*rhs*/) const { return false; }
     /// Compare to zero.
     virtual bool IsZero() const { return false; }
     /// Convert custom value to string.
     virtual ea::string ToString() const { return EMPTY_STRING; }
+    /// Serialize to Archive.
+    virtual bool Serialize(Archive& /*archive*/) { return false; }
 
 private:
     /// Type info.
     const std::type_info& typeInfo_{ typeid(void) };
 };
 
+URHO3D_TYPE_TRAIT(IsEquallyComparable, std::declval<T>() == std::declval<T>());
+URHO3D_TYPE_TRAIT(IsConvertibleToString, std::declval<T>().ToString());
+URHO3D_TYPE_TRAIT(IsArchiveSerializable, SerializeValue(std::declval<Archive&>(), "", std::declval<T&>()));
+
 /// Custom variant value type traits. Specialize the template to implement custom type behavior.
 template <class T> struct CustomVariantValueTraits
 {
     /// Copy value.
-    static void Copy(T& dest, const T& src) { dest = src; }
+    static void Copy(T& dest, const T& src)
+    {
+        dest = src;
+    }
     /// Compare values.
-    static bool Compare(const T& lhs, const T& rhs) { (void)lhs, (void)rhs; return false; }
+    static bool Compare(const T& lhs, const T& rhs)
+    {
+        if constexpr (IsEquallyComparable<T>::value)
+        {
+            return lhs == rhs;
+        }
+        else
+        {
+            (void)lhs;
+            (void)rhs;
+            return false;
+        }
+    }
     /// Check whether the value is zero.
-    static bool IsZero(const T& value) { (void)value; return false; }
+    static bool IsZero(const T& value)
+    {
+        if constexpr (IsEquallyComparable<T>::value && std::is_default_constructible<T>::value)
+        {
+            return value == T{};
+        }
+        else
+        {
+            (void)value;
+            return false;
+        }
+    }
     /// Convert type to string.
-    static ea::string ToString(const T& value) { (void)value; return EMPTY_STRING; }
+    static ea::string ToString(const T& value)
+    {
+        if constexpr (IsConvertibleToString<T>::value)
+        {
+            return value.ToString();
+        }
+        else
+        {
+            (void)value;
+            return EMPTY_STRING;
+        }
+    }
+    /// Serialize type.
+    static bool Serialize(Archive& archive, T& value)
+    {
+        if constexpr (IsArchiveSerializable<T>::value)
+        {
+            return SerializeValue(archive, "value", value);
+        }
+        else
+        {
+            (void)value;
+            (void)archive;
+            return false;
+        }
+    }
 };
 
 /// Custom variant value type traits for unique_ptr.
@@ -233,6 +310,8 @@ template <class T> struct CustomVariantValueTraits<ea::unique_ptr<T>>
     static bool IsZero(const ea::unique_ptr<T>& value) { return CustomVariantValueTraits<T>::IsZero(*value); }
     /// Convert type to string.
     static ea::string ToString(const ea::unique_ptr<T>& value) { return CustomVariantValueTraits<T>::ToString(*value); }
+    /// Serialize type.
+    static bool Serialize(Archive& archive, ea::unique_ptr<T>& value) { return CustomVariantValueTraits<T>::Serialize(archive, *value); }
 };
 
 /// Custom variant value implementation.
@@ -279,6 +358,8 @@ public:
     bool IsZero() const override { return Traits::IsZero(value_);}
     /// Convert custom value to string.
     ea::string ToString() const override { return Traits::ToString(value_); }
+    /// Serialize to Archive.
+    bool Serialize(Archive& archive) override { return Traits::Serialize(archive, value_); }
 
 private:
     /// Value.
@@ -289,7 +370,7 @@ private:
 static const unsigned VARIANT_VALUE_SIZE = sizeof(void*) * 4;
 
 /// Checks whether the custom variant type could be stored on stack.
-template <class T> inline bool IsCustomTypeOnStack() { return sizeof(CustomVariantValueImpl<T>) <= VARIANT_VALUE_SIZE; }
+template <class T> constexpr bool IsCustomTypeOnStack() { return sizeof(CustomVariantValueImpl<T>) <= VARIANT_VALUE_SIZE; }
 
 /// Union for the possible variant values. Objects exceeding the VARIANT_VALUE_SIZE are allocated on the heap.
 union VariantValue
@@ -318,7 +399,7 @@ union VariantValue
     StringVector stringVector_;
     VariantVector variantVector_;
     VariantMap* variantMap_;
-    ea::vector<unsigned char> buffer_;
+    VariantBuffer buffer_;
     ResourceRef resourceRef_;
     ResourceRefList resourceRefList_;
 
@@ -436,7 +517,7 @@ public:
     }
 
     /// Construct from a buffer.
-    Variant(const ea::vector<unsigned char>& value)      // NOLINT(google-explicit-constructor)
+    Variant(const VariantBuffer& value)      // NOLINT(google-explicit-constructor)
     {
         *this = value;
     }
@@ -700,7 +781,7 @@ public:
     }
 
     /// Assign from a buffer.
-    Variant& operator =(const ea::vector<unsigned char>& rhs)
+    Variant& operator =(const VariantBuffer& rhs)
     {
         SetType(VAR_BUFFER);
         value_.buffer_ = rhs;
@@ -883,7 +964,7 @@ public:
     }
 
     /// Test for equality with a buffer. To return true, both the type and value must match.
-    bool operator ==(const ea::vector<unsigned char>& rhs) const;
+    bool operator ==(const VariantBuffer& rhs) const;
     /// Test for equality with a %VectorBuffer. To return true, both the type and value must match.
     bool operator ==(const VectorBuffer& rhs) const;
 
@@ -1024,7 +1105,7 @@ public:
     bool operator !=(const ea::string& rhs) const { return !(*this == rhs); }
 
     /// Test for inequality with a buffer.
-    bool operator !=(const ea::vector<unsigned char>& rhs) const { return !(*this == rhs); }
+    bool operator !=(const VariantBuffer& rhs) const { return !(*this == rhs); }
 
     /// Test for inequality with a %VectorBuffer.
     bool operator !=(const VectorBuffer& rhs) const { return !(*this == rhs); }
@@ -1100,7 +1181,7 @@ public:
         SetType(VAR_CUSTOM);
         value_.AsCustomValue().~CustomVariantValue();
 
-        if (IsCustomTypeOnStack<T>())
+        if constexpr (IsCustomTypeOnStack<T>())
             new (value_.storage_) CustomVariantValueImpl<T>(ea::move(value));
         else
             new (value_.storage_) CustomVariantValueImpl<ea::unique_ptr<T>>(ea::make_unique<T>(ea::move(value)));
@@ -1220,7 +1301,7 @@ public:
     const ea::string& GetString() const { return type_ == VAR_STRING ? value_.string_ : EMPTY_STRING; }
 
     /// Return buffer or empty on type mismatch.
-    const ea::vector<unsigned char>& GetBuffer() const
+    const VariantBuffer& GetBuffer() const
     {
         return type_ == VAR_BUFFER ? value_.buffer_ : emptyBuffer;
     }
@@ -1360,7 +1441,7 @@ public:
     template <class T> T Get() const;
 
     /// Return a pointer to a modifiable buffer or null on type mismatch.
-    ea::vector<unsigned char>* GetBufferPtr()
+    VariantBuffer* GetBufferPtr()
     {
         return type_ == VAR_BUFFER ? &value_.buffer_ : nullptr;
     }
@@ -1382,7 +1463,7 @@ public:
     {
         if (const CustomVariantValue* value = GetCustomVariantValuePtr())
         {
-            if (IsCustomTypeOnStack<T>())
+            if constexpr (IsCustomTypeOnStack<T>())
             {
                 return value->GetValuePtr<T>();
             }
@@ -1395,6 +1476,11 @@ public:
         return nullptr;
     }
 
+    /// Hash function for containers.
+    unsigned ToHash() const;
+
+    /// Return type name list.
+    static const char* const* GetTypeNameList();
     /// Return name for variant type.
     static ea::string GetTypeName(VariantType type);
     /// Return variant type from type name.
@@ -1405,7 +1491,7 @@ public:
     /// Empty variant.
     static const Variant EMPTY;
     /// Empty buffer.
-    static const ea::vector<unsigned char> emptyBuffer;
+    static const VariantBuffer emptyBuffer;
     /// Empty resource reference.
     static const ResourceRef emptyResourceRef;
     /// Empty resource reference list.
@@ -1467,7 +1553,7 @@ template <> inline VariantType GetVariantType<ea::string>() { return VAR_STRING;
 
 template <> inline VariantType GetVariantType<StringHash>() { return VAR_INT; }
 
-template <> inline VariantType GetVariantType<ea::vector<unsigned char> >() { return VAR_BUFFER; }
+template <> inline VariantType GetVariantType<VariantBuffer >() { return VAR_BUFFER; }
 
 template <> inline VariantType GetVariantType<ResourceRef>() { return VAR_RESOURCEREF; }
 
@@ -1530,7 +1616,7 @@ template <> URHO3D_API const IntVector2& Variant::Get<const IntVector2&>() const
 
 template <> URHO3D_API const IntVector3& Variant::Get<const IntVector3&>() const;
 
-template <> URHO3D_API const ea::vector<unsigned char>& Variant::Get<const ea::vector<unsigned char>&>() const;
+template <> URHO3D_API const VariantBuffer& Variant::Get<const VariantBuffer&>() const;
 
 template <> URHO3D_API void* Variant::Get<void*>() const;
 
@@ -1572,7 +1658,7 @@ template <> URHO3D_API IntVector2 Variant::Get<IntVector2>() const;
 
 template <> URHO3D_API IntVector3 Variant::Get<IntVector3>() const;
 
-template <> URHO3D_API ea::vector<unsigned char> Variant::Get<ea::vector<unsigned char> >() const;
+template <> URHO3D_API VariantBuffer Variant::Get<VariantBuffer >() const;
 
 template <> URHO3D_API Matrix3 Variant::Get<Matrix3>() const;
 

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,7 +20,6 @@
 // THE SOFTWARE.
 //
 
-#include <Urho3D/Container/Utility.h>
 #include <Urho3D/Core/Context.h>
 #include <Urho3D/Core/ProcessUtils.h>
 #include <Urho3D/Core/StringUtils.h>
@@ -142,6 +141,7 @@ const aiScene* scene_ = nullptr;
 aiNode* rootNode_ = nullptr;
 ea::string inputName_;
 ea::string resourcePath_;
+ea::string prependPath_;
 ea::string outPath_;
 ea::string outName_;
 bool useSubdirs_ = true;
@@ -289,6 +289,7 @@ void Run(const ea::vector<ea::string>& arguments)
             "-ne         Do not save empty nodes (scene mode only)\n"
             "-mb <x>     Maximum number of bones per submesh. Default 64\n"
             "-p <path>   Set path for scene resources. Default is output file path\n"
+            "-pp <path>  Prepend path to resources. Default is empty\n"
             "-r <name>   Use the named scene node as root node\n"
             "-f <freq>   Animation tick frequency to use if unspecified. Default 4800\n"
             "-o          Optimize redundant submeshes. Loses scene hierarchy and animations\n"
@@ -416,6 +417,11 @@ void Run(const ea::vector<ea::string>& arguments)
             else if (argument == "p" && !value.empty())
             {
                 resourcePath_ = AddTrailingSlash(value);
+                ++i;
+            }
+            else if (argument == "pp" && !value.empty())
+            {
+                prependPath_ = AddTrailingSlash(value);
                 ++i;
             }
             else if (argument == "r" && !value.empty())
@@ -624,7 +630,7 @@ void DumpNodes(aiNode* rootNode, unsigned level)
     if (!rootNode)
         return;
 
-    ea::string indent(' ', level * 2);
+    ea::string indent(level * 2, ' ');
     Vector3 pos, scale;
     Quaternion rot;
     aiMatrix4x4 transform = GetDerivedTransform(rootNode, rootNode_);
@@ -2381,9 +2387,9 @@ ea::string GetMaterialTextureName(const ea::string& nameIn)
 {
     // Detect assimp embedded texture
     if (nameIn.length() && nameIn[0] == '*')
-        return GenerateTextureName(ToInt(nameIn.substr(1)));
+        return (useSubdirs_ ? prependPath_ : "") + GenerateTextureName(ToInt(nameIn.substr(1)));
     else
-        return (useSubdirs_ ? "Textures/" : "") + nameIn;
+        return (useSubdirs_ ? prependPath_ + "Textures/" : "") + nameIn;
 }
 
 ea::string GenerateTextureName(unsigned texIndex)

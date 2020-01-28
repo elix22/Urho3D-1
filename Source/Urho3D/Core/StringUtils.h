@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,13 @@
 #pragma once
 
 #include "../Core/Variant.h"
+#if _MSC_VER
+#   pragma warning(push, 0)
+#endif
 #include <fmt/format.h>
+#if _MSC_VER
+#   pragma warning(pop)
+#endif
 
 namespace Urho3D
 {
@@ -118,12 +124,16 @@ URHO3D_API void BufferToString(ea::string& dest, const void* data, unsigned size
 URHO3D_API void StringToBuffer(ea::vector<unsigned char>& dest, const ea::string& source);
 /// Convert a C string to a byte buffer.
 URHO3D_API void StringToBuffer(ea::vector<unsigned char>& dest, const char* source);
+/// Convert a byte buffer to a hex string.
+URHO3D_API void BufferToHexString(ea::string& dest, const void* data, unsigned size);
+/// Convert a hex string to a byte buffer.
+URHO3D_API bool HexStringToBuffer(ea::vector<unsigned char>& dest, const ea::string_view& source);
 /// Return an index to a string list corresponding to the given string, or a default value if not found. The string list must be empty-terminated.
 URHO3D_API unsigned GetStringListIndex(const ea::string& value, const ea::string* strings, unsigned defaultIndex, bool caseSensitive = false);
 /// Return an index to a string list corresponding to the given C string, or a default value if not found. The string list must be empty-terminated.
 URHO3D_API unsigned GetStringListIndex(const char* value, const ea::string* strings, unsigned defaultIndex, bool caseSensitive = false);
 /// Return an index to a C string list corresponding to the given C string, or a default value if not found. The string list must be empty-terminated.
-URHO3D_API unsigned GetStringListIndex(const char* value, const char** strings, unsigned defaultIndex, bool caseSensitive = false);
+URHO3D_API unsigned GetStringListIndex(const char* value, const char* const* strings, unsigned defaultIndex, bool caseSensitive = false);
 /// Return a formatted string.
 URHO3D_API ea::string ToString(const char* formatString, ...);
 /// Return whether a char is an alphabet letter.
@@ -166,13 +176,11 @@ template <> inline Matrix4 FromString<Matrix4>(const char* source) { return ToMa
 template <class T> T FromString(const ea::string& source) { return FromString<T>(source.c_str()); }
 
 /// Return a formatted string.
-template<typename... Args> inline ea::string Format(const char* formatString, const Args&... args)
+template<typename... Args> inline ea::string Format(ea::string_view formatString, const Args&... args)
 {
     ea::string ret;
     fmt::format_to(std::back_inserter(ret), formatString, args...);
     return ret;
 }
-/// Return a formatted string.
-template<typename... Args> inline ea::string Format(const ea::string& formatString, const Args&... args) { return Format(formatString, args...); }
 
 }

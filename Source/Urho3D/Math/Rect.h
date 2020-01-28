@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -60,7 +60,7 @@ public:
     }
 
     /// Construct from a float array.
-    explicit Rect(const float* data) noexcept :
+    explicit Rect(const float data[]) noexcept :
         min_(data[0], data[1]),
         max_(data[2], data[3])
     {
@@ -229,13 +229,19 @@ public:
     }
 
     /// Return float data.
-    const void* Data() const { return &min_.x_; }
+    const float* Data() const { return &min_.x_; }
 
     /// Return as a vector.
     Vector4 ToVector4() const { return Vector4(min_.x_, min_.y_, max_.x_, max_.y_); }
 
     /// Return as string.
     ea::string ToString() const;
+
+    /// Return hash value for HashSet & HashMap.
+    unsigned ToHash() const
+    {
+        return min_.ToHash() * 37 + max_.ToHash();
+    }
 
     /// Return left-top corner position.
     Vector2 Min() const { return min_; }
@@ -300,7 +306,7 @@ public:
     }
 
     /// Construct from an int array.
-    explicit IntRect(const int* data) noexcept :
+    explicit IntRect(const int data[]) noexcept :
         left_(data[0]),
         top_(data[1]),
         right_(data[2]),
@@ -427,6 +433,9 @@ public:
 
     /// Return as string.
     ea::string ToString() const;
+
+    /// Return hash value for HashSet & HashMap.
+    unsigned ToHash() const { return (unsigned)left_ * 31 * 31 * 31 + (unsigned)right_ * 31 * 31 + (unsigned)top_ * 31 + (unsigned)bottom_; }
 
     /// Return left-top corner position.
     IntVector2 Min() const { return {left_, top_}; }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -57,8 +57,8 @@ void GamePlugin::Start()
 {
     // Set up any game state here. Configure input. Create objects. Add UI. Game application assumes control of the
     // input.
-    GetInput()->SetMouseVisible(false);
-    GetInput()->SetMouseMode(MM_WRAP);
+    context_->GetInput()->SetMouseVisible(false);
+    context_->GetInput()->SetMouseMode(MM_WRAP);
 }
 
 void GamePlugin::Stop()

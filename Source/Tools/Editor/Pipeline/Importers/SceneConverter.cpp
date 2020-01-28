@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,7 @@ SceneConverter::SceneConverter(Context* context)
     : AssetImporter(context)
 {
     // Binary scenes are used for shipping only.
-    isOptional_ = true;
+    flags_ = AssetImporterFlag::IsOptional | AssetImporterFlag::IsRemapped;
 }
 
 void SceneConverter::RegisterObject(Context* context)
@@ -45,29 +45,38 @@ void SceneConverter::RegisterObject(Context* context)
     context->RegisterFactory<SceneConverter>();
     URHO3D_COPY_BASE_ATTRIBUTES(AssetImporter);
 }
-
-void SceneConverter::RenderInspector(const char* filter)
+bool SceneConverter::Execute(Urho3D::Asset* input, const ea::string& outputPath)
 {
-    BaseClassName::RenderInspector(filter);
-}
+    if (!BaseClassName::Execute(input, outputPath))
+        return false;
 
-bool SceneConverter::Execute(Urho3D::Asset* input, const ea::string& inputFile, const ea::string& outputPath)
-{
-    auto* fs = GetFileSystem();
+    auto* fs = context_->GetFileSystem();
+    auto* project = GetSubsystem<Project>();
 
-    // A subproces is used to cook a scene because resource loading is reserved to a main thread, but asset importers
-    // run in worker threads.
+    // A subproces is used to cook a scene because resource loading is reserved to a main thread, but asset importers run in worker threads.
 
     ea::string output;
-    ea::string outputFile = outputPath + GetFileName(inputFile) + ".bin";
-    int result = fs->SystemRun(fs->GetProgramFileName(), {GetSubsystem<Project>()->GetProjectPath(), "CookScene",
-        "--input", inputFile, "--output", outputFile}, output);
+    ea::string outputFile = outputPath + GetPath(input->GetName()) + GetFileName(input->GetName()) + ".bin";
 
+    StringVector arguments{project->GetProjectPath(), "CookScene", "--input", input->GetResourcePath(), "--output", outputFile};
+    ea::string program;
+#if URHO3D_CSHARP && !_WIN32
+    // Editor executable is a C# program interpreted by .net runtime.
+    program = fs->GetInterpreterFileName();
+    arguments.push_front(fs->GetProgramFileName());
+#else
+    program = fs->GetProgramFileName();
+#endif
+    int result = fs->SystemRun(program, arguments, output);
     if (result != 0)
     {
-        URHO3D_LOGERROR("Converting '{}' to '{}' failed.", inputFile, outputFile);
+        URHO3D_LOGERROR("Converting '{}' to '{}' failed.", input->GetResourcePath(), outputFile);
+        if (!output.empty())
+            URHO3D_LOGERROR(output);
         return false;
     }
+    else
+        URHO3D_LOGINFO("Converted '{}' to '{}'.", input->GetResourcePath(), outputFile);
 
     AddByproduct(outputFile);
     return true;

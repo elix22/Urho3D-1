@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2019 Rokas Kupstys.
+# Copyright (c) 2017-2020 the rbfx project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -89,7 +89,7 @@ if (NOT VSNPRINTFS_FUNCTION_EXISTS)
 endif()
 
 target_include_directories(SLikeNet
-    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Source/include>
+    SYSTEM PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Source/include>
 )
 
 if (WIN32)
@@ -99,5 +99,5 @@ endif ()
 install (DIRECTORY Source/include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.h)
 
 if (NOT URHO3D_MERGE_STATIC_LIBS)
-    install(TARGETS SLikeNet EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
+    install(TARGETS SLikeNet EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG})
 endif ()

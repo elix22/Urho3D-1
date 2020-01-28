@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -122,12 +122,5 @@ public:
 /// If `eventNamespace` is not null then this object will be used to send events.
 URHO3D_TOOLBOX_API bool RenderAttributes(Serializable* item, const char* filter=nullptr, Object* eventNamespace=nullptr);
 URHO3D_TOOLBOX_API bool RenderSingleAttribute(Variant& value);
-
-}
-
-namespace ImGui
-{
-
-URHO3D_TOOLBOX_API void SameLine(Urho3D::VariantType type);
 
 }

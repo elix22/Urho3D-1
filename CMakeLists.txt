@@ -21,13 +21,29 @@
 #
 
 # Set CMake minimum version and CMake policy required by UrhoCommon module
-cmake_minimum_required (VERSION 3.4.3)
+if (ANDROID)
+    cmake_minimum_required (VERSION 3.6)
+else ()
+    cmake_minimum_required (VERSION 3.14)
+endif ()
+
+# Set C++ standard
+set (CMAKE_CXX_STANDARD 17)
 
 # Set project name
 project (rbfx)
 
 # Set CMake modules search path
 set (CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/CMake/Modules)
+
+if (WEB AND "${CMAKE_GENERATOR}" STREQUAL "Ninja")
+    # Workaround for following error:
+    #   The install of the Samples target requires changing an RPATH from the build
+    #   tree, but this is not supported with the Ninja generator unless on an
+    #   ELF-based platform.  The CMAKE_BUILD_WITH_INSTALL_RPATH variable may be set
+    #   to avoid this relinking step.
+    set (CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+endif ()
 
 # Include file that sets up all configurable properties
 include(UrhoOptions)
@@ -53,8 +69,9 @@ if (APPLE)
 endif ()
 
 set (CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set (CMAKE_INCLUDE_CURRENT_DIR ON)
-set (CMAKE_POSITION_INDEPENDENT_CODE ON)
+if (BUILD_SHARED_LIBS)
+    set (CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif ()
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 if (URHO3D_SSE AND NOT MSVC)
@@ -63,9 +80,13 @@ if (URHO3D_SSE AND NOT MSVC)
 endif ()
 
 if (NOT "$ENV{CI}" STREQUAL "")
-    ucm_add_flags(-w)
+	if (MSVC)
+		ucm_add_flags("/W0")
+	else ()
+		ucm_add_flags("-w")
+	endif ()
 elseif (MSVC)
-    ucm_add_flags(/W1)
+	ucm_add_flags("/W1")
 endif ()
 
 if (URHO3D_STATIC_RUNTIME)
@@ -124,7 +145,7 @@ if (CLANG_TIDY)
         COMMAND ${CLANG_TIDY} -p . -export-fixes=clang-tidy.yml -fix ${SOURCE_FILES}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
-    set_target_properties(tidy PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
+    set_target_properties(tidy PROPERTIES EXCLUDE_FROM_ALL ON EXCLUDE_FROM_DEFAULT_BUILD ON)
 endif()
 
 ################################################### SDK preparation ####################################################
@@ -145,19 +166,11 @@ install (PROGRAMS ${CMAKE_SCRIPTS} DESTINATION ${DEST_SHARE_DIR}/Scripts)
 # Install data files
 file (MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 if (NOT ANDROID)
-    file (MAKE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Autoload)
-    foreach (RES_DIR ${RESOURCE_DIRS})
-        get_filename_component (NAME ${RES_DIR} NAME)
-        install (DIRECTORY ${RES_DIR} DESTINATION ${DEST_RESOURCE_DIR})
-        if (NOT EXISTS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NAME})
-            create_symlink(${RES_DIR} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${NAME})
-        endif ()
-    endforeach ()
-    foreach (RES_DIR ${AUTOLOAD_DIRS})
-        get_filename_component (NAME ${RES_DIR} NAME)
-        install (DIRECTORY ${RES_DIR} DESTINATION ${DEST_RESOURCE_DIR}/Autoload)
-        if (NOT EXISTS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Autoload/${NAME})
-            create_symlink(${RES_DIR} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Autoload/${NAME})
-        endif ()
-    endforeach ()
+    file (MAKE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Autoload/)
+    foreach(dir Data CoreData EditorData Autoload/LargeData)
+        create_symlink(${CMAKE_CURRENT_SOURCE_DIR}/bin/${dir} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${dir})
+        install (DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin/${dir} DESTINATION ${DEST_RESOURCE_DIR}/${dir}/../)
+    endforeach()
 endif ()
+
+set (URHO3D_CMAKE_CONFIGURED ON CACHE STRING "" FORCE)

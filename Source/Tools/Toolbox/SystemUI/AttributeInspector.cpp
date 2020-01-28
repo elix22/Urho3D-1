@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -47,8 +47,6 @@
 #include <Urho3D/Graphics/Octree.h>
 #include <Urho3D/Graphics/Graphics.h>
 #include <Graphics/SceneView.h>
-
-using namespace ui::litterals;
 
 namespace Urho3D
 {
@@ -108,17 +106,13 @@ const char* supportedVariantNames[] = {
     "Int64",
 };
 
-static const float buttonWidth()
-{
-    return 26_dpx;  // TODO: this should not exist
-}
-
 bool RenderResourceRef(Object* eventNamespace, StringHash type, const ea::string& name, ea::string& result)
 {
     SharedPtr<Resource> resource;
     auto returnValue = false;
+    const ImGuiStyle& style = ui::GetStyle();
 
-    UI_ITEMWIDTH((eventNamespace != nullptr ? 2 : 1) * (-buttonWidth()))
+    UI_ITEMWIDTH((-style.ItemSpacing.x - ui::GetCurrentContext()->FontSize) * (eventNamespace != nullptr ? 2 : 1) - style.WindowPadding.x)
         ui::InputText("", const_cast<char*>(name.c_str()), name.length(), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
 
     if (eventNamespace != nullptr)
@@ -129,7 +123,7 @@ bool RenderResourceRef(Object* eventNamespace, StringHash type, const ea::string
             const Variant& payload = ui::AcceptDragDropVariant("path");
             if (!payload.IsEmpty())
             {
-                resource = eventNamespace->GetCache()->GetResource(type, payload.GetString());
+                resource = eventNamespace->GetContext()->GetCache()->GetResource(type, payload.GetString());
                 dropped = resource != nullptr;
             }
             ui::EndDragDropTarget();
@@ -142,7 +136,7 @@ bool RenderResourceRef(Object* eventNamespace, StringHash type, const ea::string
             returnValue = true;
         }
 
-        ui::SameLine(VAR_RESOURCEREF);
+        ui::SameLine();
         if (ui::IconButton(ICON_FA_CROSSHAIRS))
         {
             eventNamespace->SendEvent(E_INSPECTORLOCATERESOURCE, InspectorLocateResource::P_NAME, name);
@@ -150,7 +144,7 @@ bool RenderResourceRef(Object* eventNamespace, StringHash type, const ea::string
         ui::SetHelpTooltip("Locate resource.");
     }
 
-    ui::SameLine(VAR_RESOURCEREF);
+    ui::SameLine();
     if (ui::IconButton(ICON_FA_TRASH))
     {
         result.clear();
@@ -281,7 +275,7 @@ bool RenderSingleAttribute(Object* eventNamespace, const AttributeInfo* info, Va
             bool dirty = v.compare(buffer->c_str()) != 0;
             if (dirty)
                 ui::PushStyleColor(ImGuiCol_Text, ui::GetStyle().Colors[ImGuiCol_TextDisabled]);
-            modified |= ui::InputText("", buffer, ImGuiInputTextFlags_EnterReturnsTrue);
+            modified |= ui::InputText("", buffer, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_NoUndoRedo);
             if (dirty)
             {
                 ui::PopStyleColor();
@@ -335,7 +329,7 @@ bool RenderSingleAttribute(Object* eventNamespace, const AttributeInfo* info, Va
             }
             if (refList.names_.empty())
             {
-                ui::SetCursorPosY(ui::GetCursorPosY() + 5_dpy);
+                ui::SetCursorPosY(ui::GetCursorPosY() + 5);
                 ui::TextUnformatted("...");
             }
             break;
@@ -374,7 +368,7 @@ bool RenderSingleAttribute(Object* eventNamespace, const AttributeInfo* info, Va
                 const ea::string& name = StringHash::GetGlobalStringHashRegister()->GetString(it->first);
                 // Column-friendly indent
                 ui::NewLine();
-                ui::SameLine(20_dpx);
+                ui::SameLine(20);
                 ui::TextUnformatted((name.empty() ? it->first.ToString() : name).c_str());
 #else
                 // Column-friendly indent
@@ -385,7 +379,7 @@ bool RenderSingleAttribute(Object* eventNamespace, const AttributeInfo* info, Va
 
                 ui::NextColumn();
                 ui::IdScope entryIdScope(index++);
-                UI_ITEMWIDTH(-buttonWidth()) // Space for trashcan button. TODO: trashcan goes out of screen a little for matrices.
+                UI_ITEMWIDTH(-26) // Space for trashcan button. TODO: trashcan goes out of screen a little for matrices.
                     modified |= RenderSingleAttribute(eventNamespace, nullptr, it->second);
                 ui::SameLine(it->second.GetType());
                 if (ui::Button(ICON_FA_TRASH))
@@ -405,9 +399,9 @@ bool RenderSingleAttribute(Object* eventNamespace, const AttributeInfo* info, Va
                 UI_ITEMWIDTH(-1)
                     ui::InputText("###Key", &mapState->fieldName);
                 ui::NextColumn();
-                UI_ITEMWIDTH(-buttonWidth()) // Space for OK button
+                UI_ITEMWIDTH(-26) // Space for OK button
                     ui::Combo("###Type", &mapState->variantTypeIndex, supportedVariantNames, MAX_SUPPORTED_VAR_TYPES);
-                ui::SameLine(0, 4_dpx);
+                ui::SameLine(0, 4);
                 if (ui::Button(ICON_FA_CHECK))
                 {
                     if (map->find(mapState->fieldName.c_str()) == map->end())   // TODO: Show warning about duplicate name
@@ -585,7 +579,7 @@ bool RenderAttributes(Serializable* item, const char* filter, Object* eventNames
         return false;
 
     if (eventNamespace == nullptr)
-        eventNamespace = ui::GetSystemUI();
+        eventNamespace = item;
 
     auto isOpen = ui::CollapsingHeader(item->GetTypeName().c_str(), ImGuiTreeNodeFlags_DefaultOpen);
     if (isOpen)
@@ -814,33 +808,4 @@ bool RenderSingleAttribute(Variant& value)
     return RenderSingleAttribute(nullptr, nullptr, value);
 }
 
-}
-
-void ImGui::SameLine(Urho3D::VariantType type)
-{
-    using namespace Urho3D;
-
-    float spacingFix;
-    switch (type)
-    {
-    case VAR_VECTOR2:
-    case VAR_VECTOR3:
-    case VAR_VECTOR4:
-    case VAR_QUATERNION:
-    case VAR_COLOR:
-    case VAR_INTRECT:
-    case VAR_INTVECTOR2:
-    case VAR_MATRIX3:
-    case VAR_MATRIX3X4:
-    case VAR_MATRIX4:
-    case VAR_RECT:
-    case VAR_INTVECTOR3:
-        spacingFix = 0;
-        break;
-    default:
-        spacingFix = 4_dpx;
-        break;
-    }
-
-    ui::SameLine(0, spacingFix);
 }

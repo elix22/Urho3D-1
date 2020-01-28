@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -90,6 +90,8 @@ public:
     void RemoveFactory(StringHash type);
     /// remove object factory.
     void RemoveFactory(StringHash type, const char* category);
+    /// Register a subsystem by explicitly using a type. Type must belong to inheritance hierarchy.
+    void RegisterSubsystem(Object* object, StringHash type);
     /// Register a subsystem.
     void RegisterSubsystem(Object* object);
     /// Remove a subsystem.

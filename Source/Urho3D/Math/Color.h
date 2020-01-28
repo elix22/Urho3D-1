@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -90,7 +90,7 @@ public:
     }
 
     /// Construct from a float array.
-    explicit Color(const float* data) noexcept :
+    explicit Color(const float data[]) noexcept :
         r_(data[0]),
         g_(data[1]),
         b_(data[2]),
@@ -202,9 +202,12 @@ public:
     Color Abs() const { return Color(Urho3D::Abs(r_), Urho3D::Abs(g_), Urho3D::Abs(b_), Urho3D::Abs(a_)); }
 
     /// Test for equality with another color with epsilon.
-    bool Equals(const Color& rhs) const
+    bool Equals(const Color& rhs, float eps = M_EPSILON) const
     {
-        return Urho3D::Equals(r_, rhs.r_) && Urho3D::Equals(g_, rhs.g_) && Urho3D::Equals(b_, rhs.b_) && Urho3D::Equals(a_, rhs.a_);
+        return Urho3D::Equals(r_, rhs.r_, eps)
+            && Urho3D::Equals(g_, rhs.g_, eps)
+            && Urho3D::Equals(b_, rhs.b_, eps)
+            && Urho3D::Equals(a_, rhs.a_, eps);
     }
 
     /// Return as string.

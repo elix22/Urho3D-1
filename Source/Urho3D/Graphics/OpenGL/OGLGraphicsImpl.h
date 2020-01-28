@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -67,12 +67,6 @@
 #endif
 #ifndef GL_ETC2_RGBA8_OES
 #define GL_ETC2_RGBA8_OES 0x9278
-#endif
-#ifndef GL_DEPTH_COMPONENT24_OES
-#define GL_DEPTH_COMPONENT24_OES 0x81A6
-#endif
-#ifndef GL_DEPTH24_STENCIL8_OES
-#define GL_DEPTH24_STENCIL8_OES 0x88F0
 #endif
 #ifndef COMPRESSED_RGB_PVRTC_4BPPV1_IMG
 #define COMPRESSED_RGB_PVRTC_4BPPV1_IMG 0x8c00

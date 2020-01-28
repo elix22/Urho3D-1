@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -90,6 +90,20 @@ XMLElement& XMLElement::operator =(const XMLElement& rhs)
     xpathNode_ = rhs.xpathResultSet_ ? rhs.xpathNode_ : (rhs.xpathNode_ ? new pugi::xpath_node(*rhs.xpathNode_) : nullptr);
     xpathResultIndex_ = rhs.xpathResultIndex_;
     return *this;
+}
+
+void XMLElement::SetName(const ea::string& name)
+{
+    SetName(name.c_str());
+}
+
+void XMLElement::SetName(const char* name)
+{
+    if (!file_ || (!node_ && !xpathNode_))
+        return;
+
+    pugi::xml_node node = xpathNode_ ? xpathNode_->node() : pugi::xml_node(node_);
+    node.set_name(name);
 }
 
 XMLElement XMLElement::CreateChild(const ea::string& name)

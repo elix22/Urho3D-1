@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -654,8 +654,8 @@ public:
 
     /// Track changes performed by this scene.
     void Connect(Scene* scene);
-    /// Track changes performed by this attribute inspector.
-    void Connect(AttributeInspector* inspector);
+    /// Track changes performed by this object. It usually is instance of AttributeInspector or Serializable.
+    void Connect(Object* inspector);
     /// Track changes performed to UI hierarchy of this root element.
     void Connect(UIElement* root);
     /// Track changes performed by this gizmo.

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -36,13 +36,7 @@ namespace Urho3D
 void SetProfilerThreadName(const char* name)
 {
 #if URHO3D_PROFILING
-
-#if _WIN32
-    tracy::SetThreadName(reinterpret_cast<std::thread::native_handle_type>(GetCurrentThread()), name);
-#else
-    tracy::SetThreadName(pthread_self(), name);
-#endif
-
+    tracy::SetThreadName(name);
 #endif
 }
 

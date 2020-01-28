@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2019 Rokas Kupstys.
+# Copyright (c) 2017-2020 the rbfx project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -27,5 +27,5 @@ target_include_directories(CLI11
 install (DIRECTORY include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.hpp)
 
 if (NOT URHO3D_MERGE_STATIC_LIBS)
-    install(TARGETS CLI11 EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
+    install(TARGETS CLI11 EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG})
 endif ()

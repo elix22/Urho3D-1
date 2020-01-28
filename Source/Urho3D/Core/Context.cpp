@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -223,6 +223,21 @@ void Context::RemoveFactory(StringHash type, const char* category)
         objectCategories_[category].erase_first_unsorted(type);
 }
 
+void Context::RegisterSubsystem(Object* object, StringHash type)
+{
+    if (!object)
+        return;
+
+    bool isTypeValid = false;
+    for (const TypeInfo* typeInfo = object->GetTypeInfo(); typeInfo != nullptr && !isTypeValid; typeInfo = typeInfo->GetBaseTypeInfo())
+        isTypeValid = typeInfo->GetType() == type;
+
+    if (isTypeValid)
+        subsystems_[type] = object;
+    else
+        URHO3D_LOGERROR("Type supplied to RegisterSubsystem() does not belong to object inheritance hierarchy.");
+}
+
 void Context::RegisterSubsystem(Object* object)
 {
     if (!object)
@@ -349,7 +364,7 @@ void Context::ReleaseSDL()
 #ifdef URHO3D_IK
 void Context::RequireIK()
 {
-    // Always increment, the caller must match with ReleaseSDL(), regardless of
+    // Always increment, the caller must match with ReleaseIK(), regardless of
     // what happens.
     ++ikInitCounter;
 

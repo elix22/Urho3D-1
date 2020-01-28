@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,8 @@
 #include "../Core/Variant.h"
 #include "../Math/BoundingBox.h"
 #include "../Math/Rect.h"
+
+#include <EASTL/unique_ptr.h>
 
 namespace pugi
 {
@@ -63,6 +65,10 @@ public:
     /// Assignment operator.
     XMLElement& operator =(const XMLElement& rhs);
 
+    /// Set element name.
+    void SetName(const ea::string& name);
+    /// Set element name.
+    void SetName(const char* name);
     /// Create a child element.
     XMLElement CreateChild(const ea::string& name);
     /// Create a child element.

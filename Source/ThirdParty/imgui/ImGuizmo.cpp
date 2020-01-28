@@ -742,6 +742,7 @@ namespace ImGuizmo
       const ImU32 flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus;
       ImGui::SetNextWindowSize(io.DisplaySize);
       ImGui::SetNextWindowPos(ImVec2(0, 0));
+      ImGui::SetNextWindowViewport(ImGui::GetMainViewport()->ID);
       
       ImGui::PushStyleColor(ImGuiCol_WindowBg, 0);
       ImGui::PushStyleColor(ImGuiCol_Border, 0);
@@ -1178,7 +1179,7 @@ namespace ImGuizmo
 
    static bool CanActivate()
    {
-      if (ImGui::IsMouseClicked(0) && !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive())
+      if (ImGui::IsMouseClicked(0) && /*!ImGui::IsAnyItemHovered() && rbfx mod*/ !ImGui::IsAnyItemActive())
          return true;
       return false;
    }

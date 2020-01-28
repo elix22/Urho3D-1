@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,69 +26,14 @@
 #if URHO3D_PLUGINS
 
 #include <atomic>
-#include <Urho3D/Core/Object.h>
+#include <Urho3D/IO/Archive.h>
 #include <Urho3D/IO/FileWatcher.h>
 #include <Urho3D/IO/Log.h>
-#include <Player/Common/PluginUtils.h>
-#if !defined(NDEBUG) && defined(URHO3D_LOGGING)
-#   define CR_DEBUG 1
-#   define CR_ERROR(format, ...) URHO3D_LOGERRORF(format, ##__VA_ARGS__)
-#   define CR_LOG(format, ...)   URHO3D_LOGTRACEF(format, ##__VA_ARGS__)
-#   define CR_TRACE
-#endif
-#include <cr/cr.h>
+
+#include "Plugins/Plugin.h"
 
 namespace Urho3D
 {
-
-enum PluginFlag
-{
-    PLUGIN_DEFAULT = 0,
-    PLUGIN_PRIVATE = 1,
-};
-URHO3D_FLAGSET(PluginFlag, PluginFlags);
-
-class Plugin : public Object
-{
-    URHO3D_OBJECT(Plugin, Object);
-public:
-    ///
-    explicit Plugin(Context* context);
-    ///
-    ~Plugin() override;
-
-    /// Returns type of the plugin.
-    PluginType GetPluginType() const { return type_; }
-    /// Returns file name of plugin.
-    ea::string GetName() const { return name_; }
-    ///
-    PluginFlags GetFlags() const { return flags_; }
-    ///
-    void SetFlags(PluginFlags flags) { flags_ = flags; }
-
-protected:
-    /// Base plugin file name.
-    ea::string name_;
-    /// Path to plugin dynamic library file.
-    ea::string path_;
-    /// Type of plugin (invalid/native/managed).
-    PluginType type_ = PLUGIN_INVALID;
-    /// Context of native plugin. Not initialized for managed plugins.
-    cr_plugin nativeContext_{};
-    /// Flag indicating that plugin should unload on the end of the frame.
-    bool unloading_ = false;
-    /// Last modification time.
-    unsigned mtime_ = 0;
-    /// Current plugin version.
-    unsigned version_ = 1;
-    ///
-    PluginFlags flags_ = PLUGIN_DEFAULT;
-    /// Instance to the plugin application. This should be a single owning reference to the plugin. Managed plugins are
-    /// an exception as managed object holds reference to native object and must be disposed in order to free this object.
-    SharedPtr<PluginApplication> application_;
-
-    friend class PluginManager;
-};
 
 class PluginManager : public Object
 {
@@ -99,9 +44,7 @@ public:
     /// Unload all plugins an destruct.
     ~PluginManager() override;
     /// Load a plugin and return true if succeeded.
-    virtual Plugin* Load(const ea::string& name);
-    /// Unload a plugin and return true if succeeded.
-    virtual void Unload(Plugin* plugin);
+    Plugin* Load(StringHash type, const ea::string& name);
     /// Returns a loaded plugin with specified name.
     Plugin* GetPlugin(const ea::string& name);
     /// Returns a vector containing all loaded plugins.
@@ -112,17 +55,20 @@ public:
     const StringVector& GetPluginNames();
     /// Converts relative or absolute plugin path to universal plugin name. Returns empty string on failure.
     static ea::string PathToName(const ea::string& path);
+#if URHO3D_STATIC
+    /// Registers static plugin.
+    bool RegisterPlugin(PluginApplication* application);
+#endif
+    bool Serialize(Archive& archive) override;
 
 protected:
-    /// Converts name to a full plugin file path. Returns empty string on error.
-    ea::string NameToPath(const ea::string& name) const;
-
+    /// Entry about dynamic library on the disk. It may or may not be loaded.
     struct DynamicLibraryInfo
     {
         /// Last modification time.
         unsigned mtime_ = 0;
         /// Type of plugin.
-        PluginType pluginType_ = PLUGIN_INVALID;
+        ModuleType pluginType_ = MODULE_INVALID;
     };
 
     /// Loaded plugins.
@@ -134,6 +80,9 @@ protected:
 
     friend class Plugin;
 };
+
+/// Reigsters all plugin-related objects with the engine.
+void RegisterPluginsLibrary(Context* context);
 
 }
 #endif

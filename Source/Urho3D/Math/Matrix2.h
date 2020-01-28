@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -54,7 +54,7 @@ public:
     }
 
     /// Construct from a float array.
-    explicit Matrix2(const float* data) noexcept :
+    explicit Matrix2(const float data[]) noexcept :
         m00_(data[0]),
         m01_(data[1]),
         m10_(data[2]),
@@ -182,14 +182,14 @@ public:
     }
 
     /// Test for equality with another matrix with epsilon.
-    bool Equals(const Matrix2& rhs) const
+    bool Equals(const Matrix2& rhs, float eps = M_EPSILON) const
     {
         const float* leftData = Data();
         const float* rightData = rhs.Data();
 
         for (unsigned i = 0; i != 4; ++i)
         {
-            if (!Urho3D::Equals(leftData[i], rightData[i]))
+            if (!Urho3D::Equals(leftData[i], rightData[i], eps))
                 return false;
         }
 
@@ -231,7 +231,7 @@ public:
     float m11_;
 
     /// Bulk transpose matrices.
-    static void BulkTranspose(float* dest, const float* src, unsigned count)
+    static void BulkTranspose(float dest[], const float src[], unsigned count)
     {
         for (unsigned i = 0; i < count; ++i)
         {

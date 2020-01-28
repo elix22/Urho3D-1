@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,8 +24,10 @@
 
 #include "../Container/Ptr.h"
 #include "../Core/Context.h"
+#include "../Core/Macros.h"
 #include "../Core/Main.h"
 #include "../Engine/Engine.h"
+#include "../Engine/PluginApplication.h"
 
 namespace Urho3D
 {
@@ -69,6 +71,8 @@ protected:
     ea::string startupErrors_;
     /// Application exit code.
     int exitCode_;
+    /// A plugin responsible for automatically loading scripts from resource path.
+    SharedPtr<PluginApplication> scriptsPlugin_;
 };
 
 // Macro for defining a main function which creates a Context and the application, then runs it
@@ -91,6 +95,19 @@ int RunApplication() \
     return application->Run(); \
 } \
 URHO3D_DEFINE_MAIN(RunApplication());
+#endif
+
+#if URHO3D_CSHARP
+#define URHO3D_DEFINE_APPLICATION_MAIN_CSHARP(Class)                                                  \
+extern "C"                                                                                            \
+{                                                                                                     \
+    URHO3D_EXPORT_API Urho3D::Application* URHO3D_STDCALL CreateApplication(Urho3D::Context* context) \
+    {                                                                                                 \
+        return new Class(context);                                                                    \
+    }                                                                                                 \
+}
+#else
+#   define URHO3D_DEFINE_APPLICATION_MAIN_CSHARP(Class)
 #endif
 
 }

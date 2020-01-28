@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -47,14 +47,14 @@ public:
     }
 
     /// Construct from an int array.
-    explicit IntVector2(const int* data) noexcept :
+    explicit IntVector2(const int data[]) noexcept :
         x_(data[0]),
         y_(data[1])
     {
     }
 
     /// Construct from an float array.
-    explicit IntVector2(const float* data) :
+    explicit IntVector2(const float data[]) :
         x_((int)data[0]),
         y_((int)data[1])
     {
@@ -200,7 +200,7 @@ public:
     }
 
     /// Construct from a float array.
-    explicit Vector2(const float* data) noexcept :
+    explicit Vector2(const float data[]) noexcept :
         x_(data[0]),
         y_(data[1])
     {
@@ -322,7 +322,7 @@ public:
     Vector2 Lerp(const Vector2& rhs, float t) const { return *this * (1.0f - t) + rhs * t; }
 
     /// Test for equality with another vector with epsilon.
-    bool Equals(const Vector2& rhs) const { return Urho3D::Equals(x_, rhs.x_) && Urho3D::Equals(y_, rhs.y_); }
+    bool Equals(const Vector2& rhs, float eps = M_EPSILON) const { return Urho3D::Equals(x_, rhs.x_, eps) && Urho3D::Equals(y_, rhs.y_, eps); }
 
     /// Return whether is NaN.
     bool IsNaN() const { return Urho3D::IsNaN(x_) || Urho3D::IsNaN(y_); }
@@ -330,10 +330,10 @@ public:
     /// Return normalized to unit length.
     Vector2 Normalized() const
     {
-        float lenSquared = LengthSquared();
+        const float lenSquared = LengthSquared();
         if (!Urho3D::Equals(lenSquared, 1.0f) && lenSquared > 0.0f)
         {
-            float invLen = 1.0f / sqrtf(lenSquared);
+            const float invLen = 1.0f / sqrtf(lenSquared);
             return *this * invLen;
         }
         else
@@ -341,13 +341,24 @@ public:
     }
 
     /// Return normalized to unit length or zero if length is too small.
-    Vector2 NormalizedOrZero(float eps = M_LARGE_EPSILON) const
+    Vector2 NormalizedOrDefault(const Vector2& defaultValue = Vector2::ZERO, float eps = M_LARGE_EPSILON) const
     {
-        float lenSquared = LengthSquared();
-        if (lenSquared > eps * eps)
-            return *this / sqrtf(lenSquared);
-        else
-            return Vector2::ZERO;
+        const float lenSquared = LengthSquared();
+        if (lenSquared < eps * eps)
+            return defaultValue;
+        return *this / sqrtf(lenSquared);
+    }
+
+    /// Return normalized vector with length in given range.
+    Vector2 ReNormalized(float minLength, float maxLength, const Vector2& defaultValue = Vector2::ZERO, float eps = M_LARGE_EPSILON) const
+    {
+        const float lenSquared = LengthSquared();
+        if (lenSquared < eps * eps)
+            return defaultValue;
+
+        const float len = sqrtf(lenSquared);
+        const float newLen = Clamp(len, minLength, maxLength);
+        return *this * (newLen / len);
     }
 
     /// Return float data.
@@ -355,6 +366,16 @@ public:
 
     /// Return as string.
     ea::string ToString() const;
+
+    /// Return hash value for HashSet & HashMap.
+    unsigned ToHash() const
+    {
+        unsigned hash = 37;
+        hash = 37 * hash + FloatToRawIntBits(x_);
+        hash = 37 * hash + FloatToRawIntBits(y_);
+
+        return hash;
+    }
 
     /// X coordinate.
     float x_;
@@ -420,20 +441,5 @@ inline float StableRandom(const Vector2& seed) { return Fract(Sin(seed.DotProduc
 
 /// Return a random value from [0, 1) from scalar seed.
 inline float StableRandom(float seed) { return StableRandom(Vector2(seed, seed)); }
-
-}
-
-namespace eastl
-{
-
-template <class T, typename Enable> struct hash;
-
-template <> struct hash<Urho3D::IntVector2>
-{
-    size_t operator()(const Urho3D::IntVector2& value) const
-    {
-        return value.ToHash();
-    }
-};
 
 }

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -155,6 +155,7 @@ Engine::Engine(Context* context) :
 #endif
 
     SubscribeToEvent(E_EXITREQUESTED, URHO3D_HANDLER(Engine, HandleExitRequested));
+    SubscribeToEvent(E_ENDFRAME, URHO3D_HANDLER(Engine, HandleEndFrame));
 }
 
 Engine::~Engine() = default;
@@ -310,7 +311,8 @@ bool Engine::Initialize(const VariantMap& parameters)
     if (!headless_)
     {
 #ifdef URHO3D_SYSTEMUI
-        context_->RegisterSubsystem(new SystemUI(context_));
+        context_->RegisterSubsystem(new SystemUI(context_,
+            GetParameter(parameters, EP_SYSTEMUI_FLAGS, 0).GetUInt()));
 #endif
     }
     frameTimer_.Reset();
@@ -811,7 +813,7 @@ void Engine::ApplyFrameLimit()
     if (lastTimeSteps_.size() > timeStepSmoothing_)
     {
         // If the smoothing configuration was changed, ensure correct amount of samples
-        lastTimeSteps_.erase_at(0, lastTimeSteps_.size() - timeStepSmoothing_);
+        lastTimeSteps_.erase_at(0, timeStepSmoothing_);
         for (unsigned i = 0; i < lastTimeSteps_.size(); ++i)
             timeStep_ += lastTimeSteps_[i];
         timeStep_ /= lastTimeSteps_.size();
@@ -988,7 +990,12 @@ const Variant& Engine::GetParameter(const VariantMap& parameters, const ea::stri
 
 void Engine::HandleExitRequested(StringHash eventType, VariantMap& eventData)
 {
-    if (autoExit_)
+    exiting_ = true;
+}
+
+void Engine::HandleEndFrame(StringHash eventType, VariantMap& eventData)
+{
+    if (exiting_ && autoExit_)
     {
         // Do not call Exit() here, as it contains mobile platform -specific tests to not exit.
         // If we do receive an exit request from the system on those platforms, we must comply
@@ -1002,7 +1009,6 @@ void Engine::DoExit()
     if (graphics)
         graphics->Close();
 
-    exiting_ = true;
 #if defined(__EMSCRIPTEN__) && defined(URHO3D_TESTING)
     emscripten_force_exit(EXIT_SUCCESS);    // Some how this is required to signal emrun to stop
 #endif

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -129,8 +129,8 @@ protected:
         if (logInstance == nullptr)
             return;
         time_t time = std::chrono::system_clock::to_time_t(msg.time);
-        logInstance->SendMessageEvent(ConvertLogLevel(msg.level), time,
-            ea::string(msg.logger_name->c_str()), ea::string(msg.payload.data(), static_cast<unsigned int>(msg.payload.size())));
+        logInstance->SendMessageEvent(ConvertLogLevel(msg.level), time, msg.logger_name.data(), ea::string(msg.payload.data(),
+            static_cast<unsigned int>(msg.payload.size())));
     }
 
     void flush_() override { }
@@ -144,7 +144,7 @@ Logger::Logger(void* logger)
 {
 }
 
-void Logger::WriteFormatted(LogLevel level, const ea::string& message)
+void Logger::Write(LogLevel level, const ea::string& message) const
 {
     if (logger_ == nullptr)
         return;
@@ -292,23 +292,32 @@ void Log::SetLogFormat(const ea::string& format)
 #endif
 }
 
-Logger Log::GetLogger(const char* name)
+Logger Log::GetLogger(const ea::string& name)
 {
-    if (name == nullptr)
-        name = "main";
+    // Loggers may be used only after initializing Log subsystem, therefore do not use logging from static initializers.
+    if (logInstance == nullptr)
+        return {};
 
-    if (logInstance != nullptr)
+    std::shared_ptr<spdlog::logger> logger;
+    MutexLock lock(logInstance->logMutex_);
+
+    logger = spdlog::get(name);
+
+    if (!logger)
     {
-        MutexLock lock(logInstance->logMutex_);
-        std::shared_ptr<spdlog::logger> logger(spdlog::get(name));
-
-        if (!logger)
-        {
-            logger = std::make_shared<spdlog::logger>(ea::string(name), logInstance->impl_->sinkProxy_);
-            spdlog::register_logger(logger);
-        }
+        logger = std::make_shared<spdlog::logger>(name, logInstance->impl_->sinkProxy_);
+        spdlog::register_logger(logger);
     }
-    return Logger(reinterpret_cast<void*>(spdlog::get(name).get()));
+
+    return Logger(reinterpret_cast<void*>(logger.get()));
+}
+
+Logger Log::GetLogger()
+{
+    if (logInstance == nullptr)
+        return {};
+    static Logger defaultLogger = Log::GetLogger("main");
+    return defaultLogger;
 }
 
 void Log::SendMessageEvent(LogLevel level, time_t timestamp, const ea::string& logger, const ea::string& message)

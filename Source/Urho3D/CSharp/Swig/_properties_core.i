@@ -125,48 +125,6 @@
     get { return GetBlockEvents(); }
     set { SetBlockEvents(value); }
   }
-  public $typemap(cstype, Urho3D::Engine *) Engine {
-    get { return GetEngine(); }
-  }
-  public $typemap(cstype, Urho3D::Time *) Time {
-    get { return GetTime(); }
-  }
-  /*public _typemap(cstype, Urho3D::WorkQueue *) WorkQueue {
-    get { return GetWorkQueue(); }
-  }*/
-  public $typemap(cstype, Urho3D::FileSystem *) FileSystem {
-    get { return GetFileSystem(); }
-  }
-  public $typemap(cstype, Urho3D::Log *) Log {
-    get { return GetLog(); }
-  }
-  public $typemap(cstype, Urho3D::ResourceCache *) Cache {
-    get { return GetCache(); }
-  }
-  public $typemap(cstype, Urho3D::Localization *) Localization {
-    get { return GetLocalization(); }
-  }
-  public $typemap(cstype, Urho3D::Network *) Network {
-    get { return GetNetwork(); }
-  }
-  public $typemap(cstype, Urho3D::Input *) Input {
-    get { return GetInput(); }
-  }
-  public $typemap(cstype, Urho3D::Audio *) Audio {
-    get { return GetAudio(); }
-  }
-  public $typemap(cstype, Urho3D::UI *) UI {
-    get { return GetUI(); }
-  }
-  public $typemap(cstype, Urho3D::SystemUI *) SystemUI {
-    get { return GetSystemUI(); }
-  }
-  public $typemap(cstype, Urho3D::Graphics *) Graphics {
-    get { return GetGraphics(); }
-  }
-  public $typemap(cstype, Urho3D::Renderer *) Renderer {
-    get { return GetRenderer(); }
-  }
 %}
 %csmethodmodifiers Urho3D::Object::GetEventDataMap "private";
 %csmethodmodifiers Urho3D::Object::GetContext "private";
@@ -176,20 +134,6 @@
 %csmethodmodifiers Urho3D::Object::GetCategory "private";
 %csmethodmodifiers Urho3D::Object::GetBlockEvents "private";
 %csmethodmodifiers Urho3D::Object::SetBlockEvents "private";
-%csmethodmodifiers Urho3D::Object::GetEngine "private";
-%csmethodmodifiers Urho3D::Object::GetTime "private";
-%csmethodmodifiers Urho3D::Object::GetWorkQueue "private";
-%csmethodmodifiers Urho3D::Object::GetFileSystem "private";
-%csmethodmodifiers Urho3D::Object::GetLog "private";
-%csmethodmodifiers Urho3D::Object::GetCache "private";
-%csmethodmodifiers Urho3D::Object::GetLocalization "private";
-%csmethodmodifiers Urho3D::Object::GetNetwork "private";
-%csmethodmodifiers Urho3D::Object::GetInput "private";
-%csmethodmodifiers Urho3D::Object::GetAudio "private";
-%csmethodmodifiers Urho3D::Object::GetUI "private";
-%csmethodmodifiers Urho3D::Object::GetSystemUI "private";
-%csmethodmodifiers Urho3D::Object::GetGraphics "private";
-%csmethodmodifiers Urho3D::Object::GetRenderer "private";
 %typemap(cscode) Urho3D::ObjectFactory %{
   public $typemap(cstype, Urho3D::Context *) Context {
     get { return GetContext(); }
@@ -226,6 +170,16 @@
 %csmethodmodifiers Urho3D::EventHandler::GetSender "private";
 %csmethodmodifiers Urho3D::EventHandler::GetEventType "private";
 %csmethodmodifiers Urho3D::EventHandler::GetUserData "private";
+%typemap(cscode) Urho3D::PluginModule %{
+  public $typemap(cstype, Urho3D::ModuleType) ModuleType {
+    get { return GetModuleType(); }
+  }
+  public $typemap(cstype, const eastl::string &) Path {
+    get { return GetPath(); }
+  }
+%}
+%csmethodmodifiers Urho3D::PluginModule::GetModuleType "private";
+%csmethodmodifiers Urho3D::PluginModule::GetPath "private";
 %typemap(cscode) Urho3D::Spline %{
   public $typemap(cstype, Urho3D::InterpolationMode) InterpolationMode {
     get { return GetInterpolationMode(); }
@@ -332,10 +286,10 @@
   public $typemap(cstype, const Urho3D::ResourceRefList &) ResourceRefList {
     get { return GetResourceRefList(); }
   }
-  public $typemap(cstype, const eastl::vector<Urho3D::Variant> &) VariantVector {
+  public $typemap(cstype, const eastl::vector<Urho3D::Variant> &) VariantList { // custom name
     get { return GetVariantVector(); }
   }
-  public $typemap(cstype, const eastl::vector<eastl::string> &) StringVector {
+  public $typemap(cstype, const eastl::vector<eastl::string> &) StringList {    // custom name
     get { return GetStringVector(); }
   }
   public $typemap(cstype, const eastl::unordered_map<Urho3D::StringHash, Urho3D::Variant> &) VariantMap {

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -65,7 +65,7 @@ public:
     }
 
     /// Construct from a float array.
-    explicit Matrix3(const float* data) noexcept :
+    explicit Matrix3(const float data[]) noexcept :
         m00_(data[0]),
         m01_(data[1]),
         m02_(data[2]),
@@ -242,14 +242,14 @@ public:
     }
 
     /// Test for equality with another matrix with epsilon.
-    bool Equals(const Matrix3& rhs) const
+    bool Equals(const Matrix3& rhs, float eps = M_EPSILON) const
     {
         const float* leftData = Data();
         const float* rightData = rhs.Data();
 
         for (unsigned i = 0; i < 9; ++i)
         {
-            if (!Urho3D::Equals(leftData[i], rightData[i]))
+            if (!Urho3D::Equals(leftData[i], rightData[i], eps))
                 return false;
         }
 
@@ -274,6 +274,15 @@ public:
     /// Return as string.
     ea::string ToString() const;
 
+    /// Return hash value for HashSet & HashMap.
+    unsigned ToHash() const
+    {
+        unsigned hash = 37;
+        for (int i = 0; i < 3 * 3; i++)
+            hash = 37 * hash + FloatToRawIntBits(Data()[i]);
+        return hash;
+    }
+
     float m00_;
     float m01_;
     float m02_;
@@ -285,7 +294,7 @@ public:
     float m22_;
 
     /// Bulk transpose matrices.
-    static void BulkTranspose(float* dest, const float* src, unsigned count)
+    static void BulkTranspose(float dest[], const float src[], unsigned count)
     {
         for (unsigned i = 0; i < count; ++i)
         {

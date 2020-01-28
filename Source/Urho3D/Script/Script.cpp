@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,7 @@
 #include "../Core/CoreEvents.h"
 #include "../Core/Profiler.h"
 #include "../Core/Thread.h"
+#include "../IO/Log.h"
 #include "../Script/Script.h"
 
 
@@ -48,6 +49,16 @@ Script::Script(Context* context)
     });
 }
 
+Script::~Script()
+{
+    URHO3D_PROFILE("Script::~Script");
+    while (!destructionQueue_.empty())
+    {
+        destructionQueue_.back()->ReleaseRef();
+        destructionQueue_.pop_back();
+    }
+}
+
 void Script::ReleaseRefOnMainThread(RefCounted* object)
 {
     if (object == nullptr)
@@ -60,6 +71,64 @@ void Script::ReleaseRefOnMainThread(RefCounted* object)
         MutexLock lock(destructionQueueLock_);
         destructionQueue_.push_back(object);
     }
+}
+
+void ScriptRuntimeApi::DereferenceAndDispose(RefCounted* instance)
+{
+    if (instance == nullptr || !instance->HasScriptObject())
+        return;
+
+    if (instance->Refs() > 2)
+    {
+        URHO3D_LOGERROR("Disposing of object with multiple native references is not allowed. It leads to crashes.");
+        assert(false);
+        return;
+    }
+    Dispose(instance);
+}
+
+GCHandleRef::GCHandleRef(void* handle) noexcept
+    : handle_(handle)
+{
+}
+
+GCHandleRef::~GCHandleRef()
+{
+    if (handle_ != nullptr)
+    {
+        Script::GetRuntimeApi()->FreeGCHandle(handle_);
+        handle_ = nullptr;
+    }
+}
+
+GCHandleRef::GCHandleRef(const GCHandleRef& other)
+{
+    operator=(other);
+}
+
+GCHandleRef::GCHandleRef(GCHandleRef&& other) noexcept
+{
+    ea::swap(handle_, other.handle_);
+}
+
+GCHandleRef& GCHandleRef::operator=(void* handle)
+{
+    if (handle_ != nullptr)
+        Script::GetRuntimeApi()->FreeGCHandle(handle_);
+    handle_ = handle;
+    return *this;
+}
+
+GCHandleRef& GCHandleRef::operator=(const GCHandleRef& rhs)
+{
+    handle_ = Script::GetRuntimeApi()->CloneGCHandle(rhs.handle_);
+    return *this;
+}
+
+GCHandleRef& GCHandleRef::operator=(GCHandleRef&& rhs) noexcept
+{
+    ea::swap(handle_, rhs.handle_);
+    return *this;
 }
 
 }

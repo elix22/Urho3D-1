@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,13 +23,9 @@
 #include <Urho3D/Core/Context.h>
 #include <Urho3D/Core/CoreEvents.h>
 #include <Urho3D/Core/Mutex.h>
+#include <Urho3D/Core/ProcessUtils.h>
 #include <Urho3D/Core/Thread.h>
-
-#if _WIN32
-#  define SWIGSTDCALL __stdcall
-#else
-#  define SWIGSTDCALL
-#endif
+#include <Urho3D/Script/Script.h>
 
 extern "C"
 {
@@ -85,6 +81,11 @@ extern "C"
 URHO3D_EXPORT_API void SWIGSTDCALL Urho3D_Context_RegisterFactory(Context* context, const char* typeName, unsigned baseType, const char* category)
 {
     context->RegisterFactory(new ManagedObjectFactory(context, typeName, StringHash(baseType)), category);
+}
+
+URHO3D_EXPORT_API void SWIGSTDCALL Urho3D_ParseArguments(int argc, char** argv)
+{
+    ParseArguments(argc, argv);
 }
 
 }

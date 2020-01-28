@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,8 @@
 // THE SOFTWARE.
 //
 
+/// \file
+
 #pragma once
 
 #include "../Core/Variant.h"
@@ -28,6 +30,8 @@
 namespace Urho3D
 {
 
+class Archive;
+class ArchiveBlock;
 class XMLElement;
 class JSONValue;
 
@@ -46,20 +50,20 @@ enum InterpMethod
 struct VAnimKeyFrame
 {
     /// Time.
-    float time_;
+    float time_{};
     /// Value.
-    Variant value_;
+    Variant value_{};
 };
 
 /// Value animation event frame.
 struct VAnimEventFrame
 {
     /// Time.
-    float time_;
+    float time_{};
     /// Event type.
-    StringHash eventType_;
+    StringHash eventType_{};
     /// Event data.
-    VariantMap eventData_;
+    VariantMap eventData_{};
 };
 
 /// Value animation class.
@@ -74,6 +78,11 @@ public:
     ~ValueAnimation() override;
     /// Register object factory.
     static void RegisterObject(Context* context);
+
+    /// Serialize from/to archive. Return true if successful.
+    bool Serialize(Archive& archive) override;
+    /// Serialize content from/to archive. Return true if successful.
+    bool Serialize(Archive& archive, ArchiveBlock& block);
 
     /// Load resource from stream. May be called from a worker thread. Return true if successful.
     bool BeginLoad(Deserializer& source) override;

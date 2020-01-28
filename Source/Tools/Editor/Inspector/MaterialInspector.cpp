@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,7 +19,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-
 #include <Urho3D/Graphics/Viewport.h>
 #include <Urho3D/Graphics/RenderPath.h>
 #include <Urho3D/Graphics/Renderer.h>
@@ -37,12 +36,10 @@
 #include <ImGui/imgui_stdlib.h>
 #include <Urho3D/IO/Log.h>
 #include "Tabs/Scene/SceneTab.h"
-#include "EditorEvents.h"
 #include "MaterialInspector.h"
 #include "MaterialInspectorUndo.h"
 #include "Editor.h"
 
-using namespace ImGui::litterals;
 
 namespace Urho3D
 {
@@ -53,38 +50,45 @@ MaterialInspector::MaterialInspector(Context* context)
 {
 }
 
-void MaterialInspector::RegisterObject(Context* context)
+void MaterialInspector::SetInspected(Object* inspected)
 {
-    context->RegisterFactory<MaterialInspector>();
-}
+    assert(inspected->IsInstanceOf<Material>());
+    BaseClassName::SetInspected(inspected);
 
-void MaterialInspector::SetResource(const ea::string& resourceName)
-{
-    auto* material = GetCache()->GetResource<Material>(resourceName);
-    if (!material)
-        return;
+    // TODO: Refactor this thing to not use fake Serializable. Make SetInspected non-virtual maybe.
+    if (auto* material = static_cast<Material*>(inspected))
+    {
+        inspectable_ = new Inspectable::Material(material);
+        auto autoSave = [this](StringHash, VariantMap&) {
+            // Auto-save material on modification
+            auto* cache = GetSubsystem<ResourceCache>();
+            Material* material = inspectable_->GetMaterial();
+            cache->IgnoreResourceReload(material);
+            material->SaveFile(context_->GetCache()->GetResourceFileName(material->GetName()));
+        };
+        SubscribeToEvent(&attributeInspector_, E_ATTRIBUTEINSPECTVALUEMODIFIED, autoSave);
+        SubscribeToEvent(&attributeInspector_, E_INSPECTORRENDERSTART, [this](StringHash, VariantMap&) { RenderPreview(); });
+        SubscribeToEvent(&attributeInspector_, E_INSPECTORRENDERATTRIBUTE, [this](StringHash, VariantMap& args) { RenderCustomWidgets(args); });
 
-    BaseClassName::SetResource(resourceName);
+        // TODO: We need to look up asset by it's byproduct.
+        auto* editor = GetSubsystem<Editor>();
+        Asset* asset = nullptr;
+        for (Object* object : editor->GetInspected())
+        {
+            asset = object ? object->Cast<Asset>() : nullptr;
+            if (asset)
+                break;
+        }
+        assert(asset != nullptr);
+        asset_ = asset;
+        asset_->GetUndo().Connect(&attributeInspector_);
 
-    inspectable_ = new Inspectable::Material(material);
-    auto autoSave = [this](StringHash, VariantMap&) {
-        // Auto-save material on modification
-        auto* material = inspectable_->GetMaterial();
-        GetCache()->IgnoreResourceReload(material);
-        material->SaveFile(GetCache()->GetResourceFileName(material->GetName()));
-    };
-    SubscribeToEvent(&attributeInspector_, E_ATTRIBUTEINSPECTVALUEMODIFIED, autoSave);
-    SubscribeToEvent(&attributeInspector_, E_INSPECTORRENDERSTART, [this](StringHash, VariantMap&) { RenderPreview(); });
-    SubscribeToEvent(&attributeInspector_, E_INSPECTORRENDERATTRIBUTE, [this](StringHash, VariantMap& args) { RenderCustomWidgets(args); });
-
-    undo_.Connect(&attributeInspector_);
-
-    ToggleModel();
+        ToggleModel();
+    }
 }
 
 void MaterialInspector::RenderInspector(const char* filter)
 {
-    SharedPtr<MaterialInspector> ref(this);
     if (inspectable_.NotNull())
         RenderAttributes(inspectable_, filter, &attributeInspector_);
 }
@@ -95,7 +99,7 @@ void MaterialInspector::ToggleModel()
     SetModel(ToString("Models/%s.mdl", currentModel));
     figureIndex_ = ++figureIndex_ % figures_.size();
 
-    StaticModel* model = node_->GetComponent<StaticModel>();
+    auto* model = node_->GetComponent<StaticModel>();
     model->SetMaterial(inspectable_->GetMaterial());
 
     auto bb = model->GetBoundingBox();
@@ -109,7 +113,7 @@ void MaterialInspector::ToggleModel()
 
 void MaterialInspector::Save()
 {
-    inspectable_->GetMaterial()->SaveFile(GetCache()->GetResourceFileName(inspectable_->GetMaterial()->GetName()));
+    inspectable_->GetMaterial()->SaveFile(context_->GetCache()->GetResourceFileName(inspectable_->GetMaterial()->GetName()));
 }
 
 void MaterialInspector::RenderPreview()
@@ -118,8 +122,6 @@ void MaterialInspector::RenderPreview()
     ui::SetHelpTooltip("Click to switch object.");
     if (ui::IsItemHovered() && ui::IsMouseClicked(MOUSEB_LEFT))
         ToggleModel();
-    else
-        HandleInput();
 
     if (Material* material = inspectable_->GetMaterial())
     {
@@ -135,11 +137,12 @@ void MaterialInspector::RenderCustomWidgets(VariantMap& args)
     using namespace InspectorRenderAttribute;
     AttributeInfo& info = *reinterpret_cast<AttributeInfo*>(args[P_ATTRIBUTEINFO].GetVoidPtr());
     Material* material = (static_cast<Inspectable::Material*>(args[P_SERIALIZABLE].GetPtr()))->GetMaterial();
+    const ImGuiStyle& style = ui::GetStyle();
 
     if (info.name_ == "Techniques")
     {
         ui::NextColumn();
-        auto secondColWidth = ui::GetColumnWidth(1) - ui::GetStyle().ItemSpacing.x * 2;
+        auto secondColWidth = ui::GetColumnWidth(1) - style.ItemSpacing.x * 2;
 
         bool modified = false;
         for (unsigned i = 0; i < material->GetNumTechniques(); i++)
@@ -154,7 +157,7 @@ void MaterialInspector::RenderCustomWidgets(VariantMap& args)
 
             ui::Columns();
             ea::string techName = tech.technique_->GetName();
-            UI_ITEMWIDTH(material->GetNumTechniques() > 1 ? -44_dpx : -22_dpx)
+            UI_ITEMWIDTH((-style.ItemSpacing.x - ui::GetCurrentContext()->FontSize) * (material->GetNumTechniques() > 1 ? 2 : 1) - style.WindowPadding.x)
                 ui::InputText("###techniqueName_", const_cast<char*>(techName.c_str()), techName.length(),
                               ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_ReadOnly);
 
@@ -163,11 +166,11 @@ void MaterialInspector::RenderCustomWidgets(VariantMap& args)
                 const Variant& payload = ui::AcceptDragDropVariant("path");
                 if (!payload.IsEmpty())
                 {
-                    auto* technique = GetCache()->GetResource<Technique>(payload.GetString());
+                    auto* technique = context_->GetCache()->GetResource<Technique>(payload.GetString());
                     if (technique)
                     {
                         material->SetTechnique(i, technique, tech.qualityLevel_, tech.lodDistance_);
-                        undo_.Track<Undo::TechniqueChangedAction>(material, i, &tech, &material->GetTechniqueEntry(i));
+                        asset_->GetUndo().Track<Undo::TechniqueChangedAction>(material, i, &tech, &material->GetTechniqueEntry(i));
                         modified = true;
                     }
                 }
@@ -175,7 +178,7 @@ void MaterialInspector::RenderCustomWidgets(VariantMap& args)
             }
             ui::SetHelpTooltip("Drag resource here.");
 
-            ui::SameLine(VAR_NONE);
+            ui::SameLine();
             if (ui::IconButton(ICON_FA_CROSSHAIRS))
             {
                 SendEvent(E_INSPECTORLOCATERESOURCE, InspectorLocateResource::P_NAME, material->GetTechnique(i)->GetName());
@@ -184,12 +187,12 @@ void MaterialInspector::RenderCustomWidgets(VariantMap& args)
 
             if (material->GetNumTechniques() > 1)
             {
-                ui::SameLine(VAR_NONE);
+                ui::SameLine();
                 if (ui::IconButton(ICON_FA_TRASH))
                 {
                     for (auto j = i + 1; j < material->GetNumTechniques(); j++)
                         material->SetTechnique(j - 1, material->GetTechnique(j));
-                    undo_.Track<Undo::TechniqueChangedAction>(material, i, &tech, nullptr);
+                    asset_->GetUndo().Track<Undo::TechniqueChangedAction>(material, i, &tech, nullptr);
                     // Technique removed possibly from the middle. Shift existing techniques back to the front and remove last one.
                     for (auto j = i + 1; j < material->GetNumTechniques(); j++)
                     {
@@ -211,7 +214,7 @@ void MaterialInspector::RenderCustomWidgets(VariantMap& args)
             // ---------------------------------------------------------------------------------------------------------
 
             ui::NewLine();
-            ui::SameLine(20_dpx);
+            ui::SameLine(20);
             ui::TextUnformatted("LOD Distance");
             ui::NextColumn();
             UI_ITEMWIDTH(secondColWidth)
@@ -225,7 +228,7 @@ void MaterialInspector::RenderCustomWidgets(VariantMap& args)
             };
 
             ui::NewLine();
-            ui::SameLine(20_dpx);
+            ui::SameLine(20);
             ui::TextUnformatted("Quality");
             ui::NextColumn();
             UI_ITEMWIDTH(secondColWidth)
@@ -233,7 +236,7 @@ void MaterialInspector::RenderCustomWidgets(VariantMap& args)
             ui::NextColumn();
 
             if (modification->TrackModification(modifiedField, [material, i]() { return material->GetTechniqueEntry(i); }))
-                undo_.Track<Undo::TechniqueChangedAction>(material, i, &modification->GetInitialValue(), &tech);
+                asset_->GetUndo().Track<Undo::TechniqueChangedAction>(material, i, &modification->GetInitialValue(), &tech);
 
             if (modifiedField)
                 material->SetTechnique(i, tech.original_.Get(), tech.qualityLevel_, tech.lodDistance_);
@@ -253,13 +256,13 @@ void MaterialInspector::RenderCustomWidgets(VariantMap& args)
             const Variant& payload = ui::AcceptDragDropVariant("path");
             if (!payload.IsEmpty())
             {
-                auto* technique = GetCache()->GetResource<Technique>(payload.GetString());
+                auto* technique = context_->GetCache()->GetResource<Technique>(payload.GetString());
                 if (technique)
                 {
                     auto index = material->GetNumTechniques();
                     material->SetNumTechniques(index + 1);
                     material->SetTechnique(index, technique);
-                    undo_.Track<Undo::TechniqueChangedAction>(material, index, nullptr, &material->GetTechniqueEntry(index));
+                    asset_->GetUndo().Track<Undo::TechniqueChangedAction>(material, index, nullptr, &material->GetTechniqueEntry(index));
                     modified = true;
                 }
             }
@@ -302,27 +305,27 @@ void MaterialInspector::RenderCustomWidgets(VariantMap& args)
             auto* modification = ui::GetUIState<ModifiedStateTracker<Variant, bool>>();
 
             ui::NewLine();
-            ui::SameLine(20_dpx);
+            ui::SameLine(20);
             ui::TextUnformatted(parameterName.c_str());
             ui::NextColumn();
             Variant value = pair.second.value_;
 
-            UI_ITEMWIDTH(-22_dpx)
+            UI_ITEMWIDTH(-22)
             {
                 bool modifiedNow = RenderSingleAttribute(value);
                 if (modification->TrackModification(modifiedNow, [material, &parameterName]() { return material->GetShaderParameter(parameterName); }))
                 {
-                    undo_.Track<Undo::ShaderParameterChangedAction>(material, parameterName, modification->GetInitialValue(), value);
+                    asset_->GetUndo().Track<Undo::ShaderParameterChangedAction>(material, parameterName, modification->GetInitialValue(), value);
                     modified = true;
                 }
                 if (modifiedNow)
                     material->SetShaderParameter(parameterName, value);
             }
 
-            ui::SameLine(value.GetType());
+            ui::SameLine();
             if (ui::Button(ICON_FA_TRASH))
             {
-                undo_.Track<Undo::ShaderParameterChangedAction>(material, parameterName, pair.second.value_, Variant{});
+                asset_->GetUndo().Track<Undo::ShaderParameterChangedAction>(material, parameterName, pair.second.value_, Variant{});
                 material->RemoveShaderParameter(parameterName);
                 modified = true;
                 break;
@@ -358,17 +361,17 @@ void MaterialInspector::RenderCustomWidgets(VariantMap& args)
             ui::SetHelpTooltip("Shader parameter name.");
 
             ui::NextColumn();
-            UI_ITEMWIDTH(-22_dpx) // Space for OK button
+            UI_ITEMWIDTH(-22) // Space for OK button
                 ui::Combo("###Type", &paramState->variantTypeIndex_, shaderParameterVariantNames, SDL_arraysize(shaderParameterVariantTypes));
             ui::SetHelpTooltip("Shader parameter type.");
 
-            ui::SameLine(0, 4_dpx);
+            ui::SameLine(0, 4);
             if (ui::Button(ICON_FA_CHECK))
             {
                 if (!paramState->fieldName_.empty() && material->GetShaderParameter(paramState->fieldName_.c_str()).GetType() == VAR_NONE)   // TODO: Show warning about duplicate name
                 {
                     Variant value{shaderParameterVariantTypes[paramState->variantTypeIndex_]};
-                    undo_.Track<Undo::ShaderParameterChangedAction>(material, paramState->fieldName_.c_str(), Variant{}, value);
+                    asset_->GetUndo().Track<Undo::ShaderParameterChangedAction>(material, paramState->fieldName_.c_str(), Variant{}, value);
                     material->SetShaderParameter(paramState->fieldName_.c_str(), value);
                     modified = true;
                     paramState->fieldName_.clear();
@@ -395,56 +398,56 @@ void Inspectable::Material::RegisterObject(Context* context)
     {
         auto getter = [](const Inspectable::Material& inspectable, Variant& value)       { value = inspectable.GetMaterial()->GetCullMode(); };
         auto setter = [](const Inspectable::Material& inspectable, const Variant& value) { inspectable.GetMaterial()->SetCullMode(static_cast<CullMode>(value.GetUInt())); };
-        URHO3D_CUSTOM_ENUM_ATTRIBUTE("Cull", getter, setter, cullModeNames, CULL_NONE, AM_EDIT);
+        URHO3D_CUSTOM_ENUM_ACCESSOR_ATTRIBUTE("Cull", getter, setter, cullModeNames, CULL_NONE, AM_EDIT);
     }
 
     // Shadow Cull Mode
     {
         auto getter = [](const Inspectable::Material& inspectable, Variant& value)       { value = inspectable.GetMaterial()->GetShadowCullMode(); };
         auto setter = [](const Inspectable::Material& inspectable, const Variant& value) { inspectable.GetMaterial()->SetShadowCullMode(static_cast<CullMode>(value.GetUInt())); };
-        URHO3D_CUSTOM_ENUM_ATTRIBUTE("Shadow Cull", getter, setter, cullModeNames, CULL_NONE, AM_EDIT);
+        URHO3D_CUSTOM_ENUM_ACCESSOR_ATTRIBUTE("Shadow Cull", getter, setter, cullModeNames, CULL_NONE, AM_EDIT);
     }
 
     // Fill Mode
     {
         auto getter = [](const Inspectable::Material& inspectable, Variant& value)       { value = inspectable.GetMaterial()->GetFillMode(); };
         auto setter = [](const Inspectable::Material& inspectable, const Variant& value) { inspectable.GetMaterial()->SetFillMode(static_cast<FillMode>(value.GetUInt())); };
-        URHO3D_CUSTOM_ENUM_ATTRIBUTE("Fill", getter, setter, fillModeNames, FILL_SOLID, AM_EDIT);
+        URHO3D_CUSTOM_ENUM_ACCESSOR_ATTRIBUTE("Fill", getter, setter, fillModeNames, FILL_SOLID, AM_EDIT);
     }
 
     // Alpha To Coverage
     {
         auto getter = [](const Inspectable::Material& inspectable, Variant& value)       { value = inspectable.GetMaterial()->GetAlphaToCoverage(); };
         auto setter = [](const Inspectable::Material& inspectable, const Variant& value) { inspectable.GetMaterial()->SetAlphaToCoverage(value.GetBool()); };
-        URHO3D_CUSTOM_ATTRIBUTE("Alpha To Coverage", getter, setter, bool, false, AM_EDIT);
+        URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE("Alpha To Coverage", getter, setter, bool, false, AM_EDIT);
     }
 
     // Line Anti Alias
     {
         auto getter = [](const Inspectable::Material& inspectable, Variant& value)       { value = inspectable.GetMaterial()->GetLineAntiAlias(); };
         auto setter = [](const Inspectable::Material& inspectable, const Variant& value) { inspectable.GetMaterial()->SetLineAntiAlias(value.GetBool()); };
-        URHO3D_CUSTOM_ATTRIBUTE("Line Anti Alias", getter, setter, bool, false, AM_EDIT);
+        URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE("Line Anti Alias", getter, setter, bool, false, AM_EDIT);
     }
 
     // Render Order
     {
         auto getter = [](const Inspectable::Material& inspectable, Variant& value)       { value = inspectable.GetMaterial()->GetRenderOrder(); };
         auto setter = [](const Inspectable::Material& inspectable, const Variant& value) { inspectable.GetMaterial()->SetRenderOrder(static_cast<unsigned char>(value.GetUInt())); };
-        URHO3D_CUSTOM_ATTRIBUTE("Render Order", getter, setter, unsigned, DEFAULT_RENDER_ORDER, AM_EDIT);
+        URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE("Render Order", getter, setter, unsigned, DEFAULT_RENDER_ORDER, AM_EDIT);
     }
 
     // Occlusion
     {
         auto getter = [](const Inspectable::Material& inspectable, Variant& value)        { value = inspectable.GetMaterial()->GetOcclusion(); };
         auto setter = [](const Inspectable::Material& inspectable, const Variant& value)  { inspectable.GetMaterial()->SetOcclusion(value.GetBool()); };
-        URHO3D_CUSTOM_ATTRIBUTE("Occlusion", getter, setter, bool, false, AM_EDIT);
+        URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE("Occlusion", getter, setter, bool, false, AM_EDIT);
     }
 
     // Specular
     {
         auto getter = [](const Inspectable::Material& inspectable, Variant& value)        { value = inspectable.GetMaterial()->GetSpecular(); };
         auto setter = [](const Inspectable::Material& inspectable, const Variant& value)  { inspectable.GetMaterial()->SetSpecular(value.GetBool()); };
-        URHO3D_CUSTOM_ATTRIBUTE("Specular", getter, setter, bool, false, AM_EDIT);
+        URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE("Specular", getter, setter, bool, false, AM_EDIT);
     }
 
     // Constant Bias
@@ -455,7 +458,7 @@ void Inspectable::Material::RegisterObject(Context* context)
             bias.constantBias_ = value.GetFloat();
             inspectable.GetMaterial()->SetDepthBias(bias);
         };
-        URHO3D_CUSTOM_ATTRIBUTE("Constant Bias", getter, setter, float, 0.0f, AM_EDIT);
+        URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE("Constant Bias", getter, setter, float, 0.0f, AM_EDIT);
     }
 
     // Slope Scaled Bias
@@ -466,7 +469,7 @@ void Inspectable::Material::RegisterObject(Context* context)
             bias.slopeScaledBias_ = value.GetFloat();
             inspectable.GetMaterial()->SetDepthBias(bias);
         };
-        URHO3D_CUSTOM_ATTRIBUTE("Slope Scaled Bias", getter, setter, float, 0.0f, AM_EDIT);
+        URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE("Slope Scaled Bias", getter, setter, float, 0.0f, AM_EDIT);
     }
 
     // Normal Offset
@@ -477,12 +480,12 @@ void Inspectable::Material::RegisterObject(Context* context)
             bias.normalOffset_ = value.GetFloat();
             inspectable.GetMaterial()->SetDepthBias(bias);
         };
-        URHO3D_CUSTOM_ATTRIBUTE("Normal Offset", getter, setter, float, 0.0f, AM_EDIT);
+        URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE("Normal Offset", getter, setter, float, 0.0f, AM_EDIT);
     }
 
     // Dummy attributes used for rendering custom widgets in inspector.
-    URHO3D_CUSTOM_ATTRIBUTE("Techniques", [](const Inspectable::Material&, Variant&){}, [](const Inspectable::Material&, const Variant&){}, unsigned, Variant{}, AM_EDIT);
-    URHO3D_CUSTOM_ATTRIBUTE("Shader Parameters", [](const Inspectable::Material&, Variant&){}, [](const Inspectable::Material&, const Variant&){}, unsigned, Variant{}, AM_EDIT);
+    URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE("Techniques", [](const Inspectable::Material&, Variant&){}, [](const Inspectable::Material&, const Variant&){}, unsigned, Variant{}, AM_EDIT);
+    URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE("Shader Parameters", [](const Inspectable::Material&, Variant&){}, [](const Inspectable::Material&, const Variant&){}, unsigned, Variant{}, AM_EDIT);
 
     for (auto i = 0; i < MAX_MATERIAL_TEXTURE_UNITS; i++)
     {
@@ -500,10 +503,10 @@ void Inspectable::Material::RegisterObject(Context* context)
         auto setter = [textureUnit](const Inspectable::Material& inspectable, const Variant& value)
         {
             const auto& ref = value.GetResourceRef();
-            if (auto* texture = inspectable.GetCache()->GetResource(ref.type_, ref.name_)->Cast<Texture>())
+            if (auto* texture = inspectable.GetContext()->GetCache()->GetResource(ref.type_, ref.name_)->Cast<Texture>())
                 inspectable.GetMaterial()->SetTexture(textureUnit, texture);
         };
-        URHO3D_CUSTOM_ATTRIBUTE(finalName.c_str(), getter, setter, ResourceRef, ResourceRef{Texture2D::GetTypeStatic()}, AM_EDIT);
+        URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE(finalName.c_str(), getter, setter, ResourceRef, ResourceRef{Texture2D::GetTypeStatic()}, AM_EDIT);
     }
 }
 

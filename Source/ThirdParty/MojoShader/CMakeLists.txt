@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2019 the Urho3D project.
+# Copyright (c) 2008-2020 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -31,5 +31,5 @@ target_include_directories(MojoShader
 )
 
 if (NOT URHO3D_MERGE_STATIC_LIBS)
-    install (TARGETS MojoShader EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR})
+    install (TARGETS MojoShader EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG})
 endif ()

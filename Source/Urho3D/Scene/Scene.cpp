@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,7 @@
 #include "../Core/CoreEvents.h"
 #include "../Core/Profiler.h"
 #include "../Core/WorkQueue.h"
+#include "../IO/Archive.h"
 #include "../IO/File.h"
 #include "../IO/Log.h"
 #include "../IO/PackageFile.h"
@@ -40,7 +41,6 @@
 #include "../Scene/Scene.h"
 #include "../Scene/SceneEvents.h"
 #include "../Scene/SceneManager.h"
-#include "../Scene/SceneMetadata.h"
 #include "../Scene/SmoothedTransform.h"
 #include "../Scene/SplinePath.h"
 #include "../Scene/UnknownComponent.h"
@@ -94,6 +94,14 @@ Scene::~Scene()
         i->second->ResetScene();
     for (auto i = localNodes_.begin(); i != localNodes_.end(); ++i)
         i->second->ResetScene();
+
+    // Validate registry
+    if (registryEnabled_)
+    {
+        assert(reg_.alive() == 1);
+        for (auto& storage : componentIndexes_)
+            assert(storage.empty());
+    }
 }
 
 void Scene::RegisterObject(Context* context)
@@ -112,6 +120,54 @@ void Scene::RegisterObject(Context* context)
     URHO3D_ATTRIBUTE("Next Local Component ID", unsigned, localComponentID_, FIRST_LOCAL_ID, AM_FILE | AM_NOEDIT);
     URHO3D_ATTRIBUTE("Variables", VariantMap, vars_, Variant::emptyVariantMap, AM_FILE); // Network replication of vars uses custom data
     URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Variable Names", GetVarNamesAttr, SetVarNamesAttr, ea::string, EMPTY_STRING, AM_FILE | AM_NOEDIT);
+}
+
+bool Scene::EnableRegistry()
+{
+    if (!registryEnabled_)
+    {
+        const bool hasNodesExceptSelf = replicatedNodes_.size() != 1 || localNodes_.size() != 0;
+        const bool hasComponents = replicatedComponents_.size() != 0 || localComponents_.size() != 0;
+        if (hasNodesExceptSelf || hasComponents)
+        {
+            URHO3D_LOGERROR("Registry may be enabled only for empty Scene");
+            return false;
+        }
+
+        registryEnabled_ = true;
+
+        // Add self to registry
+        const entt::entity entity = reg_.create();
+        SetEntity(entity);
+    }
+    return true;
+}
+
+bool Scene::CreateComponentIndex(StringHash componentType)
+{
+    if (!EnableRegistry())
+        return false;
+
+    indexedComponentTypes_.push_back(componentType);
+    componentIndexes_.emplace_back();
+    return true;
+}
+
+ea::span<Component* const> Scene::GetComponentIndex(StringHash componentType)
+{
+    if (auto storage = GetComponentIndexStorage(componentType))
+        return { storage->raw(), static_cast<ptrdiff_t>(storage->size()) };
+    return {};
+}
+
+bool Scene::Serialize(Archive& archive)
+{
+    if (!Node::Serialize(archive))
+        return false;
+
+    fileName_ = archive.GetName();
+    checksum_ = archive.GetChecksum();
+    return true;
 }
 
 bool Scene::Load(Deserializer& source)
@@ -928,6 +984,13 @@ void Scene::NodeAdded(Node* node)
         node->SetID(id);
     }
 
+    // Initialize entity
+    if (registryEnabled_)
+    {
+        const entt::entity entity = reg_.create();
+        node->SetEntity(entity);
+    }
+
     // If node with same ID exists, remove the scene reference from it and overwrite with the new node
     if (IsReplicatedID(id))
     {
@@ -1012,6 +1075,13 @@ void Scene::NodeRemoved(Node* node)
     const ea::vector<SharedPtr<Node> >& children = node->GetChildren();
     for (auto i = children.begin(); i != children.end(); ++i)
         NodeRemoved(*i);
+
+    // Remove node from registry
+    if (registryEnabled_)
+    {
+        const entt::entity entity = node->GetEntity();
+        reg_.destroy(entity);
+    }
 }
 
 void Scene::ComponentAdded(Component* component)
@@ -1052,12 +1122,34 @@ void Scene::ComponentAdded(Component* component)
     }
 
     component->OnSceneSet(this);
+
+    if (registryEnabled_)
+    {
+        if (auto storage = GetComponentIndexStorage(component->GetType()))
+        {
+            const entt::entity entity = component->GetNode()->GetEntity();
+            if (storage->has(entity))
+                storage->get(entity) = component;
+            else
+                storage->construct(entity, component);
+        }
+    }
 }
 
 void Scene::ComponentRemoved(Component* component)
 {
     if (!component)
         return;
+
+    if (registryEnabled_)
+    {
+        if (auto storage = GetComponentIndexStorage(component->GetType()))
+        {
+            const entt::entity entity = component->GetNode()->GetEntity();
+            if (storage->has(entity))
+                storage->destroy(entity);
+        }
+    }
 
     unsigned id = component->GetID();
     if (Scene::IsReplicatedID(id))
@@ -1533,6 +1625,14 @@ void Scene::PreloadResourcesJSON(const JSONValue& value)
 #endif
 }
 
+entt::storage<entt::entity, Component*>* Scene::GetComponentIndexStorage(StringHash componentType)
+{
+    const unsigned idx = indexedComponentTypes_.index_of(componentType);
+    if (idx < componentIndexes_.size())
+        return &componentIndexes_[idx];
+    return nullptr;
+}
+
 void RegisterSceneLibrary(Context* context)
 {
     ValueAnimation::RegisterObject(context);
@@ -1543,7 +1643,6 @@ void RegisterSceneLibrary(Context* context)
     UnknownComponent::RegisterObject(context);
     SplinePath::RegisterObject(context);
     SceneManager::RegisterObject(context);
-    SceneMetadata::RegisterObject(context);
     CameraViewport::RegisterObject(context);
 }
 

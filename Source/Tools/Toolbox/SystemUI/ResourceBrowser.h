@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -59,7 +59,6 @@ URHO3D_EVENT(E_RESOURCEBROWSERSELECT, ResourceBrowserSelect)
 }
 
 /// Create resource browser ui inside another window.
-URHO3D_TOOLBOX_API ResourceBrowserResult ResourceBrowserWidget(const ea::string& resourcePath,
-    const ea::string& cacheDir, ea::string& path, ea::string& selected, ResourceBrowserFlags flags);
+URHO3D_TOOLBOX_API ResourceBrowserResult ResourceBrowserWidget(ea::string& path, ea::string& selected, ResourceBrowserFlags flags);
 
 }

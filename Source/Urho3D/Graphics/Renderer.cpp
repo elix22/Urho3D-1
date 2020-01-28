@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -48,6 +48,8 @@
 #include "../Resource/ResourceCache.h"
 #include "../Resource/XMLFile.h"
 #include "../Scene/Scene.h"
+
+#include <EASTL/functional.h>
 
 #include "../DebugNew.h"
 
@@ -277,6 +279,35 @@ Renderer::Renderer(Context* context) :
 }
 
 Renderer::~Renderer() = default;
+
+void Renderer::SetGlobalShaderDefine(ea::string_view define, bool enabled)
+{
+    auto iter = globalShaderDefines_.find_as(define, ea::less<ea::string_view>());
+    bool changed = false;
+
+    if (!enabled && iter != globalShaderDefines_.end())
+    {
+        globalShaderDefines_.erase(iter);
+        changed = true;
+    }
+    else if (enabled && iter == globalShaderDefines_.end())
+    {
+        globalShaderDefines_.insert(ea::string(define));
+        changed = true;
+    }
+
+    if (changed)
+    {
+        ea::vector<ea::string> definesVector;
+        ea::copy(globalShaderDefines_.begin(), globalShaderDefines_.end(), ea::back_inserter(definesVector));
+        globalShaderDefinesString_ = ea::string::joined(definesVector, " ");
+
+        if (graphics_)
+            graphics_->SetGlobalShaderDefines(globalShaderDefinesString_);
+
+        ReloadShaders();
+    }
+}
 
 void Renderer::SetNumViewports(unsigned num)
 {
@@ -1593,6 +1624,7 @@ void Renderer::Initialize()
     URHO3D_PROFILE("InitRenderer");
 
     graphics_ = graphics;
+    graphics_->SetGlobalShaderDefines(globalShaderDefinesString_);
 
     if (!graphics_->GetShadowMapFormat())
         drawShadows_ = false;

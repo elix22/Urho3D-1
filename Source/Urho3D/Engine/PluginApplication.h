@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,21 +24,11 @@
 
 #include "../Core/Context.h"
 #include "../Core/Object.h"
+#include "../Core/PluginModule.h"
 
 
 namespace Urho3D
 {
-
-/// Enumeration describing plugin file path status.
-enum PluginType
-{
-    /// Not a valid plugin.
-    PLUGIN_INVALID,
-    /// A native plugin.
-    PLUGIN_NATIVE,
-    /// A managed plugin.
-    PLUGIN_MANAGED,
-};
 
 /// Base class for creating plugins for Editor.
 class URHO3D_API PluginApplication : public Object
@@ -48,7 +38,11 @@ public:
     /// Construct.
     explicit PluginApplication(Context* context) : Object(context) { }
     /// Destruct.
-    ~PluginApplication() override;
+    ~PluginApplication() override = default;
+    /// Internal, optional. Finalize object initialization. Depends on calling virtual methods and thus can not be done from constructor. Should be called after creating this object. May not be called if module reloading is not required.
+    void InitializeReloadablePlugin();
+    /// Internal, optional. Unregister plugin and it's types from the engine. Should be called before freeing this object. May not be called if module reloading is not required.
+    void UninitializeReloadablePlugin();
     /// Called when plugin is being loaded. Register all custom components and subscribe to events here.
     virtual void Load() { }
     /// Called when application is started. May be called multiple times but no earlier than before next Stop() call.
@@ -61,8 +55,6 @@ public:
     template<typename T> void RegisterFactory();
     /// Register a factory for an object type and specify the object category.
     template<typename T> void RegisterFactory(const char* category);
-    /// Main function of native plugin.
-    static int PluginMain(void* ctx_, size_t operation, PluginApplication*(*factory)(Context*));
 
 protected:
     /// Record type factory that will be unregistered on plugin unload.
@@ -70,7 +62,7 @@ protected:
 
 private:
     /// Types registered with the engine. They will be unloaded when plugin is reloaded.
-    ea::vector<ea::pair<StringHash, ea::string>> registeredTypes_;
+    ea::vector<ea::pair<StringHash, ea::string>> registeredTypes_{};
 };
 
 template<typename T>
@@ -90,16 +82,22 @@ void PluginApplication::RegisterFactory(const char* category)
 }
 
 /// Macro for defining entry point of editor plugin.
-#if defined(URHO3D_STATIC) || !defined(URHO3D_PLUGINS)
-// In static builds user must manually initialize his plugins by creating plugin instance.
-#define URHO3D_DEFINE_PLUGIN_MAIN(Class)
+#if !defined(URHO3D_PLUGINS)
+#   define URHO3D_DEFINE_PLUGIN_MAIN(Class)
+#   define URHO3D_DEFINE_PLUGIN_STATIC(Class)
+#elif defined(URHO3D_STATIC)
+    /// Noop in static builds.
+#   define URHO3D_DEFINE_PLUGIN_MAIN(Class)
+    /// Creates an instance of plugin application and calls its Load() method. Use this macro in Application::Start() method.
+#   define URHO3D_DEFINE_PLUGIN_STATIC(Class) RegisterPlugin(new Class(context_))
 #else
-#define URHO3D_DEFINE_PLUGIN_MAIN(Class)                                  \
-    extern "C" URHO3D_EXPORT_API int cr_main(void* ctx, size_t operation) \
-    {                                                                     \
-        return Urho3D::PluginApplication::PluginMain(ctx, operation,      \
-            [](Urho3D::Context* context) -> Urho3D::PluginApplication* {  \
-                return new Class(context);                                \
-            });                                                           \
-    }
+     /// Noop in shared builds.
+#    define URHO3D_DEFINE_PLUGIN_STATIC(Class)
+     /// Defines a main entry point of native plugin. Use this macro in a global scope.
+#    define URHO3D_DEFINE_PLUGIN_MAIN(Class)                                                                    \
+        extern "C" URHO3D_EXPORT_API Urho3D::PluginApplication* PluginApplicationMain(Urho3D::Context* context) \
+        {                                                                                                       \
+            context->RegisterFactory<Class>();                                                                  \
+            return static_cast<Class*>(context->CreateObject<Class>().Detach());                                \
+        }
 #endif

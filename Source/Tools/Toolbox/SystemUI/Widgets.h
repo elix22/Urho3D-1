@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,12 +22,13 @@
 
 #pragma once
 
-#include "ToolboxAPI.h"
-#include <typeinfo>
-#include <ImGui/imgui.h>
+#include <Urho3D/SystemUI/SystemUI.h>
 #include <Urho3D/Math/Rect.h>
 #include <Urho3D/Core/Macros.h>
-#include "Urho3D/SystemUI/SystemUI.h"
+
+#include <typeinfo>
+
+#include "ToolboxAPI.h"
 
 
 namespace ImGui
@@ -41,12 +42,8 @@ enum TransformSelector
     TSF_HIDEHANDLES = 4,
 };
 
-}
+URHO3D_FLAGSET(TransformSelector, TransformSelectorFlags);
 
-URHO3D_FLAGSET_EX(ImGui, TransformSelector, TransformSelectorFlags);
-
-namespace ImGui
-{
 /// Helper for running `for` loop just once.
 struct ScopeHelper
 {
@@ -204,9 +201,9 @@ URHO3D_TOOLBOX_API bool IconButton(const char* label);
 /// Draw a mask selector widget.
 URHO3D_TOOLBOX_API bool MaskSelector(unsigned int* mask);
 /// Draw a transform rect and allow it's modification by dragging handles with mouse.
-URHO3D_TOOLBOX_API bool TransformRect(Urho3D::IntRect& inOut, TransformSelectorFlags flags = TSF_NONE);
+URHO3D_TOOLBOX_API bool TransformRect(ImRect& inOut, TransformSelectorFlags flags = TSF_NONE);
 /// Draw a transform rect and allow it's modification by dragging handles with mouse.
-URHO3D_TOOLBOX_API bool TransformRect(Urho3D::IntRect& inOut, Urho3D::IntRect& delta, TransformSelectorFlags flags = TSF_NONE);
+URHO3D_TOOLBOX_API bool TransformRect(ImRect& inOut, ImRect& delta, TransformSelectorFlags flags = TSF_NONE);
 /// Return current SystemUI instance.
 URHO3D_TOOLBOX_API Urho3D::SystemUI* GetSystemUI();
 /// Create a optionally toggleable toolbar button with a tooltip.

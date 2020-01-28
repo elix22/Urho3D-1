@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2019 the Urho3D project.
+# Copyright (c) 2008-2020 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -46,6 +46,7 @@ else ()
     add_executable(Samples ${PLATFORM} MACOSX_BUNDLE ${SAMPLE_MANAGER_SOURCE_CODE} ${SOURCE_CODE})
 endif ()
 target_link_libraries(Samples PUBLIC Urho3D)
+set_property(TARGET Samples PROPERTY FOLDER "Sample Projects")
 if (TARGET Utilities2D)
     target_link_libraries(Samples PUBLIC Utilities2D)
 endif ()
@@ -67,9 +68,14 @@ if (WEB)
                      "${CMAKE_BINARY_DIR}/bin/Autoload/LargeData.pak"
         RELATIVE_DIR "${CMAKE_BINARY_DIR}/bin"
         OUTPUT       "Resources.js"
+        INSTALL_TO   ${DEST_BIN_DIR_CONFIG}
     )
     web_link_resources(Samples Resources.js)
     target_link_libraries(Samples PRIVATE "--shell-file ${CMAKE_SOURCE_DIR}/bin/application.html")
+    install(FILES "${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG}/Samples.js" DESTINATION ${DEST_BIN_DIR_CONFIG})
+    if (EMSCRIPTEN_WASM)
+        install(FILES "${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG}/Samples.wasm" DESTINATION ${DEST_BIN_DIR_CONFIG})
+    endif ()
 endif ()
 
 if (XCODE)
@@ -106,8 +112,8 @@ endif ()
 
 if (NOT ANDROID)
     install(TARGETS Samples
-        RUNTIME DESTINATION ${DEST_SAMPLES_DIR}
-        LIBRARY DESTINATION ${DEST_SAMPLES_DIR}
-        BUNDLE DESTINATION  ${DEST_SAMPLES_DIR}
+        RUNTIME DESTINATION ${DEST_BIN_DIR_CONFIG}
+        LIBRARY DESTINATION ${DEST_BIN_DIR_CONFIG}
+        BUNDLE DESTINATION  ${DEST_BIN_DIR_CONFIG}
     )
 endif ()

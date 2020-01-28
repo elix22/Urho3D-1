@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -76,25 +76,14 @@ bool Gizmo::Manipulate(const Camera* camera, const ea::vector<WeakPtr<Node>>& no
             // Find center point of all nodes
             // It is not clear what should be rotation and scale of center point for multiselection, therefore we limit
             // multiselection operations to world space (see above).
-            Vector3
-            center = Vector3::ZERO;
-            auto count = 0;
-            for (const auto& node: nodes)
-            {
-                if (node.Expired() || node->GetType() == Scene::GetTypeStatic())
-                    continue;
-                center += node->GetWorldPosition();
-                count++;
-            }
-
+            Vector3 center;
+            auto count = GetSelectionCenter(center, nodes);
             if (count == 0)
                 return false;
-
-            center /= count;
             currentOrigin_.SetTranslation(center);
         }
         else if (!nodes.front().Expired())
-            currentOrigin_ = nodes.front()->GetTransform().ToMatrix4();
+            currentOrigin_ = nodes.front()->GetWorldTransform().ToMatrix4();
     }
 
     // Enums are compatible.
@@ -118,13 +107,8 @@ bool Gizmo::Manipulate(const Camera* camera, const ea::vector<WeakPtr<Node>>& no
     Matrix4 tran = currentOrigin_.Transpose();
     Matrix4 delta;
 
-    ImGuiIO& io = ImGui::GetIO();
-
-    auto pos = displayPos_;
-    auto size = displaySize_;
-    if (size.x == 0 && size.y == 0)
-        size = io.DisplaySize;
-    ImGuizmo::SetRect(pos.x, pos.y, size.x, size.y);
+    ImGuiWindow* window = ui::GetCurrentWindow();
+    ImGuizmo::SetRect(window->Pos.x, window->Pos.y, window->Size.x, window->Size.y);
     ImGuizmo::Manipulate(&view.m00_, &proj.m00_, operation, mode, &tran.m00_, &delta.m00_, nullptr);
 
     if (IsActive())
@@ -303,17 +287,27 @@ bool Gizmo::IsSelected(Node* node) const
     return nodeSelection_.contains(pNode);
 }
 
-void Gizmo::SetScreenRect(const IntVector2& pos, const IntVector2& size)
+const int Gizmo::GetSelectionCenter(Vector3& outCenter, const ea::vector<WeakPtr<Node>>& nodes) const
 {
-    displayPos_ = ToImGui(pos);
-    displaySize_ = ToImGui(size);
+    outCenter = Vector3::ZERO;
+    auto count = 0;
+    for (const auto& node: nodes)
+    {
+        if (node.Expired() || node->GetType() == Scene::GetTypeStatic())
+            continue;
+        outCenter += node->GetWorldPosition();
+        count++;
+    }
+
+    if (count != 0)
+        outCenter /= count;
+    return count;
 }
 
-void Gizmo::SetScreenRect(const IntRect& rect)
+const int Gizmo::GetSelectionCenter(Vector3& outCenter) const
 {
-    displayPos_ = ToImGui(rect.Min());
-    displaySize_.x = rect.Width();
-    displaySize_.y = rect.Height();
+    int ret = GetSelectionCenter(outCenter, GetSelection());
+    return ret;
 }
 
 }

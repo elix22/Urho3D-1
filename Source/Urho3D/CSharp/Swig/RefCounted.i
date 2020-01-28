@@ -2,7 +2,9 @@
 // and increment/decrement refcount manually.
 %define URHO3D_REFCOUNTED(TYPE)
     %typemap(csbody) TYPE %{
+      [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]
       private global::System.Runtime.InteropServices.HandleRef swigCPtr;
+      [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]
       private bool swigCMemOwn;
       internal static $csclassname wrap(global::System.IntPtr cPtr, bool cMemoryOwn) {
         if (cPtr == global::System.IntPtr.Zero)
@@ -47,7 +49,9 @@
     %}
 
     %typemap(csbody_derived, directorsetup="\n        SetupSwigDirector();") TYPE %{
+      [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]
       private global::System.Runtime.InteropServices.HandleRef swigCPtr;
+      [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]
       private bool swigCMemOwn;
       internal static $csclassname wrap(global::System.IntPtr cPtr, bool cMemoryOwn) {
         if (cPtr == global::System.IntPtr.Zero)
@@ -128,7 +132,7 @@
         $*1_ltype $1Ref($input);
         $1 = &$1Ref;
     %}
-    %typemap(out) Urho3D::SharedPtr<TYPE> & %{ $result = $1->Detach(); %}          // cpp to c
+    %typemap(out) Urho3D::SharedPtr<TYPE> & %{ $result = $1->Get(); %}             // cpp to c
 
     // WeakPtr
     %apply Urho3D::SharedPtr<TYPE>  { Urho3D::WeakPtr<TYPE>  }
@@ -156,6 +160,7 @@
 
   %typemap(csdisposing, methodname="Dispose", methodmodifiers="protected", parameters="bool disposing") TYPE {
     lock(this) {
+      $typemap(csdisposed_extra_early_optional, TYPE)
       if (swigCPtr.Handle != global::System.IntPtr.Zero) {
         if (swigCMemOwn) {
           swigCMemOwn = false;
@@ -185,6 +190,7 @@
 
   %typemap(csdisposing_derived, methodname="Dispose", methodmodifiers="protected", parameters="bool disposing") TYPE {
     lock(this) {
+      $typemap(csdisposed_extra_early_optional, TYPE)
       if (swigCPtr.Handle != global::System.IntPtr.Zero) {
         $typemap(csdisposing_extra_optional, TYPE)
         if (swigCMemOwn) {

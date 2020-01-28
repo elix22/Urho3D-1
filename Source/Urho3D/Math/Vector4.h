@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -62,7 +62,7 @@ public:
     }
 
     /// Construct from a float array.
-    explicit Vector4(const float* data) noexcept :
+    explicit Vector4(const float data[]) noexcept :
         x_(data[0]),
         y_(data[1]),
         z_(data[2]),
@@ -186,9 +186,9 @@ public:
     Vector4 Lerp(const Vector4& rhs, float t) const { return *this * (1.0f - t) + rhs * t; }
 
     /// Test for equality with another vector with epsilon.
-    bool Equals(const Vector4& rhs) const
+    bool Equals(const Vector4& rhs, float eps = M_EPSILON) const
     {
-        return Urho3D::Equals(x_, rhs.x_) && Urho3D::Equals(y_, rhs.y_) && Urho3D::Equals(z_, rhs.z_) && Urho3D::Equals(w_, rhs.w_);
+        return Urho3D::Equals(x_, rhs.x_, eps) && Urho3D::Equals(y_, rhs.y_, eps) && Urho3D::Equals(z_, rhs.z_, eps) && Urho3D::Equals(w_, rhs.w_, eps);
     }
 
     /// Return whether is NaN.

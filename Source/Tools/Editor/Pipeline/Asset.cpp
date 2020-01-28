@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +27,7 @@
 #include <Urho3D/Graphics/Material.h>
 #include <Urho3D/IO/FileSystem.h>
 #include <Urho3D/IO/Log.h>
+#include <Urho3D/Resource/JSONArchive.h>
 #include <Urho3D/Resource/JSONFile.h>
 #include <Urho3D/Resource/ResourceCache.h>
 #include <Urho3D/Resource/ResourceEvents.h>
@@ -34,6 +35,8 @@
 #include <Toolbox/SystemUI/Widgets.h>
 #include <Toolbox/SystemUI/ResourceBrowser.h>
 
+#include "Editor.h"
+#include "EditorEvents.h"
 #include "Project.h"
 #include "Pipeline/Pipeline.h"
 #include "Pipeline/Asset.h"
@@ -63,13 +66,7 @@ Asset::Asset(Context* context)
                 return;
         }
 
-        if (extraInspectors_.contains(from))
-        {
-            extraInspectors_[to] = extraInspectors_[from];
-            extraInspectors_.erase(from);
-        }
-
-        auto* fs = GetFileSystem();
+        auto* fs = context_->GetFileSystem();
         auto* project = GetSubsystem<Project>();
         ea::string newName = to + (isDir ? name_.substr(from.size()) : "");
 
@@ -88,23 +85,9 @@ Asset::Asset(Context* context)
         resourcePath_ = project->GetResourcePath() + name_;
     });
 
-    SubscribeToEvent(E_RESOURCEBROWSERSELECT, [this](StringHash, VariantMap& args) {
-        if (IsMetaAsset())
-            return;
-
-        using namespace ResourceBrowserSelect;
-        const ea::string& resourceName = args[P_NAME].GetString();
-        if (resourceName.starts_with(name_))
-        {
-            // Selected resource is a child of current asset.
-            UpdateExtraInspectors(resourceName);
-        }
-    });
-
-    SubscribeToEvent(E_RESOURCEBROWSERDELETE, [this](StringHash, VariantMap& args) {
-        using namespace ResourceBrowserDelete;
-        extraInspectors_.erase(args[P_NAME].GetString());
-    });
+    SubscribeToEvent(E_EDITORFLAVORADDED, [this](StringHash, VariantMap& args) { OnFlavorAdded(args); });
+    SubscribeToEvent(E_EDITORFLAVORREMOVED, [this](StringHash, VariantMap& args) { OnFlavorRemoved(args); });
+    undo_.Connect(this);
 }
 
 void Asset::RegisterObject(Context* context)
@@ -112,61 +95,23 @@ void Asset::RegisterObject(Context* context)
     context->RegisterFactory<Asset>();
 }
 
-void Asset::Initialize(const ea::string& resourceName)
+void Asset::SetName(const ea::string& name)
 {
     assert(name_.empty());
-
     auto* project = GetSubsystem<Project>();
-
-    resourcePath_ = project->GetResourcePath() + resourceName;
-    name_ = resourceName;
-
-    Load();
-
-    // Default-initialize
-    for (const ea::string& flavor : project->GetPipeline().GetFlavors())
-        AddFlavor(flavor);
-
-    contentType_ = ::Urho3D::GetContentType(context_, resourceName);
+    resourcePath_ = project->GetResourcePath() + name;
+    name_ = name;
+    contentType_ = ::Urho3D::GetContentType(context_, name);
 }
 
-bool Asset::IsOutOfDate() const
+bool Asset::IsOutOfDate(Flavor* flavor) const
 {
-    if (importers_.empty())
-        // Asset is used as is and never converted.
-        return false;
-
-    auto* project = GetSubsystem<Project>();
-    auto* fs = GetSubsystem<FileSystem>();
-    unsigned mtime = fs->GetLastModifiedTime(resourcePath_);
-
-    bool hasByproducts = false;
-    bool hasAcceptingImporters = false;
-    for (const auto& flavor : importers_)
+    for (const auto& importer : GetImporters(flavor))
     {
-        for (const auto& importer : flavor.second)
-        {
-            hasAcceptingImporters |= importer->Accepts(resourcePath_);
-            hasByproducts |= !importer->GetByproducts().empty();
-            for (const ea::string& byproduct : importer->GetByproducts())
-            {
-                const ea::string& byproductPath = project->GetCachePath() + byproduct;
-                if (fs->FileExists(byproductPath))
-                {
-                    if (fs->GetLastModifiedTime(byproductPath) < mtime)
-                        // Out of date when resource is newer than any of byproducts.
-                        return true;
-                }
-            }
-        }
+        if (importer->IsOutOfDate())
+            return true;
     }
-
-    if (!hasAcceptingImporters)
-        // Nothing to import.
-        return false;
-
-    // Out of date when nothing was imported.
-    return !hasByproducts;
+    return false;
 }
 
 void Asset::ClearCache()
@@ -186,104 +131,6 @@ void Asset::ClearCache()
         fs->RemoveDir(cachePath, true);
 }
 
-void Asset::RenderInspector(const char* filter)
-{
-    if (currentExtraInspectorProvider_)
-    {
-        auto* project = GetSubsystem<Project>();
-        auto* fs = GetSubsystem<FileSystem>();
-
-        ea::string resourceFileName = GetCache()->GetResourceFileName(currentExtraInspectorProvider_->GetResourceName());
-        if (resourceFileName.empty() || !fs->FileExists(resourceFileName))
-        {
-            extraInspectors_.erase(currentExtraInspectorProvider_->GetResourceName());
-            currentExtraInspectorProvider_ = nullptr;
-        }
-        else
-            currentExtraInspectorProvider_->RenderInspector(filter);
-    }
-
-    bool tabBarStarted = false;
-    bool save = false;
-    StringVector flavors = importers_.keys();
-    auto it = flavors.find(DEFAULT_PIPELINE_FLAVOR);
-    ea::swap(*it, *flavors.begin());                    // default first
-    ea::quick_sort(flavors.begin() + 1, flavors.end()); // sort the rest
-
-    for (const ea::string& flavor : flavors)
-    {
-        bool tabStarted = false;
-        bool tabVisible = false;
-        for (const auto& importer : importers_[flavor])
-        {
-            bool importerSupportsFiles = false;
-            if (IsMetaAsset())
-            {
-                // This is a meta-asset pointing to a directory. Such assets are used to hold importer settings
-                // for downstream importers to inherit from. Show all importers for directories.
-                importerSupportsFiles = true;
-            }
-            else
-            {
-                // This is a real asset. Show only those importers that can import asset itself or any of it's
-                // byproducts.
-                importerSupportsFiles = importer->Accepts(resourcePath_);
-                for (const auto& siblingImporter : importers_[flavor])
-                {
-                    if (importer == siblingImporter)
-                        continue;
-
-                    for (const auto& byproduct : siblingImporter->GetByproducts())
-                    {
-                        importerSupportsFiles |= importer->Accepts(byproduct);
-                        if (importerSupportsFiles)
-                            break;
-                    }
-                    if (importerSupportsFiles)
-                        break;
-                }
-            }
-
-            if (importerSupportsFiles)
-            {
-                // Defer rendering of tab bar and tabs until we know that we have compatible importers. As a result if
-                // file is not supported by any importer - tab bar with flavors and no content will not be shown.
-                if (!tabBarStarted)
-                {
-                    ui::TextUnformatted("Importers");
-                    ui::Separator();
-                    ui::BeginTabBar(Format("###{}", (void*) this).c_str(), ImGuiTabBarFlags_None);
-                    tabBarStarted = true;
-                }
-
-                if (!tabStarted)
-                {
-                    tabStarted = true;
-                    tabVisible = ui::BeginTabItem(flavor.c_str());
-                    if (tabVisible)
-                        ui::SetHelpTooltip("Pipeline flavor");
-                }
-
-                if (tabVisible)
-                {
-                    importer->RenderInspector(filter);
-                    save |= importer->attributesModified_;
-                    importer->attributesModified_ = false;
-                }
-            }
-        }
-
-        if (tabVisible)
-            ui::EndTabItem();
-    }
-
-    if (tabBarStarted)
-        ui::EndTabBar();
-
-    if (save)
-        Save();
-}
-
 bool Asset::Save()
 {
     ea::string assetPath = RemoveTrailingSlash(resourcePath_) + ".asset";
@@ -296,6 +143,7 @@ bool Asset::Save()
         for (const auto& importer : flavor.second)
         {
             isModified |= importer->IsModified();
+            isModified |= !importer->GetByproducts().empty();
             if (isModified)
                 break;
         }
@@ -307,18 +155,17 @@ bool Asset::Save()
 
     if (isModified)
     {
-        JSONValue root{ };
-        if (SaveJSON(root))
+        JSONFile file(context_);
+        JSONOutputArchive archive(&file);
+        if (Serialize(archive))
         {
-            JSONFile file(context_);
-            file.GetRoot() = root;
             if (file.SaveFile(assetPath))
                 return true;
         }
     }
     else
     {
-        GetFileSystem()->Delete(assetPath);
+        context_->GetFileSystem()->Delete(assetPath);
         return true;
     }
 
@@ -328,164 +175,174 @@ bool Asset::Save()
 
 bool Asset::Load()
 {
+    assert(!name_.empty());
     ea::string assetPath = RemoveTrailingSlash(resourcePath_) + ".asset";
-    if (!GetFileSystem()->FileExists(assetPath))
-        // Default instance.
-        return true;
-
     JSONFile file(context_);
-    if (file.LoadFile(assetPath))
+    if (context_->GetFileSystem()->FileExists(assetPath))
     {
-        if (LoadJSON(file.GetRoot()))
-            return true;
-    }
-
-    URHO3D_LOGERROR("Loading {} failed.", assetPath);
-    return false;
-}
-
-bool Asset::SaveJSON(JSONValue& dest) const
-{
-    if (!Serializable::SaveJSON(dest))
-        return false;
-
-    auto* project = GetSubsystem<Project>();
-    StringVector flavors = project->GetPipeline().GetFlavors();
-    auto it = flavors.find(DEFAULT_PIPELINE_FLAVOR);
-    ea::swap(*it, *flavors.begin());                    // default first
-    ea::quick_sort(flavors.begin() + 1, flavors.end()); // sort the rest
-
-    JSONValue& flavorsDest = dest["flavors"];
-    flavorsDest.SetType(JSON_OBJECT);
-
-    for (const ea::string& flavor : flavors)
-    {
-        JSONValue& flavorDest = flavorsDest[flavor];
-        flavorDest.SetType(JSON_OBJECT);
-
-        JSONValue& importersDest = flavorDest["importers"];
-        importersDest.SetType(JSON_OBJECT);
-
-        // TODO: sort importers by type name
-        for (const auto& importer : importers_.find(flavor)->second)
+        if (!file.LoadFile(assetPath))
         {
-            JSONValue& importerDest = importersDest[importer->GetTypeName()];
-            importerDest.SetType(JSON_OBJECT);
-            if (!importer->SaveJSON(importerDest))
-                return false;
+            URHO3D_LOGERROR("Loading {} failed.", assetPath);
+            return false;
         }
     }
+
+    JSONInputArchive archive(&file);
+    if (!Serialize(archive))
+        return false;
+
+    // Initialize flavor importers.
+    for (Flavor* flavor : GetSubsystem<Pipeline>()->GetFlavors())
+        AddFlavor(flavor);
 
     return true;
 }
 
-bool Asset::LoadJSON(const JSONValue& source)
+bool Asset::Serialize(Archive& archive)
 {
-    if (!Serializable::LoadJSON(source))
-        return false;
-
-    const JSONValue& flavorsSrc = source["flavors"];
-    if (!flavorsSrc.IsObject())
-        return false;
-
-    auto* project = GetSubsystem<Project>();
-    for (const ea::string& flavor : project->GetPipeline().GetFlavors())
+    if (auto block = archive.OpenUnorderedBlock("asset"))
     {
-        const JSONValue& flavorSrc = flavorsSrc[flavor];
-        if (!flavorSrc.IsObject())
+        if (!BaseClassName::Serialize(archive, block))
             return false;
 
-        const JSONValue& importersSrc = flavorSrc["importers"];
-        if (!importersSrc.IsObject())
-            return false;
-
-        for (const auto& importerSrc : importersSrc)
+        auto* pipeline = GetSubsystem<Pipeline>();
+        const ea::vector<SharedPtr<Flavor>>& flavors = pipeline->GetFlavors();
+        if (auto block = archive.OpenUnorderedBlock("flavors"))
         {
-            if (!importerSrc.second.IsObject())
-                return false;
-            SharedPtr<AssetImporter> importer(context_->CreateObject(importerSrc.first)->Cast<AssetImporter>());
-            importer->Initialize(this, flavor);
-            if (!importer->LoadJSON(importerSrc.second))
-                return false;
-            importers_[flavor].emplace_back(importer);
+            for (unsigned i = 0; i < flavors.size(); i++)
+            {
+                SharedPtr<Flavor> flavor = flavors[i];
+                if (auto block = archive.OpenUnorderedBlock(flavor->GetName().c_str()))
+                {
+                    if (auto block = archive.OpenUnorderedBlock("importers"))
+                    {
+                        for (const TypeInfo* importerType : pipeline->GetImporterTypes())
+                        {
+                            SharedPtr<AssetImporter> importer;
+                            if (archive.IsInput())
+                            {
+                                importer = context_->CreateObject(importerType->GetType())->Cast<AssetImporter>();
+                                importer->Initialize(this, flavor);
+                                importers_[flavor].emplace_back(importer);
+                            }
+                            else
+                                importer = GetImporter(flavor, importerType->GetType());
+                            if (auto block = archive.OpenUnorderedBlock(importerType->GetTypeName().c_str()))
+                            {
+                                if (!importer->Serialize(archive, block))
+                                    return false;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
-
-    for (const ea::string& flavor : project->GetPipeline().GetFlavors())
-    {
-        for (const auto& importer : importers_[flavor])
-            importer->SetInheritedDefaultsIfSet();
-    }
-
     return true;
 }
 
-void Asset::AddFlavor(const ea::string& name)
+void Asset::AddFlavor(Flavor* flavor)
 {
-    if (importers_.contains(name))
+    if (importers_.contains(SharedPtr(flavor)))
         return;
 
-    auto* project = GetSubsystem<Project>();
-    ea::vector<SharedPtr<AssetImporter>>& importers = importers_[name];
-    for (StringHash importerType : project->GetPipeline().importers_)
+    ea::vector<SharedPtr<AssetImporter>>& importers = importers_[SharedPtr(flavor)];
+    for (const TypeInfo* importerType : GetSubsystem<Pipeline>()->GetImporterTypes())
     {
-        SharedPtr<AssetImporter> importer(context_->CreateObject(importerType)->Cast<AssetImporter>());
-        importer->Initialize(this, name);
+        SharedPtr<AssetImporter> importer(context_->CreateObject(importerType->GetType())->Cast<AssetImporter>());
+        importer->Initialize(this, flavor);
+        undo_.Connect(importer);
         importers.emplace_back(importer);
     }
 }
 
-void Asset::RemoveFlavor(const ea::string& name)
+const ea::vector<SharedPtr<AssetImporter>>& Asset::GetImporters(Flavor* flavor) const
 {
-    if (name == DEFAULT_PIPELINE_FLAVOR)
-        return;
-    importers_.erase(name);
+    static ea::vector<SharedPtr<AssetImporter>> empty;
+    auto it = importers_.find(SharedPtr(flavor));
+    if (it == importers_.end())
+        return empty;
+    return it->second;
 }
 
-void Asset::RenameFlavor(const ea::string& oldName, const ea::string& newName)
+AssetImporter* Asset::GetImporter(Flavor* flavor, StringHash type) const
 {
-    if (oldName == DEFAULT_PIPELINE_FLAVOR || newName == DEFAULT_PIPELINE_FLAVOR)
-        return;
-
-    if (!importers_.contains(oldName) || importers_.contains(newName))
-        return;
-
-    ea::swap(importers_[oldName], importers_[newName]);
-
-    importers_.erase(oldName);
+    for (AssetImporter* importer : GetImporters(flavor))
+    {
+        if (importer->GetType() == type)
+            return importer;
+    }
+    return nullptr;
 }
 
-void Asset::UpdateExtraInspectors(const ea::string& resourceName)
+void Asset::ReimportOutOfDateRecursive() const
 {
-    auto it = extraInspectors_.find(resourceName);
-    if (it != extraInspectors_.end())
-    {
-        currentExtraInspectorProvider_ = it->second.Get();
+    if (!IsMetaAsset())
         return;
-    }
 
-    ResourceInspector* inspector = nullptr;
-    switch (::Urho3D::GetContentType(context_, resourceName))
-    {
-    case CTYPE_MODEL:
-    {
-        currentExtraInspectorProvider_ = inspector = extraInspectors_[resourceName] =
-            context_->CreateObject<ModelInspector>();
-        break;
-    }
-    case CTYPE_MATERIAL:
-    {
-        currentExtraInspectorProvider_ = inspector = extraInspectors_[resourceName] =
-            context_->CreateObject<MaterialInspector>();
-        break;
-    }
-    default:
-        currentExtraInspectorProvider_ = nullptr;
-        break;
-    }
+    auto* fs = context_->GetFileSystem();
+    auto* project = GetSubsystem<Project>();
+    Pipeline* pipeline = project->GetPipeline();
 
-    if (inspector != nullptr)
-        inspector->SetResource(resourceName);
+    StringVector files;
+    fs->ScanDir(files, GetResourcePath(), "", SCAN_FILES, true);
+
+    for (const ea::string& file : files)
+    {
+        if (Asset* asset = pipeline->GetAsset(GetName() + file))
+        {
+            if (asset->IsOutOfDate(pipeline->GetDefaultFlavor()))
+                pipeline->ScheduleImport(asset);
+        }
+    }
+}
+
+void Asset::OnFlavorAdded(VariantMap& args)
+{
+    using namespace EditorFlavorAdded;
+    auto* flavor = static_cast<Flavor*>(args[P_FLAVOR].GetPtr());
+    AddFlavor(flavor);
+}
+
+void Asset::OnFlavorRemoved(VariantMap& args)
+{
+    using namespace EditorFlavorRemoved;
+    auto* flavor = static_cast<Flavor*>(args[P_FLAVOR].GetPtr());
+    importers_.erase(SharedPtr(flavor));
+}
+
+void Asset::Inspect()
+{
+    ea::vector<Object*> safeSenders{this};
+    auto* editor = GetSubsystem<Editor>();
+    auto* pipeline = GetSubsystem<Pipeline>();
+    auto* cache = GetSubsystem<ResourceCache>();
+    editor->ClearInspector();
+    // Asset inspector will show inspectors for importers.
+    editor->Inspect(this);
+    // Show inspectors for byproducts too.
+    for (AssetImporter* importer : GetImporters(pipeline->GetDefaultFlavor()))
+    {
+        safeSenders.push_back(importer);
+        for (const ea::string& byproduct : importer->GetByproducts())
+        {
+            if (StringHash resourceType = GetContentResourceType(context_, byproduct))
+            {
+                Resource* resource = cache->GetResource(resourceType, byproduct);
+                editor->Inspect(resource);
+                undo_.Connect(resource);
+            }
+        }
+    }
+    // Show inspector for raw resource.
+    if (StringHash resourceType = GetContentResourceType(context_, GetName()))
+    {
+        if (Resource* resource = cache->GetResource(resourceType, GetName()))
+        {
+            editor->Inspect(resource);
+            undo_.Connect(resource);
+        }
+    }
 }
 
 }

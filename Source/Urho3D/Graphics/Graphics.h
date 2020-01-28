@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -156,7 +156,7 @@ public:
     /// Set shaders.
     void SetShaders(ShaderVariation* vs, ShaderVariation* ps);
     /// Set shader float constants.
-    void SetShaderParameter(StringHash param, const float* data, unsigned count);
+    void SetShaderParameter(StringHash param, const float data[], unsigned count);
     /// Set shader float constant.
     void SetShaderParameter(StringHash param, float value);
     /// Set shader integer constant.
@@ -252,6 +252,8 @@ public:
     void PrecacheShaders(Deserializer& source);
     /// Set shader cache directory, Direct3D only. This can either be an absolute path or a path within the resource system.
     void SetShaderCacheDir(const ea::string& path);
+    /// Set global shader defines.
+    void SetGlobalShaderDefines(const ea::string& globalShaderDefines);
 
     /// Return whether rendering initialized.
     bool IsInitialized() const;
@@ -490,6 +492,12 @@ public:
 
     /// Return shader cache directory, Direct3D only.
     const ea::string& GetShaderCacheDir() const { return shaderCacheDir_; }
+
+    /// Return global shader defines.
+    const ea::string& GetGlobalShaderDefines() const { return globalShaderDefines_; }
+
+    /// Return global shader defines hash.
+    StringHash GetGlobalShaderDefinesHash() const { return globalShaderDefinesHash_; }
 
     /// Return current rendertarget width and height.
     IntVector2 GetRenderTargetDimensions() const;
@@ -799,6 +807,10 @@ private:
     ea::string orientations_;
     /// Graphics API name.
     ea::string apiName_;
+    /// Global shader defines.
+    ea::string globalShaderDefines_;
+    /// Hash of global shader defines.
+    StringHash globalShaderDefinesHash_;
 
     /// Pixel perfect UV offset.
     static const Vector2 pixelUVOffset;

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2019 Rokas Kupstys.
+# Copyright (c) 2017-2020 the rbfx project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,3 +29,5 @@ add_target_csharp(
     PROJECT ${CMAKE_CURRENT_SOURCE_DIR}/ScriptPlayer.csproj
     OUTPUT ${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG}/ScriptPlayer.exe
     DEPENDS Urho3DNet)
+add_dependencies(ScriptPlayer Urho3DNet)
+install(FILES "${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG}/ScriptPlayer.exe" DESTINATION ${DEST_BIN_DIR_CONFIG})

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -59,6 +59,9 @@ public:
 
     /// Return swapchain.
     IDXGISwapChain* GetSwapChain() const { return swapChain_; }
+
+    /// Return default render target view.
+    ID3D11RenderTargetView* GetDefaultRenderTargetView() const { return defaultRenderTargetView_; }
 
     /// Return whether multisampling is supported for a given texture format and sample count.
     bool CheckMultiSampleSupport(DXGI_FORMAT format, unsigned sampleCount) const;

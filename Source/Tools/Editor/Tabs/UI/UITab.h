@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@
 namespace Urho3D
 {
 
-class UITab : public BaseResourceTab, public IHierarchyProvider, public IInspectorProvider
+class UITab : public BaseResourceTab, public IHierarchyProvider
 {
     URHO3D_OBJECT(UITab, BaseResourceTab);
 public:
@@ -39,22 +39,10 @@ public:
     explicit UITab(Context* context);
     /// Render scene hierarchy window.
     void RenderHierarchy() override;
-    /// Clear current selection.
-    void ClearSelection() override;
-    /// Render inspector window.
-    void RenderInspector(const char* filter) override;
     /// Render content of tab window.
     bool RenderWindowContent() override;
     /// Render toolbar buttons.
     void RenderToolbarButtons() override;
-    /// Handle window padding.
-    void OnBeforeEnd() override;
-    /// Handle window padding.
-    void OnBeforeBegin() override;
-    /// Handle window padding.
-    void OnAfterBegin() override;
-    /// Handle window padding.
-    void OnAfterEnd() override;
     /// Update window when it is active.
     void OnActiveUpdate() override;
     /// Load UI layout from resource path.
@@ -69,8 +57,6 @@ public:
     UIElement* GetSelected() const;
 
 protected:
-    ///
-    IntRect UpdateViewRect() override;
     /// Render scene hierarchy window.
     void RenderNodeTree(UIElement* element);
     /// Select element. Pass null to unselect current element.
@@ -100,10 +86,13 @@ protected:
     SharedPtr<Texture2D> texture_;
     /// Flag enabling display of internal elements.
     bool showInternal_ = false;
-
+    ///
     WeakPtr<UIElement> selectedElement_;
+    ///
     bool hideResizeHandles_ = false;
+    ///
     ea::vector<ea::string> styleNames_;
+    ///
     ea::string textureSelectorAttribute_;
 };
 

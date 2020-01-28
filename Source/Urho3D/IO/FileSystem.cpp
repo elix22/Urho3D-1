@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -151,11 +151,11 @@ int DoSystemCommand(const ea::string& commandLine, bool redirectToLog, Context* 
 #endif
 }
 
-enum SystemRunFlag
+enum SystemRunFlag : unsigned
 {
     SR_DEFAULT,
     SR_WAIT_FOR_EXIT,
-    SR_READ_OUTPUT = 1 << 1 | SR_WAIT_FOR_EXIT,
+    SR_READ_OUTPUT = 1u << 1u | SR_WAIT_FOR_EXIT,
 };
 URHO3D_FLAGSET(SystemRunFlag, SystemRunFlags);
 
@@ -270,7 +270,7 @@ int DoSystemRun(const ea::string& fileName, const ea::vector<ea::string>& argume
         posix_spawn_file_actions_addclose(&actions, STDERR_FILENO);
         posix_spawn_file_actions_adddup2(&actions, desc[1], STDERR_FILENO);
     }
-    posix_spawnp(&pid, fixedFileName.c_str(), &actions, 0, (char**)&argPtrs[0], environ);
+    posix_spawnp(&pid, fixedFileName.c_str(), &actions, nullptr, (char**)&argPtrs[0], environ);
     posix_spawn_file_actions_destroy(&actions);
 
     if (pid > 0)
@@ -497,7 +497,13 @@ int FileSystem::SystemRun(const ea::string& fileName, const ea::vector<ea::strin
 int FileSystem::SystemRun(const ea::string& fileName, const ea::vector<ea::string>& arguments)
 {
     ea::string output;
-    return SystemRun(fileName, arguments, output);
+    if (allowedPaths_.empty())
+        return DoSystemRun(fileName, arguments, SR_WAIT_FOR_EXIT, output);
+    else
+    {
+        URHO3D_LOGERROR("Executing an external command is not allowed");
+        return -1;
+    }
 }
 
 int FileSystem::SystemSpawn(const ea::string& fileName, const ea::vector<ea::string>& arguments)
@@ -948,7 +954,7 @@ void FileSystem::ScanDirInternal(ea::vector<ea::string>& result, ea::string path
     if (URHO3D_IS_ASSET(path))
     {
         ea::string assetPath(URHO3D_ASSET(path));
-        assetPath.resize(assetPath.length() - 1);       // AssetManager.list() does not like trailing slash
+        assetPath = RemoveTrailingSlash(assetPath);       // AssetManager.list() does not like trailing slash
         int count;
         char** list = SDL_Android_GetFileList(assetPath.c_str(), &count);
         for (int i = 0; i < count; ++i)
@@ -1496,7 +1502,7 @@ ea::string GetAbsolutePath(const ea::string& path)
     {
         if (parts[index] != ".." && parts[index + 1] == "..")
         {
-            parts.erase_at(index, index + 2);
+            parts.erase_at(index, 2);
             index = Max(0, --index);
         }
         else

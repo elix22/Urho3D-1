@@ -1,6 +1,6 @@
 //
 // Copyright (c) 2008-2017 the Urho3D project.
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,19 +23,30 @@
 #pragma once
 
 
-#include <EASTL/unordered_map.h>
+#include "../Core/Object.h"
+#include "../Graphics/IndexBuffer.h"
+#include "../Graphics/Texture2D.h"
+#include "../Graphics/VertexBuffer.h"
+#include "../Input/InputEvents.h"
+#include "../Math/StringHash.h"
+#include "../Math/Matrix4.h"
+#include "../Math/Vector2.h"
+#include "../Math/Vector4.h"
+#include "../SystemUI/SystemUIEvents.h"
 
-#include "Urho3D/Core/Object.h"
-#include "Urho3D/Math/StringHash.h"
-#include "Urho3D/Graphics/VertexBuffer.h"
-#include "Urho3D/Graphics/IndexBuffer.h"
-#include "Urho3D/Math/Matrix4.h"
-#include "Urho3D/Graphics/Texture2D.h"
-#include "Urho3D/Input/InputEvents.h"
-#include "SystemUIEvents.h"
+#define IM_VEC2_CLASS_EXTRA                                                                                            \
+    operator Urho3D::Vector2() { return {x, y}; }                                                                      \
+    ImVec2(const Urho3D::Vector2& vec) { x = vec.x_; y = vec.y_; }
+
+#define IM_VEC4_CLASS_EXTRA                                                                                            \
+    operator Urho3D::Vector4() { return {x, y, z, w}; }                                                                \
+    ImVec4(const Urho3D::Vector4& vec) { x = vec.x_; y = vec.y_; z = vec.z_; w = vec.w_; }
+
+#include <EASTL/unordered_map.h>
 
 #include <ImGui/imgui.h>
 #include <ImGui/imgui_internal.h>
+#include <ImGui/imgui_stdlib.h>
 
 
 namespace Urho3D
@@ -48,28 +59,20 @@ class URHO3D_API SystemUI : public Object
 URHO3D_OBJECT(SystemUI, Object);
 public:
     /// Construct.
-    explicit SystemUI(Context* context);
+    explicit SystemUI(Context* context, ImGuiConfigFlags flags=0);
     /// Destruct.
     ~SystemUI() override;
 
-    /// Get ui scale.
-    /// \return scale of ui.
-    float GetZoom() const { return uiZoom_; };
-    /// Set ui scale.
-    /// \param zoom of ui.
-    void SetZoom(float zoom);
-    /// Update DPI scale.
-    /// \param scale is a vector of {hscale, vscale, dscale}. If `pixelPerfect` is `true` then scale will be rounded to nearest power of two.
-    void SetScale(Vector3 scale, bool pixelPerfect=true);
     /// Add font to imgui subsystem.
     /// \param fontPath a string pointing to TTF font resource.
     /// \param size a font size. If 0 then size of last font is used.
+    /// \param name is any string, stored internally as font name.
     /// \param ranges optional ranges of font that should be used. Parameter is ImWchar[] of {start1, stop1, ..., startN, stopN, 0}.
     /// \param merge set to true if new font should be merged to last active font.
     /// \return ImFont instance that may be used for setting current font when drawing GUI.
     ImFont* AddFont(const ea::string& fontPath, const ImWchar* ranges = nullptr, float size = 0, bool merge = false);
-    ImFont* AddFont(const void* data, unsigned dsize, const ImWchar* ranges = nullptr, float size = 0, bool merge = false);
-    ImFont* AddFontCompressed(const void* data, unsigned dsize, const ImWchar* ranges = nullptr, float size = 0, bool merge = false);
+    ImFont* AddFont(const void* data, unsigned dsize, const char* name, const ImWchar* ranges = nullptr, float size = 0, bool merge = false);
+    ImFont* AddFontCompressed(const void* data, unsigned dsize, const char* name, const ImWchar* ranges = nullptr, float size = 0, bool merge = false);
     /// Apply built-in system ui style.
     /// \param darkStyle enables dark style, otherwise it is a light style.
     /// \param alpha value between 0.0f - 1.0f
@@ -78,25 +81,26 @@ public:
     bool IsAnyItemActive() const;
     /// Return whether mouse is hovering any system ui component.
     bool IsAnyItemHovered() const;
-    /// Return font scale.
-    float GetFontScale() const { return fontScale_; }
     /// Prepares font textures, updates projection matrix and does other things that are required to start this subsystem.
     void Start();
+    /// Hold a reference to this texture until end of frame.
+    void ReferenceTexture(Texture2D* texture) { referencedTextures_.push_back(SharedPtr(texture)); }
 
 protected:
-    float uiZoom_ = 1.f;
-    float fontScale_ = 1.f;
-    Matrix4 projection_;
     VertexBuffer vertexBuffer_;
     IndexBuffer indexBuffer_;
     SharedPtr<Texture2D> fontTexture_;
     ea::vector<float> fontSizes_;
     ImGuiContext* imContext_;
+    ea::vector<SharedPtr<Texture2D>> referencedTextures_;
 
+    void PlatformInitialize();
+    void PlatformShutdown();
     void ReallocateFontTexture();
-    void UpdateProjectionMatrix();
-    void OnRenderDrawLists(ImDrawData* data);
     void OnRawEvent(VariantMap& args);
+    void OnScreenMode(VariantMap& args);
+    void OnInputEnd(VariantMap& args);
+    void OnRenderEnd();
 };
 
 /// Convert Color to ImVec4.
@@ -123,58 +127,31 @@ URHO3D_API bool IsMouseDragging(Urho3D::MouseButton button, float lock_threshold
 URHO3D_API bool IsMouseReleased(Urho3D::MouseButton button);
 URHO3D_API bool IsMouseClicked(Urho3D::MouseButton button, bool repeat=false);
 URHO3D_API bool IsItemClicked(Urho3D::MouseButton button);
+URHO3D_API ImVec2 GetMouseDragDelta(Urho3D::MouseButton button, float lock_threshold = -1.0f);
 URHO3D_API bool SetDragDropVariant(const char* type, const Urho3D::Variant& variant, ImGuiCond cond = 0);
 URHO3D_API const Urho3D::Variant& AcceptDragDropVariant(const char* type, ImGuiDragDropFlags flags = 0);
-
-namespace litterals
-{
-
-/// Scale a literal value according to x axis DPI.
-URHO3D_API float operator "" _dpx(long double x);
-/// Scale a literal value according to x axis DPI.
-URHO3D_API float operator "" _dpx(unsigned long long x);
-
-/// Scale a literal value according to y axis DPI.
-URHO3D_API float operator "" _dpy(long double y);
-/// Scale a literal value according to y axis DPI.
-URHO3D_API float operator "" _dpy(unsigned long long y);
-
-/// Scale a literal value according to diagonal axis DPI.
-URHO3D_API float operator "" _dp(long double z);
-/// Scale a literal value according to diagonal axis DPI.
-URHO3D_API float operator "" _dp(unsigned long long z);
-
-/// Scale a literal value according to x axis DPI which was rounded to the nearest power of two.
-URHO3D_API float operator "" _pdpx(long double x);
-/// Scale a literal value according to x axis DPI which was rounded to the nearest power of two.
-URHO3D_API float operator "" _pdpx(unsigned long long x);
-
-/// Scale a literal value according to y axis DPI which was rounded to the nearest power of two.
-URHO3D_API float operator "" _pdpy(long double y);
-/// Scale a literal value according to y axis DPI which was rounded to the nearest power of two.
-URHO3D_API float operator "" _pdpy(unsigned long long y);
-
-/// Scale a literal value according to diagonal axis DPI which was rounded to the nearest power of two.
-URHO3D_API float operator "" _pdp(long double z);
-/// Scale a literal value according to diagonal axis DPI which was rounded to the nearest power of two.
-URHO3D_API float operator "" _pdp(unsigned long long z);
+URHO3D_API void Image(Urho3D::Texture2D* user_texture_id, const ImVec2& size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1), const ImVec4& tint_col = ImVec4(1, 1, 1, 1), const ImVec4& border_col = ImVec4(0, 0, 0, 0));
+/// Render an image which is also an item that can be activated.
+URHO3D_API void ImageItem(Urho3D::Texture2D* user_texture_id, const ImVec2& size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1), const ImVec4& tint_col = ImVec4(1, 1, 1, 1), const ImVec4& border_col = ImVec4(0, 0, 0, 0));
+URHO3D_API bool ImageButton(Urho3D::Texture2D* user_texture_id, const ImVec2& size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1), int frame_padding = -1, const ImVec4 & bg_col = ImVec4(0, 0, 0, 0), const ImVec4 & tint_col = ImVec4(1, 1, 1, 1));
+URHO3D_API bool IsKeyDown(Urho3D::Key key);
+URHO3D_API bool IsKeyPressed(Urho3D::Key key, bool repeat = true);
+URHO3D_API bool IsKeyReleased(Urho3D::Key key);
+URHO3D_API int GetKeyPressedAmount(Urho3D::Key key, float repeat_delay, float rate);
+/// Activate last item if specified mouse button is pressed and held over it, deactivate when released.
+URHO3D_API bool ItemMouseActivation(Urho3D::MouseButton button);
 
 }
 
-/// Scale a value according to x axis DPI.
-URHO3D_API float dpx(float x);
-/// Scale a value according to y axis DPI.
-URHO3D_API float dpy(float y);
-/// Scale a value according to diagonal axis DPI.
-URHO3D_API float dp(float z);
-
-/// Scale a literal value according to x axis DPI which was rounded to the nearest power of two.
-URHO3D_API float pdpx(float x);
-/// Scale a literal value according to y axis DPI which was rounded to the nearest power of two.
-URHO3D_API float pdpy(float y);
-/// Scale a literal value according to diagonal axis DPI which was rounded to the nearest power of two.
-URHO3D_API float pdp(float z);
-
-}
+static inline bool operator==(const ImVec2& lhs, const ImVec2& rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
+static inline bool operator!=(const ImVec2& lhs, const ImVec2& rhs) { return !(lhs == rhs); }
+static inline bool operator==(const ImRect& lhs, const ImRect& rhs) { return lhs.Min == rhs.Min && lhs.Max == rhs.Max; }
+static inline bool operator!=(const ImRect& lhs, const ImRect& rhs) { return !(lhs == rhs); }
+static inline ImRect operator+(const ImRect& lhs, const ImRect& rhs) { return ImRect(lhs.Min + rhs.Min, lhs.Max + rhs.Max); }
+static inline ImRect& operator+=(ImRect& lhs, const ImRect& rhs) { lhs.Min += rhs.Min; lhs.Max += rhs.Max; return lhs; }
+static inline ImRect operator/(const ImRect& lhs, float rhs) { return ImRect(lhs.Min / rhs, lhs.Max / rhs); }
+static inline ImRect& operator/=(ImRect& lhs, float rhs) { lhs.Min /= rhs; lhs.Max /= rhs; return lhs; }
+static inline ImRect& operator*=(ImRect& lhs, float rhs) { lhs.Min *= rhs; lhs.Max *= rhs; return lhs; }
+static inline ImRect ImRound(const ImRect& r) { return ImRect(ImRound(r.Min), ImRound(r.Max)); };
 
 namespace ui = ImGui;

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,8 +20,11 @@
 // THE SOFTWARE.
 //
 
+/// \file
+
 #pragma once
 
+#include <EASTL/span.h>
 #include <EASTL/unique_ptr.h>
 
 #include "../Core/Mutex.h"
@@ -29,6 +32,8 @@
 #include "../Resource/JSONFile.h"
 #include "../Scene/Node.h"
 #include "../Scene/SceneResolver.h"
+
+#include <entt/entity/registry.hpp>
 
 namespace Urho3D
 {
@@ -98,6 +103,22 @@ public:
     ~Scene() override;
     /// Register object factory. Node must be registered first.
     static void RegisterObject(Context* context);
+
+    /// Enable registry. Scene must be empty.
+    bool EnableRegistry();
+    /// Create component index. Scene must be empty.
+    bool CreateComponentIndex(StringHash componentType);
+    /// Create component index for template type. Scene must be empty.
+    template <class T> void CreateComponentIndex() { CreateComponentIndex(T::GetTypeStatic()); }
+    /// Return registry.
+    entt::registry& GetRegistry() { return reg_; }
+    /// Return component index. Iterable. Invalidated when indexed component is added or removed!
+    ea::span<Component* const> GetComponentIndex(StringHash componentType);
+    /// Return component index for template type. Invalidated when indexed component is added or removed!
+    template <class T> ea::span<Component* const> GetComponentIndex() { return GetComponentIndex(T::GetTypeStatic()); }
+
+    /// Serialize from/to archive. Return true if successful.
+    bool Serialize(Archive& archive) override;
 
     /// Load from binary data. Removes all existing child nodes and components first. Return true if successful.
     bool Load(Deserializer& source) override;
@@ -278,6 +299,17 @@ private:
     void PreloadResourcesXML(const XMLElement& element);
     /// Preload resources from a JSON scene or object prefab file.
     void PreloadResourcesJSON(const JSONValue& value);
+    /// Return component index storage for given type.
+    entt::storage<entt::entity, Component*>* GetComponentIndexStorage(StringHash componentType);
+
+    /// Whether the registry is active.
+    bool registryEnabled_{ false };
+    /// Registry.
+    entt::registry reg_;
+    /// Types of components that should be indexed.
+    ea::vector<StringHash> indexedComponentTypes_;
+    /// Indexes of components.
+    ea::vector<entt::storage<entt::entity, Component*>> componentIndexes_;
 
     /// Replicated scene nodes by ID.
     ea::unordered_map<unsigned, Node*> replicatedNodes_;

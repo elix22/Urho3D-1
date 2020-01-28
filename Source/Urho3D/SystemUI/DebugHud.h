@@ -1,6 +1,6 @@
 //
 // Copyright (c) 2008-2017 the Urho3D project.
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,11 +23,12 @@
 
 #pragma once
 
-#include <EASTL/map.h>
-
 #include "../Container/FlagSet.h"
 #include "../Core/Object.h"
 #include "../Core/Timer.h"
+#include "../SystemUI/SystemUI.h"
+
+#include <EASTL/map.h>
 
 namespace Urho3D
 {
@@ -82,32 +83,23 @@ public:
     bool ResetAppStats(const ea::string& label);
     /// Clear all application-specific stats.
     void ClearAppStats();
-    /// Limit rendering area of debug hud.
-    /// \param position of debug hud from top-left corner of the screen.
-    /// \param size specifies size of debug hud rect. Pass zero vector to occupy entire screen and automatically resize
-    /// debug hud to the size of the screen later. Calling this method with non-zero size parameter requires user to manually resize debug hud on screen size changes later.
-    void SetExtents(const IntVector2& position = IntVector2::ZERO, IntVector2 size = IntVector2::ZERO);
+    /// Render system ui.
+    void RenderUI(DebugHudModeFlags mode);
 
 private:
-    /// Render system ui.
-    void RenderUi(VariantMap& eventData);
+    /// Render debug hud on to entire viewport.
+    void OnRenderDebugUI(StringHash, VariantMap&);
 
     /// Hashmap containing application specific stats.
-    ea::map<ea::string, ea::string> appStats_;
-    /// Profiler max block depth.
-    unsigned profilerMaxDepth_;
-    /// Profiler accumulation interval.
-    unsigned profilerInterval_;
+    ea::map<ea::string, ea::string> appStats_{};
     /// Show 3D geometry primitive/batch count flag.
-    bool useRendererStats_;
+    bool useRendererStats_ = true;
     /// Current shown-element mode.
-    DebugHudModeFlags mode_;
+    DebugHudModeFlags mode_{DEBUGHUD_SHOW_NONE};
     /// FPS timer.
-    Timer fpsTimer_;
+    Timer fpsTimer_{};
     /// Calculated fps
-    unsigned fps_;
-    /// DebugHud extents that data will be rendered in.
-    IntRect extents_;
+    unsigned fps_ = 0;
 };
 
 }

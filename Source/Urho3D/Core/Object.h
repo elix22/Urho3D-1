@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,6 +35,7 @@
 namespace Urho3D
 {
 
+class Archive;
 class Context;
 class EventHandler;
 class Engine;
@@ -127,6 +128,9 @@ public:
     /// Handle event.
     virtual void OnEvent(Object* sender, StringHash eventType, VariantMap& eventData);
 
+    /// Serialize object.
+    virtual bool Serialize(Archive& archive);
+
     /// Return type info static.
     static const TypeInfo* GetTypeInfoStatic() { return nullptr; }
     /// Check current instance is type of specified type.
@@ -158,6 +162,8 @@ public:
     void UnsubscribeFromAllEvents();
     /// Unsubscribe from all events except those listed, and optionally only those with userdata (script registered events.)
     void UnsubscribeFromAllEventsExcept(const ea::vector<StringHash>& exceptions, bool onlyUserData);
+    /// Unsubscribe from all events except those with listed senders, and optionally only those with userdata (script registered events.)
+    void UnsubscribeFromAllEventsExcept(const ea::vector<Object*>& exceptions, bool onlyUserData);
     /// Send event to all subscribers.
     void SendEvent(StringHash eventType);
     /// Send event with parameters to all subscribers.
@@ -203,41 +209,6 @@ public:
     void SetBlockEvents(bool block) { blockEvents_ = block; }
     /// Return sending and receiving events blocking status.
     bool GetBlockEvents() const { return blockEvents_; }
-
-    /// Return engine subsystem.
-    Engine* GetEngine() const;
-    /// Return time subsystem.
-    Time* GetTime() const;
-    /// Return work queue subsystem.
-    WorkQueue* GetWorkQueue() const;
-    /// Return file system subsystem.
-    FileSystem* GetFileSystem() const;
-#if URHO3D_LOGGING
-    /// Return logging subsystem.
-    Log* GetLog() const;
-#endif
-    /// Return resource cache subsystem.
-    ResourceCache* GetCache() const;
-    /// Return localization subsystem.
-    Localization* GetLocalization() const;
-#if URHO3D_NETWORK
-    /// Return network subsystem.
-    Network* GetNetwork() const;
-#endif
-    /// Return input subsystem.
-    Input* GetInput() const;
-    /// Return audio subsystem.
-    Audio* GetAudio() const;
-    /// Return UI subsystem.
-    UI* GetUI() const;
-#if URHO3D_SYSTEMUI
-    /// Return system ui subsystem.
-    SystemUI* GetSystemUI() const;
-#endif
-    /// Return graphics subsystem.
-    Graphics* GetGraphics() const;
-    /// Return renderer subsystem.
-    Renderer* GetRenderer() const;
 
 protected:
     /// Execution context.

@@ -99,6 +99,7 @@ Urho3D development, contributions and bugfixes by:
 - Ner'zhul
 - Newb I the Newbd
 - OvermindDL1
+- Polynominal
 - PredatorMF
 - Scellow
 - Skrylar
@@ -114,9 +115,11 @@ Urho3D development, contributions and bugfixes by:
 - att-kin9
 - celeron55
 - chenjie199234
+- codexhound
 - cosmy1
 - damu
 - dragonCASTjosh
+- error408
 - feltech
 - fredakilla
 - gleblebedev
@@ -128,6 +131,7 @@ Urho3D development, contributions and bugfixes by:
 - marynate
 - meshonline
 - mightyCelu
+- MystMagus
 - neat3d
 - nemerle
 - ninjastone
@@ -140,6 +144,7 @@ Urho3D development, contributions and bugfixes by:
 - rifai
 - rikorin
 - skaiware
+- smortex
 - ssinai1
 - sssooonnnggg
 - svifylabs
@@ -171,7 +176,7 @@ Urho3D is greatly inspired by OGRE (http://www.ogre3d.org) and Horde3D
 - Comparison of several sorting algorithms by Juha Nieminen
   http://warp.povusers.org/SortComparison/
 
-DXT / ETC1 / PVRTC decompression code based on the Squish library and the Oolong Engine.
+DXT / PVRTC decompression code based on the Squish library and the Oolong Engine.
 Jack and mushroom models from the realXtend project. (https://www.realxtend.org)
 Ninja model and terrain, water, smoke, flare and status bar textures from OGRE.
 BlueHighway font from Larabie Fonts.

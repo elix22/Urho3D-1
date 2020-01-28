@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -140,6 +140,9 @@ void MessageBox::HandleMessageAcknowledged(StringHash eventType, VariantMap& eve
     VariantMap& newEventData = GetEventDataMap();
     newEventData[P_OK] = eventData[Released::P_ELEMENT] == okButton_;
     SendEvent(E_MESSAGEACK, newEventData);
+
+    // Explicitly remove from UI. Releasing reference will not destroy object immediately if it is used from C#.
+    window_->Remove();
 
     // Self destruct
     ReleaseRef();

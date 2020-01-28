@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,7 @@
 
 
 #include <Urho3D/IO/Log.h>
-#include "RootUIElement.h"
+#include "Tabs/UI/RootUIElement.h"
 
 
 namespace Urho3D
@@ -31,7 +31,6 @@ namespace Urho3D
 RootUIElement::RootUIElement(Context* context)
     : UIElement(context)
 {
-
 }
 
 IntVector2 RootUIElement::ScreenToElement(const IntVector2& screenPosition)

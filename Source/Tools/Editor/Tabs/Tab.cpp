@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,6 @@ namespace Urho3D
 
 Tab::Tab(Context* context)
     : Object(context)
-    , inspector_(context)
 {
 }
 
@@ -46,8 +45,6 @@ Tab::~Tab()
 bool Tab::RenderWindow()
 {
     Input* input = GetSubsystem<Input>();
-    if (input->IsMouseVisible())
-        lastMousePosition_ = input->GetMousePosition();
 
     if (autoPlace_)
     {
@@ -103,7 +100,9 @@ bool Tab::RenderWindow()
     wasOpen_ = open_;
     if (open_)
     {
-        OnBeforeBegin();
+        bool noContentPadding = noContentPadding_;
+        if (noContentPadding)
+            ui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
 
         if (IsModified())
             windowFlags_ |= ImGuiWindowFlags_UnsavedDocument;
@@ -112,7 +111,18 @@ bool Tab::RenderWindow()
 
         ui::Begin(uniqueTitle_.c_str(), &open_, windowFlags_);
         {
-            OnAfterBegin();
+            if (noContentPadding)
+                ui::PopStyleVar();
+
+            if (onTabContextMenu_.HasSubscribers())
+            {
+                if (ui::BeginPopupContextItem("Tab context menu"))
+                {
+                    onTabContextMenu_(this);
+                    ui::EndPopup();
+                }
+            }
+
             if (!ui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows))
             {
                 if (!wasRendered)                                                                                   // Just activated
@@ -133,11 +143,14 @@ bool Tab::RenderWindow()
                 // Tab is possibly closing, lets not override that condition.
             }
             isRendered_ = true;
-            OnBeforeEnd();
+
+            if (noContentPadding)
+                ui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
         }
 
         ui::End();
-        OnAfterEnd();
+        if (noContentPadding)
+            ui::PopStyleVar();
     }
     else
     {
@@ -165,12 +178,6 @@ void Tab::SetTitle(const ea::string& title)
 void Tab::UpdateUniqueTitle()
 {
     uniqueTitle_ = ToString("%s###%s", title_.c_str(), id_.c_str());
-}
-
-IntRect Tab::UpdateViewRect()
-{
-    IntRect tabRect = ToIntRect(ui::GetCurrentWindow()->ContentsRegionRect);
-    return tabRect;
 }
 
 void Tab::OnSaveUISettings(ImGuiTextBuffer* buf)

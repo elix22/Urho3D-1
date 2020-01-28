@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,7 +26,9 @@
 #include <Urho3D/Graphics/Camera.h>
 #include <Urho3D/SystemUI/Console.h>
 #include <Urho3D/UI/Cursor.h>
+#if URHO3D_SYSTEMUI
 #include <Urho3D/SystemUI/DebugHud.h>
+#endif
 #include <Urho3D/Engine/Engine.h>
 #include <Urho3D/Engine/EngineDefs.h>
 #include <Urho3D/IO/FileSystem.h>

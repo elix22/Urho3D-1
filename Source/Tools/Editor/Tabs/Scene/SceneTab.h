@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,7 @@
 #pragma once
 
 
+#include <Urho3D/IO/BinaryArchive.h>
 #include <Urho3D/Scene/SceneManager.h>
 #include <Toolbox/SystemUI/AttributeInspector.h>
 #include <Toolbox/SystemUI/Gizmo.h>
@@ -36,7 +37,6 @@ namespace Urho3D
 {
 
 class EditorSceneSettings;
-class SceneEffects;
 
 struct SceneState
 {
@@ -44,27 +44,28 @@ struct SceneState
     {
         sceneState_.Clear();
         uiState_.Clear();
-        startScene_ = scene;
-        scene->SaveXML(sceneState_);
-        root->GetUI()->SaveLayout(uiState_, root);
+        BinaryOutputArchive sceneArchive(scene->GetContext(), sceneState_);
+        scene->Serialize(sceneArchive);
+        BinaryOutputArchive uiArchive(scene->GetContext(), uiState_);
+        root->Serialize(uiArchive);
         defaultStyle_ = root->GetDefaultStyle();
     }
 
-    void Load(UIElement* root)
+    void Load(Scene* scene, UIElement* root)
     {
         sceneState_.Seek(0);
-        startScene_->LoadXML(sceneState_);
-        startScene_->GetUI()->Clear();
+        BinaryInputArchive sceneArchive(scene->GetContext(), sceneState_);
+        scene->Serialize(sceneArchive);
+        scene->GetContext()->GetUI()->Clear();
         root->SetDefaultStyle(defaultStyle_);
-        root->LoadXML(uiState_);
+        BinaryInputArchive uiArchive(scene->GetContext(), uiState_);
+        root->Serialize(uiArchive);
         defaultStyle_ = nullptr;
         sceneState_.Clear();
         uiState_.Clear();
-        startScene_->GetSubsystem<SceneManager>()->SetActiveScene(startScene_);
+        scene->GetSubsystem<SceneManager>()->SetActiveScene(scene);
     }
 
-    ///
-    WeakPtr<Scene> startScene_;
     ///
     VectorBuffer sceneState_;
     ///
@@ -73,7 +74,7 @@ struct SceneState
     SharedPtr<XMLFile> defaultStyle_;
 };
 
-class SceneTab : public BaseResourceTab, public IHierarchyProvider, public IInspectorProvider
+class SceneTab : public BaseResourceTab, public IHierarchyProvider
 {
     URHO3D_OBJECT(SceneTab, BaseResourceTab);
 public:
@@ -81,10 +82,6 @@ public:
     explicit SceneTab(Context* context);
     /// Destruct.
     ~SceneTab() override;
-    /// Clear current selection.
-    void ClearSelection() override;
-    /// Render inspector window.
-    void RenderInspector(const char* filter) override;
     /// Render scene hierarchy window starting from the root node (scene).
     void RenderHierarchy() override;
     /// Render buttons which customize gizmo behavior.
@@ -146,16 +143,6 @@ protected:
     void OnNodeSelectionChanged();
     /// Render content of the tab window.
     bool RenderWindowContent() override;
-    /// Called right before ui::Begin() of tab.
-    void OnBeforeBegin() override;
-    /// Called right after ui::Begin() of tab.
-    void OnAfterBegin() override;
-    /// Called right before ui::End() of tab
-    void OnBeforeEnd() override;
-    /// Called right after ui::End() of tab
-    void OnAfterEnd() override;
-    /// Update objects with current tab view rect size.
-    IntRect UpdateViewRect() override;
     /// Manually updates scene.
     void OnUpdate(VariantMap& args);
     /// Render context menu of a scene node.
@@ -166,6 +153,10 @@ protected:
     void OnComponentRemoved(VariantMap& args);
     ///
     void OnTemporaryChanged(VariantMap& args);
+    ///
+    void OnSceneActivated(VariantMap& args);
+    ///
+    void OnEditorProjectClosing();
     ///
     void AddComponentIcon(Component* component);
     ///
@@ -181,8 +172,6 @@ protected:
     /// Paste components into selection or nodes into parent if first selected node.
     void PasteIntuitive();
     ///
-    void ResizeMainViewport(const IntRect& rect);
-    ///
     void RenderDebugInfo();
 
     /// Rectangle dimensions that are rendered by this view.
@@ -196,7 +185,7 @@ protected:
     /// Current selected component displayed in inspector.
     ea::hash_set<WeakPtr<Component>> selectedComponents_;
     /// Flag indicating that mouse is hovering scene viewport.
-    bool mouseHoversViewport_ = false;
+    bool isViewportActive_ = false;
     /// Nodes whose entries in hierarchy tree should be opened on next frame.
     ea::vector<Node*> openHierarchyNodes_;
     /// Node to scroll to on next frame.
@@ -217,6 +206,14 @@ protected:
     SharedPtr<RootUIElement> rootElement_;
     ///
     SharedPtr<XMLFile> defaultStyle_;
+    ///
+    bool debugHudVisible_ = false;
+    /// Rectangle encompassing all selected nodes.
+    ImRect selectionRect_{};
+    /// Frame on which range selection will be performed.
+    int performRangeSelectionFrame_ = -1;
+    /// We have to use our own because drawlist splitter may be used by other widgets.
+    ImDrawListSplitter viewportSplitter_{};
 };
 
 };

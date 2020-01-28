@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2019 the Urho3D project.
+# Copyright (c) 2008-2020 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,4 +23,4 @@
 file (GLOB SOURCE_FILES *.cpp *.h)
 add_executable (SpritePacker ${SOURCE_FILES})
 target_link_libraries (SpritePacker Urho3D)
-install(TARGETS SpritePacker RUNTIME DESTINATION ${DEST_TOOLS_DIR})
+install(TARGETS SpritePacker RUNTIME DESTINATION ${DEST_BIN_DIR_CONFIG})

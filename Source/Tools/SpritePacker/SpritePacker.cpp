@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -298,19 +298,13 @@ void Run(ea::vector<ea::string>& arguments)
 
             stbrp_context packerContext;
             stbrp_node packerMemory[PACKER_NUM_NODES];
-            stbrp_init_target(&packerContext, textureWidth, textureHeight, packerMemory, packerInfos.size());
-            stbrp_pack_rects(&packerContext, packerRects, packerInfos.size());
-
-            // check to see if everything fit
-            for (unsigned i = 0; i < packerInfos.size(); ++i)
+            stbrp_init_target(&packerContext, textureWidth, textureHeight, packerMemory, PACKER_NUM_NODES);
+            if (!stbrp_pack_rects(&packerContext, packerRects, packerInfos.size()))
             {
-                stbrp_rect* packerRect = &packerRects[i];
-                if (!packerRect->was_packed)
-                {
-                    fit = false;
-                    break;
-                }
+                // check to see if everything fit
+                fit = false;
             }
+
             if (fit)
             {
                 success = true;

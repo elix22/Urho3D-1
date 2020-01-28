@@ -41,6 +41,8 @@
 namespace Urho3D
 {
 
+static const char* debugLevelAbbreviations[] = {"T", "D", "I", "W", "E", 0};
+
 Console::Console(Context* context) :
     Object(context)
 {
@@ -85,6 +87,11 @@ void Console::SetNumHistoryRows(unsigned rows)
     historyRows_ = rows;
     if (history_.size() > rows)
         history_.resize(rows);
+}
+
+void Console::SetConsoleHeight(unsigned height)
+{
+    windowSize_.y_ = static_cast<int>(height);
 }
 
 bool Console::IsVisible() const
@@ -133,8 +140,13 @@ void Console::HandleLogMessage(StringHash eventType, VariantMap& eventData)
     // The message may be multi-line, so split to rows in that case
     ea::vector<ea::string> rows = message.split('\n');
     for (const auto& row : rows)
-        history_.push_back(LogEntry{level, timestamp, logger, row});
-    scrollToEnd_ = true;
+    {
+        ea::string formattedMessage = Format("[{}] [{}] [{}] : {}", Time::GetTimeStamp(timestamp, "%H:%M:%S"),
+            debugLevelAbbreviations[level], logger, row);
+        history_.push_back(LogEntry{level, timestamp, logger, formattedMessage});
+    }
+    if (isAtEnd_)
+        ScrollToEnd();
 
     if (autoVisibleOnError_ && level == LOG_ERROR && !IsVisible())
         SetVisible(true);
@@ -142,53 +154,158 @@ void Console::HandleLogMessage(StringHash eventType, VariantMap& eventData)
 
 void Console::RenderContent()
 {
-    auto region = ui::GetContentRegionAvail();
-    auto showCommandInput = !interpretersPointers_.empty();
-    ui::BeginChild("ConsoleScrollArea", ImVec2(region.x, region.y - (showCommandInput ? 30 : 0)), false,
-                   ImGuiWindowFlags_HorizontalScrollbar);
-
-    for (const auto& row : history_)
+    ImVec2 region = ui::GetContentRegionAvail();
+    bool showCommandInput = !interpretersPointers_.empty();
+    bool copying = (ui::IsKeyDown(SDL_SCANCODE_LCTRL) || ui::IsKeyDown(SDL_SCANCODE_RCTRL)) && ui::IsKeyPressed(SDL_SCANCODE_C);
+    if (ui::BeginChild("ConsoleScrollArea", ImVec2(region.x, region.y - (showCommandInput ? 30 : 0)), false,
+        ImGuiWindowFlags_HorizontalScrollbar))
     {
-        if (!levelVisible_[row.level_])
-            continue;
-
-        if (loggersHidden_.contains(row.logger_))
-            continue;
-
-        ImColor color;
-        const char* debugLevel;
-        switch (row.level_)
+        const ImGuiIO& io = ui::GetIO();
+        int textStart = 0;
+        for (const auto& row : history_)
         {
-        case LOG_TRACE:
-            debugLevel = "T";
-            break;
-        case LOG_DEBUG:
-            debugLevel = "D";
-            break;
-        case LOG_INFO:
-            debugLevel = "I";
-            break;
-        case LOG_WARNING:
-            debugLevel = "W";
-            break;
-        case LOG_ERROR:
-            debugLevel = "E";
-            break;
-        default:
-            debugLevel = "?";
-            break;
+            int textEnd = textStart + (int) row.message_.length();
+
+            if (!levelVisible_[row.level_])
+            {
+                textStart = textEnd;
+                continue;
+            }
+
+            if (loggersHidden_.contains(row.logger_))
+            {
+                textStart = textEnd;
+                continue;
+            }
+
+            const char* rowStart = row.message_.c_str();
+            const char* rowEnd = row.message_.c_str() + row.message_.length();
+
+            ImVec2 rowSize = ui::CalcTextSize(rowStart, rowEnd);
+            ImVec2 rowStartPos = ui::GetCursorScreenPos();
+            ImRect rowRect{};
+            rowRect.Min = rowStartPos;
+            rowRect.Max = rowStartPos + rowSize;
+            rowRect.Max.y += ui::GetStyle().ItemSpacing.y;   // So clicking between rows still does a selection
+            bool isRowHovered = rowRect.Contains(ui::GetMousePos()) && ui::IsWindowHovered();
+
+            // Perform selection
+            if (ui::IsMouseDown(MOUSEB_LEFT))
+            {
+                if (isRowHovered)
+                {
+                    ImVec2 pos = rowStartPos;
+                    const char* c = rowStart;
+                    while (c < rowEnd)
+                    {
+                        int numBytes = ImTextCountUtf8BytesFromChar(c, rowEnd);
+                        ImVec2 charSize = ui::CalcTextSize(c, c + numBytes);
+                        if (ImRect(pos, pos + charSize).Contains(ui::GetMousePos()))
+                            break;
+                        pos.x += charSize.x;
+                        c += numBytes;
+                    }
+                    selection_.y_ = textStart + static_cast<int>(c - rowStart);
+                    if (ui::IsMouseClicked(MOUSEB_LEFT))
+                        selection_.x_ = selection_.y_;
+                }
+            }
+
+            // Render selection.
+            const char* selectedStart = Clamp(rowStart + (Min(selection_.x_, selection_.y_) - textStart), rowStart, rowEnd);
+            const char* selectedEnd = Clamp(rowEnd + (Max(selection_.x_, selection_.y_) - textEnd), rowStart, rowEnd);
+            if (selectedStart < selectedEnd)
+            {
+                if (copying && ui::IsWindowFocused())
+                {
+                    copyBuffer_.append(selectedStart, selectedEnd - selectedStart);
+                    if (selectedEnd == rowEnd && Max(selection_.x_, selection_.y_) > textEnd)
+                    {
+                        // Append new line if this line is selected to the end and selection on the next line exists.
+#if _WIN32
+                        const char* eol = "\r\n";
+#else
+                        const char* eol = "\n";
+#endif
+                        copyBuffer_.append(eol);
+                    }
+                }
+                ImVec2 sizeUnselected = ui::CalcTextSize(rowStart, selectedStart);
+                ImVec2 sizeSelected = ui::CalcTextSize(selectedStart, selectedEnd);
+                ImRect selection{};
+                selection.Min = rowStartPos;
+                selection.Min.x += sizeUnselected.x;
+                selection.Max = selection.Min + sizeSelected;
+                selection.Max.y += ui::GetStyle().ItemSpacing.y;   // Fill in spaces between lines
+                ui::GetWindowDrawList()->AddRectFilled(selection.Min, selection.Max, ui::GetColorU32(ImGuiCol_TextSelectedBg));
+            }
+            ui::PushStyleColor(ImGuiCol_Text, ToImGui(LOG_LEVEL_COLORS[row.level_]));
+            ui::TextUnformatted(rowStart, rowEnd);
+
+            // Find URIs, render underlines and send click events
+            if (isRowHovered)
+            {
+                for (unsigned i = 0; i < row.message_.length();)
+                {
+                    unsigned uriPos = row.message_.find("://", i);
+                    if (uriPos == ea::string::npos)
+                        break;
+
+                    char uriTerminator = ' ';
+                    const char* uriStart = rowStart + uriPos - 1;
+                    const char* uriEnd = rowStart + uriPos + 2;
+                    while (uriStart > rowStart && isalnum(*uriStart))
+                        --uriStart;
+
+                    if (*uriStart == '\'' || *uriStart == '"')
+                        uriTerminator = *uriStart;
+                    uriStart++;
+
+                    while (uriEnd < rowEnd && *uriEnd != uriTerminator)
+                        ++uriEnd;
+
+                    ImRect uriRect{};
+                    uriRect.Min = rowStartPos;
+                    uriRect.Min.x += ui::CalcTextSize(rowStart, uriStart).x;
+                    uriRect.Max = uriRect.Min + ui::CalcTextSize(uriStart, uriEnd);
+
+                    if (uriRect.Contains(ui::GetMousePos()))
+                    {
+                        ui::GetWindowDrawList()->AddLine({uriRect.Min.x, uriRect.Max.y}, uriRect.Max, ui::GetColorU32(ImGuiCol_Text));
+                        ui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                        if (ui::IsMouseClicked(MOUSEB_LEFT) || ui::IsMouseClicked(MOUSEB_RIGHT))
+                        {
+                            using namespace ConsoleUriClick;
+                            VariantMap& newEventData = GetEventDataMap();
+                            newEventData[P_PROTOCOL] = ea::string(uriStart, rowStart + uriPos);
+                            newEventData[P_ADDRESS] = ea::string(rowStart + uriPos + 3, uriEnd - (rowStart + uriPos + 3));
+                            SendEvent(E_CONSOLEURICLICK, newEventData);
+                        }
+                    }
+
+                    i = uriEnd - rowStart;
+                }
+            }
+            ui::PopStyleColor();
+            textStart = textEnd;
         }
-        color = ToImGui(LOG_LEVEL_COLORS[row.level_]);
-        ui::TextColored(color, "[%s] [%s] [%s] : %s", Time::GetTimeStamp(row.timestamp_, "%H:%M:%S").c_str(),
-            debugLevel, row.logger_.c_str(), row.message_.c_str());
-    }
 
-    if (scrollToEnd_)
-    {
-        ui::SetScrollHereY(1.f);
-        scrollToEnd_ = false;
-    }
+        if (scrollToEnd_ > 0)
+        {
+            ui::SetScrollHereY(1.f);
+            scrollToEnd_--;
+        }
 
+        isAtEnd_ = ui::GetScrollY() >= ui::GetScrollMaxY();
+
+        if (!copyBuffer_.empty())
+        {
+            ui::SetClipboardText(copyBuffer_.c_str());
+            copyBuffer_.clear();
+        }
+
+        ui::SetCursorPosY(ui::GetCursorPosY() + 1);
+    }
     ui::EndChild();
 
     if (showCommandInput)
@@ -216,7 +333,7 @@ void Console::RenderContent()
                 URHO3D_LOGINFOF("> %s", line.c_str());
                 if (history_.size() > historyRows_)
                     history_.pop_front();
-                scrollToEnd_ = true;
+                ScrollToEnd();
                 inputBuffer_[0] = 0;
 
                 // Send the command as an event for script subsystem
@@ -299,7 +416,8 @@ StringVector Console::GetLoggers() const
 
 void Console::SetLoggerVisible(const ea::string& loggerName, bool visible)
 {
-    scrollToEnd_ = true;
+    if (isAtEnd_)
+        ScrollToEnd();
     if (visible)
         loggersHidden_.erase(loggerName);
     else
@@ -316,7 +434,8 @@ void Console::SetLevelVisible(LogLevel level, bool visible)
     if (level < LOG_TRACE || level >= LOG_NONE)
         return;
 
-    scrollToEnd_ = true;
+    if (isAtEnd_)
+        ScrollToEnd();
     levelVisible_[level] = visible;
 }
 

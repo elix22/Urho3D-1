@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,6 +25,7 @@
 #include <EASTL/utility.h>
 #include <Urho3D/Container/Ptr.h>
 
+#include "Inspector/InspectorProvider.h"
 #include "Tabs/Tab.h"
 
 
@@ -39,12 +40,15 @@ public:
     ///
     bool RenderWindowContent() override;
     ///
-    void SetProvider(IInspectorProvider* provider);
+    void AddProvider(InspectorProvider* provider);
+    ///
+    void ClearProviders() { providers_.clear(); }
 
 protected:
+    ///
     ea::string filter_;
-
-    ea::pair<WeakPtr<RefCounted>, IInspectorProvider*> provider_;
+    ///
+    ea::vector<SharedPtr<InspectorProvider>> providers_;
 };
 
 }

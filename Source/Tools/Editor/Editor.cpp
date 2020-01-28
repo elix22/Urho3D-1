@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -28,18 +28,17 @@
 #include <Urho3D/Core/CoreEvents.h>
 #include <Urho3D/Core/WorkQueue.h>
 #include <Urho3D/Graphics/Graphics.h>
+#include <Urho3D/Graphics/Model.h>
 #include <Urho3D/IO/FileSystem.h>
 #include <Urho3D/IO/Log.h>
+#include <Urho3D/Resource/JSONArchive.h>
 #include <Urho3D/Resource/ResourceCache.h>
 #include <Urho3D/SystemUI/SystemUI.h>
 #include <Urho3D/SystemUI/Console.h>
+#include <Urho3D/SystemUI/DebugHud.h>
 #include <Urho3D/LibraryInfo.h>
 #include <Urho3D/Core/CommandLine.h>
 
-#include <ImGui/imgui.h>
-#include <ImGui/imgui_stdlib.h>
-#include <Toolbox/IO/ContentUtilities.h>
-#include <Toolbox/SystemUI/ResourceBrowser.h>
 #include <Toolbox/ToolboxAPI.h>
 #include <Toolbox/SystemUI/Widgets.h>
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
@@ -60,14 +59,15 @@
 #include "Pipeline/Commands/BuildAssets.h"
 #include "Pipeline/Importers/ModelImporter.h"
 #include "Pipeline/Importers/SceneConverter.h"
+#include "Pipeline/Importers/TextureImporter.h"
+#include "Plugins/ModulePlugin.h"
+#include "Plugins/ScriptBundlePlugin.h"
+#include "Inspector/AssetInspector.h"
 #include "Inspector/MaterialInspector.h"
 #include "Inspector/ModelInspector.h"
+#include "Inspector/NodeInspector.h"
+#include "Inspector/SerializableInspector.h"
 #include "Tabs/ProfilerTab.h"
-
-using namespace ui::litterals;
-
-URHO3D_DEFINE_APPLICATION_MAIN(Urho3D::Editor);
-
 
 namespace Urho3D
 {
@@ -79,6 +79,8 @@ Editor::Editor(Context* context)
 
 void Editor::Setup()
 {
+    context_->RegisterSubsystem(this, Editor::GetTypeStatic());
+
 #ifdef _WIN32
     // Required until SDL supports hdpi on windows
     if (HMODULE hLibrary = LoadLibraryA("Shcore.dll"))
@@ -91,10 +93,10 @@ void Editor::Setup()
 #endif
 
     // Discover resource prefix path by looking for CoreData and going up.
-    for (coreResourcePrefixPath_ = GetFileSystem()->GetProgramDir();;
+    for (coreResourcePrefixPath_ = context_->GetFileSystem()->GetProgramDir();;
         coreResourcePrefixPath_ = GetParentPath(coreResourcePrefixPath_))
     {
-        if (GetFileSystem()->DirExists(coreResourcePrefixPath_ + "CoreData"))
+        if (context_->GetFileSystem()->DirExists(coreResourcePrefixPath_ + "CoreData"))
             break;
         else
         {
@@ -120,10 +122,16 @@ void Editor::Setup()
     engineParameters_[EP_RESOURCE_PATHS] = "CoreData;EditorData";
     engineParameters_[EP_RESOURCE_PREFIX_PATHS] = coreResourcePrefixPath_;
     engineParameters_[EP_WINDOW_MAXIMIZE] = true;
-
+    engineParameters_[EP_ENGINE_AUTO_LOAD_SCRIPTS] = false;
+#if URHO3D_SYSTEMUI_VIEWPORTS
+    engineParameters_[EP_HIGH_DPI] = true;
+    engineParameters_[EP_SYSTEMUI_FLAGS] = ImGuiConfigFlags_ViewportsEnable | ImGuiConfigFlags_DpiEnableScaleViewports;
+#else
+    engineParameters_[EP_HIGH_DPI] = false;
+#endif
     // Load editor settings
     {
-        auto* fs = GetFileSystem();
+        auto* fs = context_->GetFileSystem();
         ea::string editorSettingsDir = fs->GetAppPreferencesDir("rbfx", "Editor");
         if (!fs->DirExists(editorSettingsDir))
             fs->CreateDir(editorSettingsDir);
@@ -134,34 +142,19 @@ void Editor::Setup()
             JSONFile file(context_);
             if (file.LoadFile(editorSettingsFile))
             {
-                editorSettings_ = file.GetRoot();
+                JSONInputArchive archive(&file);
+                if (!Serialize(archive))
+                    URHO3D_LOGERROR("Loading of editor settings failed.");
 
-                // Load window geometry
-                {
-                    JSONValue& window = editorSettings_["window"];
-                    if (window.IsObject())
-                    {
-                        if (window.Contains("size"))
-                        {
-                            IntVector2 size = window["size"].GetVariantValue(VAR_INTVECTOR2).GetIntVector2();
-                            engineParameters_[EP_WINDOW_WIDTH] = size.x_;
-                            engineParameters_[EP_WINDOW_HEIGHT] = size.y_;
-                        }
-                        if (window.Contains("pos"))
-                        {
-                            IntVector2 pos = window["pos"].GetVariantValue(VAR_INTVECTOR2).GetIntVector2();
-                            engineParameters_[EP_WINDOW_POSITION_X] = pos.x_;
-                            engineParameters_[EP_WINDOW_POSITION_Y] = pos.y_;
-                        }
-                        if (window.Contains("maximized"))
-                            engineParameters_[EP_WINDOW_MAXIMIZE] = window["maximized"].GetVariantValue(VAR_BOOL).GetBool();
-                    }
-                }
+                engineParameters_[EP_WINDOW_WIDTH] = windowSize_.x_;
+                engineParameters_[EP_WINDOW_HEIGHT] = windowSize_.y_;
+                engineParameters_[EP_WINDOW_POSITION_X] = windowPos_.x_;
+                engineParameters_[EP_WINDOW_POSITION_Y] = windowPos_.y_;
             }
         }
     }
 
-    GetLog()->SetLogFormat("[%H:%M:%S] [%l] [%n] : %v");
+    context_->GetLog()->SetLogFormat("[%H:%M:%S] [%l] [%n] : %v");
 
     SetRandomSeed(Time::GetTimeSinceEpoch());
 
@@ -176,17 +169,24 @@ void Editor::Setup()
     context_->RegisterFactory<PreviewTab>();
     context_->RegisterFactory<ProfilerTab>();
 
+    // Inspectors
+    RegisterProvider<Asset, AssetInspector>();
+    RegisterProvider<Model, ModelInspector>();
+    RegisterProvider<Material, MaterialInspector>();
+    RegisterProvider<Node, NodeInspector>();
+
+#if URHO3D_PLUGINS
+    RegisterPluginsLibrary(context_);
+#endif
     RegisterToolboxTypes(context_);
     EditorSceneSettings::RegisterObject(context_);
     Inspectable::Material::RegisterObject(context_);
-
-    // Inspectors
-    ModelInspector::RegisterObject(context_);
-    MaterialInspector::RegisterObject(context_);
+    context_->RegisterFactory<SerializableInspector>();
 
     // Importers
     ModelImporter::RegisterObject(context_);
     SceneConverter::RegisterObject(context_);
+    TextureImporter::RegisterObject(context_);
     Asset::RegisterObject(context_);
 
     // Define custom command line parameters here
@@ -196,17 +196,21 @@ void Editor::Setup()
     // Subcommands
     RegisterSubcommand<CookScene>();
     RegisterSubcommand<BuildAssets>();
+
+    keyBindings_.Bind(ActionType::OpenProject, this, &Editor::OpenOrCreateProject);
+    keyBindings_.Bind(ActionType::Exit, this, &Editor::OnExitHotkeyPressed);
+    keyBindings_.Bind(ActionType::UndoAction, this, &Editor::OnUndo);
+    keyBindings_.Bind(ActionType::RedoAction, this, &Editor::OnRedo);
 }
 
 void Editor::Start()
 {
-    context_->RegisterSubsystem(this);
     // Execute specified subcommand and exit.
     for (SharedPtr<SubCommand>& cmd : subCommands_)
     {
         if (GetCommandLineParser().got_subcommand(cmd->GetTypeName().c_str()))
         {
-            GetLog()->SetLogFormat("%v");
+            context_->GetLog()->SetLogFormat("%v");
             ExecuteSubcommand(cmd);
             engine_->Exit();
             return;
@@ -216,83 +220,34 @@ void Editor::Start()
     // Continue with normal editor initialization
     context_->RegisterSubsystem(new SceneManager(context_));
     context_->RegisterSubsystem(new EditorIconCache(context_));
-    GetInput()->SetMouseMode(MM_ABSOLUTE);
-    GetInput()->SetMouseVisible(true);
+    context_->GetInput()->SetMouseMode(MM_ABSOLUTE);
+    context_->GetInput()->SetMouseVisible(true);
 
-    GetCache()->SetAutoReloadResources(true);
+    context_->GetCache()->SetAutoReloadResources(true);
     engine_->SetAutoExit(false);
 
-    SubscribeToEvent(E_UPDATE, std::bind(&Editor::OnUpdate, this, _2));
+    SubscribeToEvent(E_UPDATE, [this](StringHash, VariantMap& args) { OnUpdate(args); });
 
     // Creates console but makes sure it's UI is not rendered. Console rendering is done manually in editor.
     auto* console = engine_->CreateConsole();
     console->SetAutoVisibleOnError(false);
-    GetFileSystem()->SetExecuteConsoleCommands(false);
-    SubscribeToEvent(E_CONSOLECOMMAND, std::bind(&Editor::OnConsoleCommand, this, _2));
+    context_->GetFileSystem()->SetExecuteConsoleCommands(false);
+    SubscribeToEvent(E_CONSOLECOMMAND, [this](StringHash, VariantMap& args) { OnConsoleCommand(args); });
     console->RefreshInterpreters();
 
-    SubscribeToEvent(E_ENDFRAME, [this](StringHash, VariantMap&) {
-        // Opening a new project must be done at the point when SystemUI is not in use. End of the frame is a good
-        // candidate. This subsystem will be recreated.
-        if (!pendingOpenProject_.empty())
-        {
-            CloseProject();
-            // Reset SystemUI so that imgui loads it's config proper.
-            context_->RemoveSubsystem<SystemUI>();
-            context_->RegisterSubsystem(new SystemUI(context_));
-            SetupSystemUI();
-
-            project_ = new Project(context_);
-            context_->RegisterSubsystem(project_);
-            bool loaded = project_->LoadProject(pendingOpenProject_);
-            // SystemUI has to be started after loading project, because project sets custom settings file path. Starting
-            // subsystem reads this file and loads settings.
-            GetSystemUI()->Start();
-            if (loaded)
-            {
-                auto* fs = GetFileSystem();
-                loadDefaultLayout_ = project_->IsNewProject();
-                JSONValue& recents = editorSettings_["recent-projects"];
-                if (!recents.IsArray())
-                    recents.SetType(JSON_ARRAY);
-                // Remove latest project if it was already opened or any projects that no longer exists.
-                for (int i = 0; i < recents.Size();)
-                {
-                    if (recents[i].GetString() == pendingOpenProject_ || !fs->DirExists(recents[i].GetString()))
-                        recents.Erase(i);
-                    else
-                        ++i;
-                }
-                // Latest project goes to front
-                recents.Insert(0, pendingOpenProject_);
-                // Limit recents list size
-                if (recents.Size() > 10)
-                    recents.Resize(10);
-            }
-            else
-                CloseProject();
-            pendingOpenProject_.clear();
-        }
-    });
-    SubscribeToEvent(E_EXITREQUESTED, [this](StringHash, VariantMap&) {
-        if (auto* preview = GetTab<PreviewTab>())
-        {
-            if (preview->GetSceneSimulationStatus() == SCENE_SIMULATION_STOPPED)
-                exiting_ = true;
-            else
-                preview->Stop();
-        }
-        else
-            exiting_ = true;
-    });
-    SubscribeToEvent(E_EDITORPROJECTLOADING, std::bind(&Editor::UpdateWindowTitle, this, EMPTY_STRING));
+    SubscribeToEvent(E_ENDFRAME, [this](StringHash, VariantMap&) { OnEndFrame(); });
+    SubscribeToEvent(E_EXITREQUESTED, [this](StringHash, VariantMap&) { OnExitRequested(); });
+    SubscribeToEvent(E_EDITORPROJECTSERIALIZE, [this](StringHash, VariantMap&) { UpdateWindowTitle(); });
+    SubscribeToEvent(E_CONSOLEURICLICK, [this](StringHash, VariantMap& args) { OnConsoleUriClick(args); });
+    SetupSystemUI();
     if (!defaultProjectPath_.empty())
     {
         ui::GetIO().IniFilename = nullptr;  // Avoid creating imgui.ini in some cases
-        pendingOpenProject_ = defaultProjectPath_.c_str();
+        OpenProject(defaultProjectPath_);
     }
-    else
-        SetupSystemUI();
+
+    // Hud will be rendered manually.
+    context_->GetEngine()->CreateDebugHud()->SetMode(DEBUGHUD_SHOW_NONE);
 }
 
 void Editor::ExecuteSubcommand(SubCommand* cmd)
@@ -319,29 +274,27 @@ void Editor::Stop()
     if (!engine_->IsHeadless())
     {
         // Save window geometry
-        {
-            JSONValue& window = editorSettings_["window"];
-            window.SetType(JSON_OBJECT);
-            window["size"].SetType(JSON_NULL);
-            window["size"].SetVariantValue(GetGraphics()->GetSize(), context_);
-            window["pos"].SetType(JSON_NULL);
-            window["pos"].SetVariantValue(GetGraphics()->GetWindowPosition(), context_);
-            window["maximized"].SetType(JSON_NULL);
-            window["maximized"].SetVariantValue(GetGraphics()->GetMaximized(), context_);
-        }
+        auto* graphics = GetSubsystem<Graphics>();
+        windowPos_ = graphics->GetWindowPosition();
+        windowSize_ = graphics->GetSize();
 
-        auto* fs = GetFileSystem();
+        auto* fs = context_->GetFileSystem();
         ea::string editorSettingsDir = fs->GetAppPreferencesDir("rbfx", "Editor");
         if (!fs->DirExists(editorSettingsDir))
             fs->CreateDir(editorSettingsDir);
 
-        JSONFile file(context_);
-        file.GetRoot() = editorSettings_;
-        if (!file.SaveFile(editorSettingsDir + "Editor.json"))
-            URHO3D_LOGERROR("Saving of editor settings failed.");
+        JSONFile json(context_);
+        JSONOutputArchive archive(&json);
+        if (Serialize(archive))
+        {
+            if (!json.SaveFile(editorSettingsDir + "Editor.json"))
+                URHO3D_LOGERROR("Saving of editor settings failed.");
+        }
+        else
+            URHO3D_LOGERROR("Serializing of editor settings failed.");
     }
 
-    GetWorkQueue()->Complete(0);
+    context_->GetWorkQueue()->Complete(0);
     if (auto* manager = GetSubsystem<SceneManager>())
         manager->UnloadAll();
     CloseProject();
@@ -365,6 +318,7 @@ void Editor::OnUpdate(VariantMap& args)
     ImGui::PopStyleVar();
 
     RenderMenuBar();
+    RenderSettingsWindow();
 
     bool hasModified = false;
     if (project_.NotNull())
@@ -400,8 +354,6 @@ void Editor::OnUpdate(VariantMap& args)
             loadDefaultLayout_ = false;
             LoadDefaultLayout();
         }
-
-        HandleHotkeys();
     }
     else
     {
@@ -410,31 +362,25 @@ void Editor::OnUpdate(VariantMap& args)
         auto* lists = ui::GetWindowDrawList();
         ImRect rect{ui::GetWindowContentRegionMin(), ui::GetWindowContentRegionMax()};
 
-        ImVec2 tileSize{200_dpx, 200_dpy};
-        ui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{10_dpx, 10_dpy});
+        ImVec2 tileSize{200, 200};
+        ui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{10, 10});
 
-        ui::SetCursorScreenPos(rect.GetCenter() - ImVec2{tileSize.x * 1.5f + 10_dpx, tileSize.y * 1.5f + 10_dpy});
+        ui::SetCursorPos(rect.GetCenter() - ImVec2{tileSize.x * 1.5f + 10, tileSize.y * 1.5f + 10});
 
         ui::BeginGroup();
-
-        // New project tile
-        {
-            if (ui::Button("Open/Create Project", tileSize))
-                OpenOrCreateProject();
-            ui::SameLine();
-        }
 
         struct State
         {
             explicit State(Editor* editor)
             {
-                const JSONValue& recents = editor->editorSettings_["recent-projects"];
-                snapshots_.resize(recents.Size());
-                for (int i = 0; i < recents.Size(); i++)
+                FileSystem *fs = editor->GetContext()->GetFileSystem();
+                StringVector& recents = editor->recentProjects_;
+                snapshots_.resize(recents.size());
+                for (int i = 0; i < recents.size();)
                 {
-                    const ea::string& projectPath = recents[i].GetString();
+                    const ea::string& projectPath = recents[i];
                     ea::string snapshotFile = AddTrailingSlash(projectPath) + ".snapshot.png";
-                    if (editor->GetFileSystem()->FileExists(snapshotFile))
+                    if (fs->FileExists(snapshotFile))
                     {
                         Image img(editor->context_);
                         if (img.LoadFile(snapshotFile))
@@ -444,6 +390,7 @@ void Editor::OnUpdate(VariantMap& args)
                             snapshots_[i] = texture;
                         }
                     }
+                    ++i;
                 }
             }
 
@@ -451,34 +398,34 @@ void Editor::OnUpdate(VariantMap& args)
         };
 
         auto* state = ui::GetUIState<State>(this);
-        const JSONValue& recents = editorSettings_["recent-projects"];
+        const StringVector& recents = recentProjects_;
 
         int index = 0;
         for (int row = 0; row < 3; row++)
         {
-            for (int col = row == 0 ? 1 : 0; col < 3; col++, index++)
+            for (int col = 0; col < 3; col++, index++)
             {
                 SharedPtr<Texture2D> snapshot;
                 if (state->snapshots_.size() > index)
                     snapshot = state->snapshots_[index];
 
-                if (recents.Size() <= index)
+                if (recents.size() <= index || (row == 2 && col == 2))  // Last tile never shows a project.
                 {
                     if (ui::Button("Open/Create Project", tileSize))
                         OpenOrCreateProject();
                 }
                 else
                 {
-                    const ea::string& projectPath = recents[index].GetString();
+                    const ea::string& projectPath = recents[index];
                     if (snapshot.NotNull())
                     {
                         if (ui::ImageButton(snapshot.Get(), tileSize - style.ItemInnerSpacing * 2))
-                            pendingOpenProject_ = projectPath;
+                            OpenProject(projectPath);
                     }
                     else
                     {
-                        if (ui::Button(recents[index].GetString().c_str(), tileSize))
-                            pendingOpenProject_ = projectPath;
+                        if (ui::Button(recents[index].c_str(), tileSize))
+                            OpenProject(projectPath);
                     }
                     if (ui::IsItemHovered())
                         ui::SetTooltip("%s", projectPath.c_str());
@@ -498,7 +445,7 @@ void Editor::OnUpdate(VariantMap& args)
     // Dialog for a warning when application is being closed with unsaved resources.
     if (exiting_)
     {
-        if (!GetWorkQueue()->IsCompleted(0))
+        if (!context_->GetWorkQueue()->IsCompleted(0))
         {
             ui::OpenPopup("Completing Tasks");
 
@@ -506,8 +453,8 @@ void Editor::OnUpdate(VariantMap& args)
                                                                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_Popup))
             {
                 ui::TextUnformatted("Some tasks are in progress and are being completed. Please wait.");
-                static float totalIncomplete = GetWorkQueue()->GetNumIncomplete(0);
-                ui::ProgressBar(100.f / totalIncomplete * Min(totalIncomplete - (float)GetWorkQueue()->GetNumIncomplete(0), totalIncomplete));
+                static float totalIncomplete = context_->GetWorkQueue()->GetNumIncomplete(0);
+                ui::ProgressBar(100.f / totalIncomplete * Min(totalIncomplete - (float)context_->GetWorkQueue()->GetNumIncomplete(0), totalIncomplete));
                 ui::EndPopup();
             }
         }
@@ -551,7 +498,7 @@ void Editor::OnUpdate(VariantMap& args)
         }
         else
         {
-            GetWorkQueue()->Complete(0);
+            context_->GetWorkQueue()->Complete(0);
             if (project_.NotNull())
             {
                 project_->SaveProject();
@@ -591,6 +538,72 @@ void Editor::OnConsoleCommand(VariantMap& args)
     using namespace ConsoleCommand;
     if (args[P_COMMAND].GetString() == "revision")
         URHO3D_LOGINFOF("Engine revision: %s", GetRevision());
+}
+
+void Editor::OnEndFrame()
+{
+    // Opening a new project must be done at the point when SystemUI is not in use. End of the frame is a good
+    // candidate. This subsystem will be recreated.
+    if (!pendingOpenProject_.empty())
+    {
+        CloseProject();
+        // Reset SystemUI so that imgui loads it's config proper.
+        context_->RemoveSubsystem<SystemUI>();
+#if URHO3D_SYSTEMUI_VIEWPORTS
+        unsigned flags = ImGuiConfigFlags_ViewportsEnable | ImGuiConfigFlags_DpiEnableScaleViewports;
+#else
+        unsigned flags = 0;
+#endif
+        context_->RegisterSubsystem(new SystemUI(context_, flags));
+        SetupSystemUI();
+
+        project_ = new Project(context_);
+        context_->RegisterSubsystem(project_);
+        bool loaded = project_->LoadProject(pendingOpenProject_);
+        // SystemUI has to be started after loading project, because project sets custom settings file path. Starting
+        // subsystem reads this file and loads settings.
+        if (loaded)
+        {
+            auto* fs = context_->GetFileSystem();
+            loadDefaultLayout_ = project_->NeeDefaultUIPlacement();
+            StringVector& recents = recentProjects_;
+            // Remove latest project if it was already opened or any projects that no longer exists.
+            for (auto it = recents.begin(); it != recents.end();)
+            {
+                if (*it == pendingOpenProject_ || !fs->DirExists(*it))
+                    it = recents.erase(it);
+                else
+                    ++it;
+            }
+            // Latest project goes to front
+            recents.insert(recents.begin(), pendingOpenProject_);
+            // Limit recents list size
+            if (recents.size() > 10)
+                recents.resize(10);
+        }
+        else
+        {
+            CloseProject();
+            URHO3D_LOGERROR("Loading project failed.");
+        }
+        pendingOpenProject_.clear();
+    }
+}
+
+void Editor::OnExitRequested()
+{
+    if (auto* preview = GetTab<PreviewTab>())
+    {
+        if (preview->GetSceneSimulationStatus() != SCENE_SIMULATION_STOPPED)
+            preview->Stop();
+    }
+    exiting_ = true;
+}
+
+void Editor::OnExitHotkeyPressed()
+{
+    if (!exiting_)
+        OnExitRequested();
 }
 
 void Editor::CreateDefaultTabs()
@@ -642,7 +655,7 @@ void Editor::LoadDefaultLayout()
 
 void Editor::OpenProject(const ea::string& projectPath)
 {
-    pendingOpenProject_ = projectPath;
+    pendingOpenProject_ = AddTrailingSlash(projectPath);
 }
 
 void Editor::CloseProject()
@@ -653,33 +666,30 @@ void Editor::CloseProject()
     project_.Reset();
 }
 
-void Editor::HandleHotkeys()
+void Editor::OnUndo()
 {
     if (ui::IsAnyItemActive())
         return;
 
-    auto* input = GetInput();
-    if (input->GetKeyDown(KEY_CTRL))
-    {
-        if (input->GetKeyPress(KEY_Y) || (input->GetKeyDown(KEY_SHIFT) && input->GetKeyPress(KEY_Z)))
-        {
-            VariantMap args;
-            args[Undo::P_TIME] = M_MAX_UNSIGNED;
-            SendEvent(E_REDO, args);
-            auto it = args.find(Undo::P_MANAGER);
-            if (it != args.end())
-                ((Undo::Manager*)it->second.GetPtr())->Redo();
-        }
-        else if (input->GetKeyPress(KEY_Z))
-        {
-            VariantMap args;
-            args[Undo::P_TIME] = 0;
-            SendEvent(E_UNDO, args);
-            auto it = args.find(Undo::P_MANAGER);
-            if (it != args.end())
-                ((Undo::Manager*)it->second.GetPtr())->Undo();
-        }
-    }
+    VariantMap args;
+    args[Undo::P_TIME] = 0;
+    SendEvent(E_UNDO, args);
+    auto it = args.find(Undo::P_MANAGER);
+    if (it != args.end())
+        ((Undo::Manager*)it->second.GetPtr())->Undo();
+}
+
+void Editor::OnRedo()
+{
+    if (ui::IsAnyItemActive())
+        return;
+
+    VariantMap args;
+    args[Undo::P_TIME] = M_MAX_UNSIGNED;
+    SendEvent(E_REDO, args);
+    auto it = args.find(Undo::P_MANAGER);
+    if (it != args.end())
+        ((Undo::Manager*)it->second.GetPtr())->Redo();
 }
 
 Tab* Editor::GetTabByName(const ea::string& uniqueName)
@@ -718,14 +728,19 @@ void Editor::SetupSystemUI()
     static ImWchar fontAwesomeIconRanges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
     static ImWchar notoSansRanges[] = {0x20, 0x52f, 0x1ab0, 0x2189, 0x2c60, 0x2e44, 0xa640, 0xab65, 0};
     static ImWchar notoMonoRanges[] = {0x20, 0x513, 0x1e00, 0x1f4d, 0};
-    GetSystemUI()->ApplyStyleDefault(true, 1.0f);
-    GetSystemUI()->AddFont("Fonts/NotoSans-Regular.ttf", notoSansRanges, 16.f);
-    GetSystemUI()->AddFont("Fonts/" FONT_ICON_FILE_NAME_FAS, fontAwesomeIconRanges, 14.f, true);
-    monoFont_ = GetSystemUI()->AddFont("Fonts/NotoMono-Regular.ttf", notoMonoRanges, 14.f);
-    GetSystemUI()->AddFont("Fonts/" FONT_ICON_FILE_NAME_FAS, fontAwesomeIconRanges, 12.f, true);
+    SystemUI* systemUI = GetSubsystem<SystemUI>();
+
+    systemUI->ApplyStyleDefault(true, 1.0f);
+    systemUI->AddFont("Fonts/NotoSans-Regular.ttf", notoSansRanges, 16.f);
+    systemUI->AddFont("Fonts/" FONT_ICON_FILE_NAME_FAS, fontAwesomeIconRanges, 14.f, true);
+    monoFont_ = systemUI->AddFont("Fonts/NotoMono-Regular.ttf", notoMonoRanges, 14.f);
+    systemUI->AddFont("Fonts/" FONT_ICON_FILE_NAME_FAS, fontAwesomeIconRanges, 12.f, true);
     ui::GetStyle().WindowRounding = 3;
     // Disable imgui saving ui settings on it's own. These should be serialized to project file.
     auto& io = ui::GetIO();
+#if URHO3D_SYSTEMUI_VIEWPORTS
+    io.ConfigViewportsNoAutoMerge = true;
+#endif
     io.IniFilename = nullptr;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_NavEnableKeyboard;
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
@@ -734,7 +749,8 @@ void Editor::SetupSystemUI()
     // TODO: Make configurable.
     auto& style = ImGui::GetStyle();
     style.FrameBorderSize = 0;
-    style.WindowBorderSize = 0;
+    style.WindowBorderSize = 1;
+    style.ItemSpacing = {4, 4};
     ImVec4* colors = ImGui::GetStyle().Colors;
     colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
     colors[ImGuiCol_TextDisabled]           = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
@@ -769,9 +785,9 @@ void Editor::SetupSystemUI()
     colors[ImGuiCol_ResizeGrip]             = ImVec4(0.24f, 0.24f, 0.24f, 1.00f);
     colors[ImGuiCol_ResizeGripHovered]      = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
     colors[ImGuiCol_ResizeGripActive]       = ImVec4(0.37f, 0.37f, 0.37f, 1.00f);
-    colors[ImGuiCol_Tab]                    = ImVec4(0.40f, 0.40f, 0.40f, 0.86f);
+    colors[ImGuiCol_Tab]                    = ImVec4(0.26f, 0.26f, 0.26f, 0.40f);
     colors[ImGuiCol_TabHovered]             = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
-    colors[ImGuiCol_TabActive]              = ImVec4(0.26f, 0.26f, 0.26f, 1.00f);
+    colors[ImGuiCol_TabActive]              = ImVec4(0.28f, 0.28f, 0.28f, 1.00f);
     colors[ImGuiCol_TabUnfocused]           = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
     colors[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.26f, 0.26f, 0.26f, 1.00f);
     colors[ImGuiCol_DockingPreview]         = ImVec4(0.55f, 0.55f, 0.55f, 1.00f);
@@ -786,11 +802,47 @@ void Editor::SetupSystemUI()
     colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
     colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
     colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.44f, 0.44f, 0.44f, 0.35f);
+
+    ImGuiSettingsHandler handler;
+    handler.TypeName = "Project";
+    handler.TypeHash = ImHashStr(handler.TypeName, 0, 0);
+    handler.ReadOpenFn = [](ImGuiContext* context, ImGuiSettingsHandler* handler, const char* name) -> void*
+    {
+        return (void*) name;
+    };
+    handler.ReadLineFn = [](ImGuiContext*, ImGuiSettingsHandler*, void* entry, const char* line)
+    {
+        auto* systemUI = ui::GetSystemUI();
+        auto* editor = systemUI->GetSubsystem<Editor>();
+        const char* name = static_cast<const char*>(entry);
+        if (strcmp(name, "Window") == 0)
+            editor->CreateDefaultTabs();
+        else
+        {
+            Tab* tab = editor->GetTabByName(name);
+            if (tab == nullptr)
+            {
+                StringVector parts = ea::string(name).split('#');
+                tab = editor->CreateTab(parts.front());
+            }
+            tab->OnLoadUISettings(name, line);
+        }
+    };
+    handler.WriteAllFn = [](ImGuiContext* imgui_ctx, ImGuiSettingsHandler* handler, ImGuiTextBuffer* buf)
+    {
+        auto* systemUI = ui::GetSystemUI();
+        auto* editor = systemUI->GetSubsystem<Editor>();
+        buf->appendf("[Project][Window]\n");
+        // Save tabs
+        for (auto& tab : editor->GetContentTabs())
+            tab->OnSaveUISettings(buf);
+    };
+    ui::GetCurrentContext()->SettingsHandlers.push_back(handler);
 }
 
 void Editor::UpdateWindowTitle(const ea::string& resourcePath)
 {
-    if (GetEngine()->IsHeadless())
+    if (context_->GetEngine()->IsHeadless())
         return;
 
     auto* project = GetSubsystem<Project>();
@@ -805,7 +857,7 @@ void Editor::UpdateWindowTitle(const ea::string& resourcePath)
             title += ToString(" | %s", GetFileName(resourcePath).c_str());
     }
 
-    GetGraphics()->SetWindowTitle(title);
+    context_->GetGraphics()->SetWindowTitle(title);
 }
 
 template<typename T>
@@ -827,6 +879,66 @@ void Editor::OpenOrCreateProject()
     {
         OpenProject(projectDir);
         NFD_FreePath(projectDir);
+    }
+}
+
+#if URHO3D_STATIC && URHO3D_PLUGINS
+bool Editor::RegisterPlugin(PluginApplication* plugin)
+{
+    return project_->GetPlugins()->RegisterPlugin(plugin);
+}
+#endif
+
+void Editor::OnConsoleUriClick(VariantMap& args)
+{
+    using namespace ConsoleUriClick;
+    if (ui::IsMouseClicked(MOUSEB_LEFT))
+    {
+        const ea::string& protocol = args[P_PROTOCOL].GetString();
+        const ea::string& address = args[P_ADDRESS].GetString();
+        if (protocol == "res")
+            context_->GetFileSystem()->SystemOpen(context_->GetCache()->GetResourceFileName(address));
+    }
+}
+
+void Editor::ClearInspector()
+{
+    inspected_.clear();
+    GetTab<InspectorTab>()->ClearProviders();
+}
+
+void Editor::Inspect(Object* object)
+{
+    if (object == nullptr)
+    {
+        URHO3D_LOGERROR("Editor can not inspect a null object.");
+        return;
+    }
+    bool inspected = false;
+    for (const auto& pair : registeredInspectorProviders_)
+    {
+        if (object->IsInstanceOf(pair.first))
+        {
+            inspected = true;
+            inspected_.push_back(WeakPtr(object));
+            SharedPtr<InspectorProvider> provider(context_->CreateObject(pair.second)->Cast<InspectorProvider>());
+            provider->SetInspected(object);
+            GetTab<InspectorTab>()->AddProvider(provider);
+        }
+    }
+
+    if (!inspected)
+    {
+        // A special case. If no custom inspector exists we use default inspector for Serializable items. This inspector
+        // is not registered to registeredInspectorProviders_ because we want to use it only if no other inspectors
+        // supporting specified object exist.
+        if (auto* serializable = object->Cast<Serializable>())
+        {
+            inspected_.push_back(WeakPtr(serializable));
+            SharedPtr<InspectorProvider> provider(context_->CreateObject<SerializableInspector>());
+            provider->SetInspected(serializable);
+            GetTab<InspectorTab>()->AddProvider(provider);
+        }
     }
 }
 

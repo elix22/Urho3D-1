@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,7 @@
 #include "../Core/ProcessUtils.h"
 #include "../Core/Profiler.h"
 #include "../Core/StringUtils.h"
+#include "../Core/Thread.h"
 #include "../Graphics/Graphics.h"
 #include "../Graphics/GraphicsEvents.h"
 #include "../Input/Input.h"
@@ -51,7 +52,7 @@
 
 #include "../DebugNew.h"
 
-extern "C" int SDL_AddTouch(SDL_TouchID touchID, const char* name);
+extern "C" int SDL_AddTouch(SDL_TouchID touchID, SDL_TouchDeviceType type, const char* name);
 
 // Use a "click inside window to focus" mechanism on desktop platforms when the mouse cursor is hidden
 #if defined(_WIN32) || (defined(__APPLE__) && !defined(IOS) && !defined(TVOS)) || (defined(__linux__) && !defined(__ANDROID__))
@@ -304,6 +305,11 @@ int EmscriptenInput::HandleSDLEvents(void* userData, SDL_Event* event)
 // On Windows repaint while the window is actively being resized.
 int Win32_ResizingEventWatcher(void* data, SDL_Event* event)
 {
+    // In some cases engine may run in a different thread than one which processes windows messages.
+    // Screen repainging is not possible in such cases.
+    if (!Thread::IsMainThread())
+        return 0;
+
     if (event->type == SDL_WINDOWEVENT && event->window.event == SDL_WINDOWEVENT_RESIZED)
     {
         SDL_Window* win = SDL_GetWindowFromID(event->window.windowID);
@@ -389,7 +395,9 @@ Input::Input(Context* context) :
     SubscribeToEvent(E_SCREENMODE, URHO3D_HANDLER(Input, HandleScreenMode));
 
 #if defined(__ANDROID__)
-    SDL_SetHint(SDL_HINT_ANDROID_SEPARATE_MOUSE_AND_TOUCH, "1");
+    // Prevent mouse events from being registered as synthetic touch events and vice versa
+    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
 #elif defined(__EMSCRIPTEN__)
     emscriptenInput_ = ea::make_unique<EmscriptenInput>(this);
 #endif
@@ -605,9 +613,6 @@ void Input::SetMouseVisible(bool enable, bool suppressEvent)
             {
                 SetMouseGrabbed(false, suppressEvent);
 
-                SDL_ShowCursor(SDL_TRUE);
-                mouseVisible_ = true;
-
 #ifndef __EMSCRIPTEN__
                 if (mouseMode_ == MM_ABSOLUTE)
                     SetMouseModeAbsolute(SDL_FALSE);
@@ -637,6 +642,8 @@ void Input::SetMouseVisible(bool enable, bool suppressEvent)
                 if (mouseMode_ == MM_ABSOLUTE && emscriptenPointerLock_)
                     emscriptenInput_->ExitPointerLock(suppressEvent);
 #endif
+                SDL_ShowCursor(SDL_TRUE);
+                mouseVisible_ = true;
             }
         }
         else
@@ -1202,7 +1209,7 @@ void Input::SetTouchEmulation(bool enable)
 
             // Add a virtual touch device the first time we are enabling emulated touch
             if (!SDL_GetNumTouchDevices())
-                SDL_AddTouch(0, "Emulated Touch");
+                SDL_AddTouch(0, SDL_TOUCH_DEVICE_INDIRECT_RELATIVE, "Emulated Touch");
         }
         else
             ResetTouches();
@@ -1875,6 +1882,19 @@ void Input::HandleSDLEvent(void* sdlEvent)
 {
     SDL_Event& evt = *static_cast<SDL_Event*>(sdlEvent);
 
+    // Possibility for custom handling or suppression of default handling for the SDL event
+    {
+        using namespace SDLRawInput;
+
+        VariantMap eventData = GetEventDataMap();
+        eventData[P_SDLEVENT] = &evt;
+        eventData[P_CONSUMED] = false;
+        SendEvent(E_SDLRAWINPUT, eventData);
+
+        if (eventData[P_CONSUMED].GetBool())
+            return;
+    }
+
     // While not having input focus, skip key/mouse/touch/joystick events, except for the "click to focus" mechanism
     if (!inputFocus_ && evt.type >= SDL_KEYDOWN && evt.type <= SDL_MULTIGESTURE)
     {
@@ -1895,19 +1915,6 @@ void Input::HandleSDLEvent(void* sdlEvent)
         }
         else
 #endif
-            return;
-    }
-
-    // Possibility for custom handling or suppression of default handling for the SDL event
-    {
-        using namespace SDLRawInput;
-
-        VariantMap eventData = GetEventDataMap();
-        eventData[P_SDLEVENT] = &evt;
-        eventData[P_CONSUMED] = false;
-        SendEvent(E_SDLRAWINPUT, eventData);
-
-        if (eventData[P_CONSUMED].GetBool())
             return;
     }
 

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -33,6 +33,8 @@ BaseResourceTab::BaseResourceTab(Context* context)
     : Tab(context)
     , undo_(context)
 {
+    onTabContextMenu_.Subscribe(this, &BaseResourceTab::OnRenderContextMenu);
+
     SubscribeToEvent(E_RESOURCERENAMED, [&](StringHash, VariantMap& args) {
         using namespace ResourceRenamed;
 
@@ -109,14 +111,12 @@ void BaseResourceTab::Close()
 {
     undo_.Clear();
     lastUndoIndex_ = 0;
-    GetCache()->ReleaseResource(GetResourceType(), GetResourceName(), true);
+    context_->GetCache()->ReleaseResource(GetResourceType(), GetResourceName(), true);
     resourceName_.clear();
 }
 
-void BaseResourceTab::OnBeforeEnd()
+bool BaseResourceTab::RenderWindowContent()
 {
-    Tab::OnBeforeEnd();
-
     if (wasOpen_ && !ui::IsPopupOpen("Save?"))
     {
         if ((!open_ && IsModified()) || !pendingLoadResource_.empty())
@@ -180,6 +180,19 @@ void BaseResourceTab::OnBeforeEnd()
 
     if (wasOpen_ && !open_)
         Close();
+
+    return true;
+}
+
+void BaseResourceTab::OnRenderContextMenu()
+{
+    if (ui::MenuItem("Save"))
+        SaveResource();
+
+    ui::Separator();
+
+    if (ui::MenuItem("Close"))
+        open_ = false;
 }
 
 }

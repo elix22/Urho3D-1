@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,30 +19,25 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-
 #include <Urho3D/Graphics/Viewport.h>
 #include <Urho3D/Graphics/RenderPath.h>
-#include <Urho3D/Graphics/Renderer.h>
 #include <Urho3D/Graphics/Light.h>
 #include <Urho3D/Graphics/Camera.h>
 #include <Urho3D/Graphics/Model.h>
+#include <Urho3D/Input/Input.h>
 #include <Urho3D/Resource/ResourceCache.h>
 #include <Urho3D/SystemUI/SystemUI.h>
-#include <Urho3D/Input/Input.h>
-#include <Urho3D/Core/StringUtils.h>
 #include <Urho3D/Graphics/StaticModel.h>
-#include <Toolbox/SystemUI/Widgets.h>
-#include <Urho3D/IO/Log.h>
 #include "Tabs/Scene/SceneTab.h"
-#include "EditorEvents.h"
 #include "PreviewInspector.h"
 #include "Editor.h"
+
 
 namespace Urho3D
 {
 
 PreviewInspector::PreviewInspector(Context* context)
-    : ResourceInspector(context)
+    : InspectorProvider(context)
     , view_(context, {0, 0, 200, 200})
 {
     // Workaround: for some reason this overriden method of our class does not get called by SceneView constructor.
@@ -65,67 +60,47 @@ void PreviewInspector::SetModel(Model* model)
 
 void PreviewInspector::SetModel(const ea::string& resourceName)
 {
-    SetModel(GetCache()->GetResource<Model>(resourceName));
-}
-
-void PreviewInspector::SetGrab(bool enable)
-{
-    if (mouseGrabbed_ == enable)
-        return;
-
-    mouseGrabbed_ = enable;
-    Input* input = view_.GetCamera()->GetInput();
-    if (enable && input->IsMouseVisible())
-        input->SetMouseVisible(false);
-    else if (!enable && !input->IsMouseVisible())
-        input->SetMouseVisible(true);
+    SetModel(context_->GetCache()->GetResource<Model>(resourceName));
 }
 
 void PreviewInspector::CreateObjects()
 {
     view_.CreateObjects();
     node_ = view_.GetScene()->CreateChild("Preview");
-    view_.GetCamera()->GetNode()->CreateComponent<Light>();
-    view_.GetCamera()->GetNode()->SetPosition(Vector3::BACK * distance_);
-    view_.GetCamera()->GetNode()->LookAt(Vector3::ZERO);
+    Node* node = view_.GetCamera()->GetNode();
+    node->CreateComponent<Light>();
+    node->SetPosition(Vector3::BACK * distance_);
+    node->LookAt(Vector3::ZERO);
 }
 
 void PreviewInspector::RenderPreview()
 {
-    auto size = static_cast<int>(ui::GetWindowWidth() - ui::GetCursorPosX());
-    view_.SetSize({0, 0, size, size});
-    ui::Image(view_.GetTexture(), ImVec2(view_.GetTexture()->GetWidth(), view_.GetTexture()->GetHeight()));
-}
-
-void PreviewInspector::HandleInput()
-{
-    Input* input = view_.GetCamera()->GetInput();
-    bool rightMouseButtonDown = input->GetMouseButtonDown(MOUSEB_RIGHT);
-    if (ui::IsItemHovered())
-    {
-        if (rightMouseButtonDown)
-            SetGrab(true);
-    }
+    auto* input = GetSubsystem<Input>();
+    float dpi = ui::GetCurrentWindow()->Viewport->DpiScale;
+    float size = ui::GetWindowWidth() - ui::GetCursorPosX();
+    view_.SetSize({0, 0, static_cast<int>(size * dpi), static_cast<int>(size * dpi)});
+    ui::ImageItem(view_.GetTexture(), ImVec2(size, size));
+    bool wasActive = mouseGrabbed_;
+    mouseGrabbed_ = ui::ItemMouseActivation(MOUSEB_RIGHT) && ui::IsMouseDragging(MOUSEB_RIGHT);
+    if (wasActive != mouseGrabbed_)
+        input->SetMouseVisible(!mouseGrabbed_);
 
     if (mouseGrabbed_)
     {
-        if (rightMouseButtonDown)
+        ui::SetMouseCursor(ImGuiMouseCursor_None);
+        Node* node = view_.GetCamera()->GetNode();
+        if (input->GetKeyPress(KEY_ESCAPE))
         {
-            if (input->GetKeyPress(KEY_ESCAPE))
-            {
-                view_.GetCamera()->GetNode()->SetPosition(Vector3::BACK * distance_);
-                view_.GetCamera()->GetNode()->LookAt(Vector3::ZERO);
-            }
-            else
-            {
-                IntVector2 delta = input->GetMouseMove();
-                view_.GetCamera()->GetNode()->RotateAround(Vector3::ZERO,
-                                                           Quaternion(delta.x_ * 0.1f, view_.GetCamera()->GetNode()->GetUp()) *
-                                                           Quaternion(delta.y_ * 0.1f, view_.GetCamera()->GetNode()->GetRight()), TS_WORLD);
-            }
+            node->SetPosition(Vector3::BACK * distance_);
+            node->LookAt(Vector3::ZERO);
         }
         else
-            SetGrab(false);
+        {
+            Vector2 delta(input->GetMouseMove());
+            Quaternion rotateDelta = Quaternion(delta.x_ * 0.1f, node->GetUp()) *
+                Quaternion(delta.y_ * 0.1f, node->GetRight());
+            node->RotateAround(Vector3::ZERO, rotateDelta, TS_WORLD);
+        }
     }
 }
 

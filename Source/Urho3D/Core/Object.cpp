@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -59,10 +59,13 @@ bool TypeInfo::IsTypeOf(StringHash type) const
 
 bool TypeInfo::IsTypeOf(const TypeInfo* typeInfo) const
 {
+    if (typeInfo == nullptr)
+        return false;
+    
     const TypeInfo* current = this;
     while (current)
     {
-        if (current == typeInfo)
+        if (current == typeInfo || current->GetType() == typeInfo->GetType())
             return true;
 
         current = current->GetBaseTypeInfo();
@@ -126,6 +129,13 @@ void Object::OnEvent(Object* sender, StringHash eventType, VariantMap& eventData
         nonSpecific->Invoke(eventData);
         context->SetEventHandler(nullptr);
     }
+}
+
+bool Object::Serialize(Archive& /*archive*/)
+{
+    URHO3D_LOGERROR("Serialization is not supported for " + GetTypeInfo()->GetTypeName());
+    assert(0);
+    return false;
 }
 
 bool Object::IsInstanceOf(StringHash type) const
@@ -264,6 +274,24 @@ void Object::UnsubscribeFromAllEventsExcept(const ea::vector<StringHash>& except
     for (auto handler = eventHandlers_.begin(); handler != eventHandlers_.end(); )
     {
         if ((!onlyUserData || handler->GetUserData()) && !exceptions.contains(handler->GetEventType()))
+        {
+            if (handler->GetSender())
+                context_->RemoveEventReceiver(this, handler->GetSender(), handler->GetEventType());
+            else
+                context_->RemoveEventReceiver(this, handler->GetEventType());
+
+            handler = EraseEventHandler(handler);
+        }
+        else
+            ++handler;
+    }
+}
+
+void Object::UnsubscribeFromAllEventsExcept(const ea::vector<Object*>& exceptions, bool onlyUserData)
+{
+    for (auto handler = eventHandlers_.begin(); handler != eventHandlers_.end(); )
+    {
+        if ((!onlyUserData || handler->GetUserData()) && !exceptions.contains(handler->GetSender()))
         {
             if (handler->GetSender())
                 context_->RemoveEventReceiver(this, handler->GetSender(), handler->GetEventType());
@@ -544,73 +572,6 @@ template <> Graphics* Object::GetSubsystem<Graphics>() const
 }
 
 template <> Renderer* Object::GetSubsystem<Renderer>() const
-{
-    return context_->renderer_;
-}
-Engine* Object::GetEngine() const
-{
-    return context_->engine_;
-}
-
-Time* Object::GetTime() const
-{
-    return context_->time_; }
-
-WorkQueue* Object::GetWorkQueue() const
-{
-    return context_->workQueue_;
-}
-FileSystem* Object::GetFileSystem() const
-{
-    return context_->fileSystem_;
-}
-#if URHO3D_LOGGING
-Log* Object::GetLog() const
-{
-    return context_->log_;
-}
-#endif
-ResourceCache* Object::GetCache() const
-{
-    return context_->cache_;
-}
-
-Localization* Object::GetLocalization() const
-{
-    return context_->l18n_;
-}
-#if URHO3D_NETWORK
-Network* Object::GetNetwork() const
-{
-    return context_->network_;
-}
-#endif
-Input* Object::GetInput() const
-{
-    return context_->input_;
-}
-
-Audio* Object::GetAudio() const
-{
-    return context_->audio_;
-}
-
-UI* Object::GetUI() const
-{
-    return context_->ui_;
-}
-#if URHO3D_SYSTEMUI
-SystemUI* Object::GetSystemUI() const
-{
-    return context_->systemUi_;
-}
-#endif
-Graphics* Object::GetGraphics() const
-{
-    return context_->graphics_;
-}
-
-Renderer* Object::GetRenderer() const
 {
     return context_->renderer_;
 }

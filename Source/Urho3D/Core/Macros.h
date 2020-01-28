@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -37,4 +37,10 @@
 #   define URHO3D_FALLTHROUGH [[fallthrough]]
 #else
 #   define URHO3D_FALLTHROUGH
+#endif
+
+#if _WIN32
+#  define URHO3D_STDCALL __stdcall
+#else
+#  define URHO3D_STDCALL
 #endif

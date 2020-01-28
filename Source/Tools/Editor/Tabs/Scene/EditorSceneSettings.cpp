@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 // Copyright (c) 2017 Eugene Kozlov
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -21,6 +21,7 @@
 // THE SOFTWARE.
 //
 
+#include <Urho3D/Graphics/BillboardSet.h>
 #include <Urho3D/Graphics/Camera.h>
 #include <Urho3D/Graphics/DebugRenderer.h>
 #include <Urho3D/Graphics/RenderPath.h>
@@ -166,8 +167,9 @@ void EditorSceneSettings::SetCamera2D(bool is2D)
     {
         if (is2D)
         {
-            camera->RemoveComponent<DebugCameraController>();
-            camera->GetOrCreateComponent<DebugCameraController2D>();
+            camera->RemoveComponent<DebugCameraController3D>();
+            auto* controller = camera->GetOrCreateComponent<DebugCameraController2D>();
+            controller->SetUpdateEventMask(USE_NO_EVENT);
             Vector3 pos = camera->GetWorldPosition();
             camera->SetWorldPosition(pos);
             camera->LookAt(pos + Vector3::FORWARD);
@@ -176,8 +178,27 @@ void EditorSceneSettings::SetCamera2D(bool is2D)
         else
         {
             camera->RemoveComponent<DebugCameraController2D>();
-            camera->GetOrCreateComponent<DebugCameraController>();
+            auto* controller = camera->GetOrCreateComponent<DebugCameraController3D>();
+            controller->SetUpdateEventMask(USE_NO_EVENT);
             camera->GetComponent<Camera>()->SetOrthographic(false);
+        }
+
+        ea::vector<Node*> nodes;
+        GetScene()->GetNodesWithTag(nodes, "DebugIcon");
+        for (Node* node : nodes)
+        {
+            auto* billboard = node->GetComponent<BillboardSet>();
+            if (!billboard)
+                continue;
+
+            if (is2D)
+            {
+                billboard->SetFaceCameraMode(FaceCameraMode::FC_NONE);
+                node->LookAt(node->GetWorldPosition() + Vector3::FORWARD);
+            }
+            else
+                billboard->SetFaceCameraMode(FaceCameraMode::FC_LOOKAT_XYZ);
+            billboard->Commit();
         }
     }
 
@@ -205,7 +226,7 @@ void EditorSceneSettings::SetEditorViewportRenderPath(const ResourceRef& renderP
         return;
     }
 
-    if (XMLFile* renderPathFile = GetCache()->GetResource<XMLFile>(renderPath.name_))
+    if (XMLFile* renderPathFile = context_->GetCache()->GetResource<XMLFile>(renderPath.name_))
     {
         if (auto* tab = GetSubsystem<Editor>()->GetTab<SceneTab>())
         {
@@ -219,7 +240,7 @@ void EditorSceneSettings::SetEditorViewportRenderPath(const ResourceRef& renderP
             {
                 if (command.pixelShaderName_.starts_with("PBR"))
                 {
-                    XMLFile* gammaCorrection = GetCache()->GetResource<XMLFile>(
+                    XMLFile* gammaCorrection = context_->GetCache()->GetResource<XMLFile>(
                         "PostProcess/GammaCorrection.xml");
                     path->Append(gammaCorrection);
                     return;

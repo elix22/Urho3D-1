@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,8 @@
 #include "../Precompiled.h"
 
 #include "../Core/Context.h"
+#include "../IO/Archive.h"
+#include "../IO/ArchiveSerialization.h"
 #include "../IO/Deserializer.h"
 #include "../IO/FileSystem.h"
 #include "../IO/Log.h"
@@ -36,10 +38,14 @@
 #include "../Scene/SceneEvents.h"
 #include "../Scene/Serializable.h"
 
+#include <EASTL/fixed_vector.h>
+
 #include "../DebugNew.h"
 
 namespace Urho3D
 {
+
+static const unsigned MAX_STACK_ATTRIBUTE_COUNT = 128;
 
 static unsigned RemapAttributeIndex(const ea::vector<AttributeInfo>* attributes, const AttributeInfo& netAttr, unsigned netAttrIndex)
 {
@@ -55,6 +61,50 @@ static unsigned RemapAttributeIndex(const ea::vector<AttributeInfo>* attributes,
     }
 
     return netAttrIndex; // Could not remap
+}
+
+static bool SaveAttributeWithName(Archive& archive, const AttributeInfo& attr, const Variant& value)
+{
+    assert(!archive.IsInput());
+
+    // Save attribute name
+    if (!SerializeStringHashKey(archive, const_cast<StringHash&>(attr.nameHash_), attr.name_))
+        return false;
+
+    // Save attribute
+    if (attr.enumNames_)
+    {
+        int enumValue = value.GetInt();
+        return SerializeEnum<int, int>(archive, "attribute", attr.enumNames_, enumValue);
+    }
+    else
+    {
+        return SerializeVariantValue(archive, attr.type_, "attribute", const_cast<Variant&>(value));
+    }
+}
+
+static bool LoadAttribute(Archive& archive, const AttributeInfo& attr, Variant& value)
+{
+    assert(archive.IsInput());
+
+    // Read attribute value
+    if (attr.enumNames_)
+    {
+        int enumValue{};
+        if (!SerializeEnum<int, int>(archive, "attribute", attr.enumNames_, enumValue))
+            return false;
+
+        value = enumValue;
+        return true;
+    }
+    else
+    {
+        // Reset value to default so it could use custom serialization
+        if (attr.type_ == VAR_CUSTOM)
+            value = attr.defaultValue_;
+
+        return SerializeVariantValue(archive, attr.type_, "attribute", value);
+    }
 }
 
 Serializable::Serializable(Context* context) :
@@ -303,7 +353,7 @@ bool Serializable::Load(Deserializer& source)
     for (unsigned i = 0; i < attributes->size(); ++i)
     {
         const AttributeInfo& attr = attributes->at(i);
-        if (!(attr.mode_ & AM_FILE))
+        if (!attr.ShouldLoad())
             continue;
 
         if (source.IsEof())
@@ -330,7 +380,7 @@ bool Serializable::Save(Serializer& dest) const
     for (unsigned i = 0; i < attributes->size(); ++i)
     {
         const AttributeInfo& attr = attributes->at(i);
-        if (!(attr.mode_ & AM_FILE) || (attr.mode_ & AM_FILEREADONLY) == AM_FILEREADONLY)
+        if (!attr.ShouldSave())
             continue;
 
         OnGetAttribute(attr, value);
@@ -369,7 +419,7 @@ bool Serializable::LoadXML(const XMLElement& source)
         while (attempts)
         {
             const AttributeInfo& attr = attributes->at(i);
-            if ((attr.mode_ & AM_FILE) && !attr.name_.compare(name))
+            if (attr.ShouldLoad() && !attr.name_.compare(name))
             {
                 Variant varValue;
 
@@ -445,64 +495,53 @@ bool Serializable::LoadJSON(const JSONValue& source)
 
     const JSONObject& attributesObject = attributesValue.GetObject();
 
-    unsigned startIndex = 0;
-
-    for (auto it = attributesObject.begin(); it != attributesObject.end();)
+    for (const AttributeInfo& attr : *attributes)
     {
-        ea::string name = it->first;
-        const JSONValue& value = it->second;
-        unsigned i = startIndex;
-        unsigned attempts = attributes->size();
-
-        while (attempts)
+        if (attr.ShouldLoad())
         {
-            const AttributeInfo& attr = attributes->at(i);
-            if ((attr.mode_ & AM_FILE) && !attr.name_.compare(name))
+            const JSONValue& value = attributesValue[attr.name_];
+            if (value.GetValueType() == JSON_NULL)
+                continue;
+
+            Variant varValue;
+            // If enums specified, do enum lookup ad int assignment. Otherwise assign variant directly
+            if (attr.enumNames_ && attr.type_ == VAR_INT)
             {
-                Variant varValue;
-
-                // If enums specified, do enum lookup ad int assignment. Otherwise assign variant directly
-                if (attr.enumNames_ && attr.type_ == VAR_INT)
+                const ea::string& valueStr = value.GetString();
+                bool enumFound = false;
+                int enumValue = 0;
+                const char** enumPtr = attr.enumNames_;
+                while (*enumPtr)
                 {
-                    const ea::string& valueStr = value.GetString();
-                    bool enumFound = false;
-                    int enumValue = 0;
-                    const char** enumPtr = attr.enumNames_;
-                    while (*enumPtr)
+                    if (!valueStr.comparei(*enumPtr))
                     {
-                        if (!valueStr.comparei(*enumPtr))
-                        {
-                            enumFound = true;
-                            break;
-                        }
-                        ++enumPtr;
-                        ++enumValue;
+                        enumFound = true;
+                        break;
                     }
-                    if (enumFound)
-                        varValue = enumValue;
-                    else
-                        URHO3D_LOGWARNING("Unknown enum value " + valueStr + " in attribute " + attr.name_);
+                    ++enumPtr;
+                    ++enumValue;
                 }
+                if (enumFound)
+                    varValue = enumValue;
                 else
-                    varValue = value.GetVariantValue(attr.type_, context_);
-
-                if (!varValue.IsEmpty())
-                    OnSetAttribute(attr, varValue);
-
-                startIndex = (i + 1) % attributes->size();
-                break;
+                    URHO3D_LOGWARNING("Unknown enum value " + valueStr + " in attribute " + attr.name_);
             }
             else
-            {
-                i = (i + 1) % attributes->size();
-                --attempts;
-            }
+                varValue = value.GetVariantValue(attr.type_, context_);
+
+            if (!varValue.IsEmpty())
+                OnSetAttribute(attr, varValue);
         }
+    }
 
-        if (!attempts)
-            URHO3D_LOGWARNING("Unknown attribute " + name + " in JSON data");
-
-        it++;
+    // Report missing attributes.
+    for (const auto& pair : attributesObject)
+    {
+        bool found = false;
+        for (int i = 0; i < attributes->size() && !found; i++)
+            found |= attributes->at(i).name_ == pair.first;
+        if (!found)
+            URHO3D_LOGWARNING("Unknown attribute {} in JSON data", pair.first);
     }
 
     return true;
@@ -525,7 +564,7 @@ bool Serializable::SaveXML(XMLElement& dest) const
     for (unsigned i = 0; i < attributes->size(); ++i)
     {
         const AttributeInfo& attr = attributes->at(i);
-        if (!(attr.mode_ & AM_FILE) || (attr.mode_ & AM_FILEREADONLY) == AM_FILEREADONLY)
+        if (!attr.ShouldSave())
             continue;
 
         OnGetAttribute(attr, value);
@@ -562,7 +601,7 @@ bool Serializable::SaveJSON(JSONValue& dest) const
     for (unsigned i = 0; i < attributes->size(); ++i)
     {
         const AttributeInfo& attr = attributes->at(i);
-        if (!(attr.mode_ & AM_FILE) || (attr.mode_ & AM_FILEREADONLY) == AM_FILEREADONLY)
+        if (!attr.ShouldSave())
             continue;
 
         OnGetAttribute(attr, value);
@@ -626,6 +665,191 @@ bool Serializable::LoadFile(const ea::string& resourceName)
     if (extension == ".json")
         return LoadJSON(realResourceName);
     return Load(realResourceName);
+}
+
+bool Serializable::Serialize(Archive& archive)
+{
+    if (ArchiveBlock block = archive.OpenUnorderedBlock("serializable"))
+        return Serialize(archive, block);
+    return false;
+}
+
+bool Serializable::Serialize(Archive& archive, ArchiveBlock& block)
+{
+    const ea::vector<AttributeInfo>* attributes = GetAttributes();
+    if (!attributes)
+        return true;
+
+    // Prepare for serialization
+    ea::fixed_vector<Variant, MAX_STACK_ATTRIBUTE_COUNT> attributeValues;
+    const unsigned numAttributes = attributes->size();
+    const bool saveDefaults = !archive.IsHumanReadable();
+
+    // Caclculate number of attributes to write
+    unsigned numAttributesToWrite = 0;
+    if (!archive.IsInput())
+    {
+        if (!saveDefaults)
+            attributeValues.resize(numAttributes);
+
+        for (unsigned index = 0; index < numAttributes; ++index)
+        {
+            const AttributeInfo& attr = (*attributes)[index];
+
+            if (!attr.ShouldSave())
+                continue;
+
+            // Code is optimized for binary archives that always save defaults
+            ++numAttributesToWrite;
+
+            // Check the value
+            if (!saveDefaults)
+            {
+                OnGetAttribute(attr, attributeValues[index]);
+
+                if (!SaveDefaultAttributes(attr))
+                {
+                    const Variant defaultValue = GetAttributeDefault(index);
+                    if (attributeValues[index] == defaultValue)
+                    {
+                        // Skip attribute with default value
+                        attributeValues[index] = Variant::EMPTY;
+                        --numAttributesToWrite;
+                    }
+                }
+            }
+        }
+    }
+
+    // Serialize attributes
+    if (auto block = archive.OpenMapBlock("attributes", numAttributesToWrite))
+    {
+        if (archive.IsInput())
+        {
+            ea::fixed_vector<StringHash, MAX_STACK_ATTRIBUTE_COUNT> attributeNames;
+
+            // Try to load attributes sequentially
+            unsigned nextAttributeIndex = 0;
+            unsigned numSkippedAttributes = 0;
+            for (unsigned i = 0; i < block.GetSizeHint(); ++i)
+            {
+                // Skip attributes that are not serialized
+                while (nextAttributeIndex < numAttributes && !(*attributes)[nextAttributeIndex].ShouldLoad())
+                    ++nextAttributeIndex;
+
+                // Read attribute name hash
+                StringHash attrNameHash;
+                if (!SerializeStringHashKey(archive, attrNameHash, EMPTY_STRING))
+                {
+                    URHO3D_LOGERROR("Could not load " + GetTypeName() + ", failed to read attribute name");
+                    return false;
+                }
+
+                // If attribute is expected, just read it
+                if (nextAttributeIndex < numAttributes && (*attributes)[nextAttributeIndex].nameHash_ == attrNameHash)
+                {
+                    const AttributeInfo& attr = (*attributes)[nextAttributeIndex];
+                    Variant value;
+                    if (!LoadAttribute(archive, attr, value))
+                    {
+                        URHO3D_LOGERROR("Could not load " + GetTypeName() + ", failed to read attribute " + attr.name_);
+                        return false;
+                    }
+
+                    OnSetAttribute(attr, value);
+                    ++nextAttributeIndex;
+                    continue;
+                }
+
+                // Lazy initialize attribute names
+                if (attributeNames.empty())
+                {
+                    for (unsigned j = 0; j < numAttributes; ++j)
+                        attributeNames.push_back(attributes->at(j).nameHash_);
+                }
+
+                // Try to find the attribute
+                const unsigned attributeIndex = attributeNames.index_of(attrNameHash);
+
+                // Skip if not found or invalid
+                if (attributeIndex >= numAttributes || !((*attributes)[attributeIndex].mode_ & AM_FILE))
+                {
+                    ++numSkippedAttributes;
+                    continue;
+                }
+
+                // Lazy allocate deferred array
+                if (attributeValues.empty())
+                    attributeValues.resize(numAttributes);
+
+                // Load attribute into deferred array
+                const AttributeInfo& attr = (*attributes)[attributeIndex];
+                if (!LoadAttribute(archive, attr, attributeValues[attributeIndex]))
+                {
+                    URHO3D_LOGERROR("Could not load " + GetTypeName() + ", failed to read attribute " + attr.name_);
+                    return false;
+                }
+            }
+
+            // Apply deferred attributes
+            if (!attributeValues.empty())
+            {
+                for (unsigned attributeIndex = 0; attributeIndex < numAttributes; ++attributeIndex)
+                {
+                    const Variant& value = attributeValues[attributeIndex];
+                    if (!value.IsEmpty())
+                        OnSetAttribute((*attributes)[attributeIndex], value);
+                }
+            }
+
+            // Warn about skipped attributes
+            if (numSkippedAttributes > 0)
+            {
+                URHO3D_LOGWARNING(ea::to_string(numSkippedAttributes) + " atributes were skipped while loading " + GetTypeName());
+            }
+        }
+        else
+        {
+            if (saveDefaults)
+            {
+                // Get and save attributes
+                Variant value;
+                for (const AttributeInfo& attr : *attributes)
+                {
+                    if (!attr.ShouldSave())
+                        continue;
+
+                    OnGetAttribute(attr, value);
+
+                    if (!SaveAttributeWithName(archive, attr, value))
+                    {
+                        URHO3D_LOGERROR("Could not save " + GetTypeName() + ", failed to write attribute " + attr.name_);
+                        return false;
+                    }
+                }
+            }
+            else
+            {
+                // Just save attributes because they are already acquired
+                for (unsigned attributeIndex = 0; attributeIndex < numAttributes; ++attributeIndex)
+                {
+                    const AttributeInfo& attr = (*attributes)[attributeIndex];
+                    const Variant& value = attributeValues[attributeIndex];
+
+                    if (value.IsEmpty())
+                        continue;
+
+                    if (!SaveAttributeWithName(archive, attr, value))
+                    {
+                        URHO3D_LOGERROR("Could not save " + GetTypeName() + ", failed to write attribute " + attr.name_);
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+    return false;
 }
 
 bool Serializable::SetAttribute(unsigned index, const Variant& value)

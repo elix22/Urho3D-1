@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,11 +35,9 @@ public:
     /// Register object with the engine.
     static void RegisterObject(Context* context);
     ///
-    void RenderInspector(const char* filter) override;
-    ///
     bool Accepts(const ea::string& path) const override;
     ///
-    bool Execute(Urho3D::Asset* input, const ea::string& inputFile, const ea::string& outputPath) override;
+    bool Execute(Urho3D::Asset* input, const ea::string& outputPath) override;
 
 protected:
     ///

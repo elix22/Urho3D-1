@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -291,6 +291,12 @@ void Graphics::PrecacheShaders(Deserializer& source)
     URHO3D_PROFILE("PrecacheShaders");
 
     ShaderPrecache::LoadShaders(this, source);
+}
+
+void Graphics::SetGlobalShaderDefines(const ea::string& globalShaderDefines)
+{
+    globalShaderDefines_ = globalShaderDefines;
+    globalShaderDefinesHash_ = globalShaderDefines_;
 }
 
 void Graphics::SetShaderCacheDir(const ea::string& path)

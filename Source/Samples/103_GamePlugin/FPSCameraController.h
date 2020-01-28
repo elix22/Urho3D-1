@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -45,7 +45,7 @@ public:
 
     void Update(float timeStep) override
     {
-        Input* input = GetInput();
+        Input* input = context_->GetInput();
         if (input->ShouldIgnoreInput())
         {
             // This component takes into account the fact that it will execute in context of editor where scene may

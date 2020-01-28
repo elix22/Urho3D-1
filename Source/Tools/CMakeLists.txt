@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2008-2019 the Urho3D project.
+# Copyright (c) 2008-2020 the Urho3D project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -39,7 +39,7 @@ if (CMAKE_CROSSCOMPILING AND (WEB OR MOBILE))
 endif ()
 
 # Urho3D tools
-set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${DEST_TOOLS_DIR})
+set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG})
 
 if (URHO3D_TOOLS AND DESKTOP)
     add_subdirectory (PackageTool)
@@ -51,6 +51,7 @@ if (URHO3D_TOOLS AND DESKTOP)
     add_subdirectory (SpritePacker)
     add_subdirectory (Editor)
     add_subdirectory (ScriptPlayer)
+    add_subdirectory (SerializationConverter)
 elseif (MINI_URHO OR WEB OR MOBILE)
     add_subdirectory (PackageTool)
 endif ()

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,8 +20,11 @@
 // THE SOFTWARE.
 //
 
+/// \file
+
 #pragma once
 
+#include "../Core/NonCopyable.h"
 #include "../Graphics/Drawable.h"
 #include "../Math/BoundingBox.h"
 #include "../Math/Frustum.h"
@@ -35,7 +38,7 @@ class Drawable;
 class Node;
 
 /// Base class for octree queries.
-class URHO3D_API OctreeQuery
+class URHO3D_API OctreeQuery : private NonCopyable
 {
 public:
     /// Construct with query parameters.
@@ -48,11 +51,6 @@ public:
 
     /// Destruct.
     virtual ~OctreeQuery() = default;
-
-    /// Prevent copy construction.
-    OctreeQuery(const OctreeQuery& rhs) = delete;
-    /// Prevent assignment.
-    OctreeQuery& operator =(const OctreeQuery& rhs) = delete;
 
     /// Intersection test for an octant.
     virtual Intersection TestOctant(const BoundingBox& box, bool inside) = 0;
@@ -218,7 +216,7 @@ struct URHO3D_API RayQueryResult
 };
 
 /// Raycast octree query.
-class URHO3D_API RayOctreeQuery
+class URHO3D_API RayOctreeQuery : private NonCopyable
 {
 public:
     /// Construct with ray and query parameters.
@@ -243,11 +241,6 @@ public:
         level_(level)
     {
     }
-
-    /// Prevent copy construction.
-    RayOctreeQuery(const RayOctreeQuery& rhs) = delete;
-    /// Prevent assignment.
-    RayOctreeQuery& operator =(const RayOctreeQuery& rhs) = delete;
 
     /// Result vector reference.
     ea::vector<RayQueryResult>& result_;

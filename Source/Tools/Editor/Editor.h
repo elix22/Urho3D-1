@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,13 +19,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-
 #pragma once
 
 
 #include <Urho3D/Engine/Application.h>
 #include <Toolbox/SystemUI/AttributeInspector.h>
+
+#include "Inspector/InspectorProvider.h"
+#include "KeyBindings.h"
 #include "Project.h"
+#include "Pipeline/Commands/SubCommand.h"
 
 using namespace std::placeholders;
 
@@ -34,10 +37,16 @@ namespace Urho3D
 
 class Tab;
 class SceneTab;
-class AssetConverter;
-class SubCommand;
 
 static const unsigned EDITOR_VIEW_LAYER = 1U << 31;
+
+struct InspectArgs
+{
+    /// In. Object that is to be inspected.
+    WeakPtr<Object> object_;
+    /// Out. Inspector that is going to perform the inspection.
+    ea::vector<WeakPtr<InspectorProvider>> inspectors_;
+};
 
 class Editor : public Application
 {
@@ -98,20 +107,60 @@ public:
     void UpdateWindowTitle(const ea::string& resourcePath=EMPTY_STRING);
     ///
     VariantMap& GetEngineParameters() { return engineParameters_; }
+#if URHO3D_STATIC && URHO3D_PLUGINS
+    /// Register static plugin.
+    bool RegisterPlugin(PluginApplication* plugin);
+#endif
+    /// Serialize editor user-specific settings.
+    bool Serialize(Archive& archive) override;
+    /// Remove all items from inspector.
+    void ClearInspector();
+    /// Request editor to inspect specified object. Reference to this object will not be held.
+    void Inspect(Object* object);
+    /// Returns true when specified object is currently inspected.
+    bool IsInspected(Object* object) const { return object != nullptr && inspected_.contains(WeakPtr(object)); }
+    /// Return a list of currently inspected objects.
+    const ea::vector<WeakPtr<Object>>& GetInspected() const { return inspected_; }
+
+    /// Key bindings manager.
+    KeyBindings keyBindings_{context_};
+    /// Signal is fired when settings tabs are rendered. Various subsystems can register their tabs.
+    Signal<void> settingsTabs_{};
+    /// Signal is fired when something wants to inspect a certain object.
+    Signal<InspectArgs> onInspect_;
 
 protected:
     /// Process console commands.
     void OnConsoleCommand(VariantMap& args);
-    /// Process any global hotkeys.
-    void HandleHotkeys();
+    /// Housekeeping tasks.
+    void OnEndFrame();
+    /// Handle user closing editor window.
+    void OnExitRequested();
+    /// Handle user closing editor with a hotkey.
+    void OnExitHotkeyPressed();
+    /// Handle undo request.
+    void OnUndo();
+    /// Handle redo request.
+    void OnRedo();
     /// Renders a project plugins submenu.
     void RenderProjectMenu();
+    ///
+    void RenderSettingsWindow();
     ///
     void SetupSystemUI();
     ///
     template<typename T> void RegisterSubcommand();
     /// Opens a file dialog for folder selection. Project is opened or created in selected folder.
     void OpenOrCreateProject();
+    ///
+    void OnConsoleUriClick(VariantMap& args);
+    ///
+    template<typename Inspectable, typename Inspector>
+    void RegisterProvider()
+    {
+        context_->RegisterFactory<Inspector>();
+        registeredInspectorProviders_[Inspectable::GetTypeStatic()] = Inspector::GetTypeStatic();
+    }
 
     /// List of active scene tabs.
     ea::vector<SharedPtr<Tab>> tabs_;
@@ -127,18 +176,26 @@ protected:
     ea::string pendingOpenProject_;
     /// Flag indicating that editor should create and load default layout.
     bool loadDefaultLayout_ = false;
-    ///
+    /// Monospace font.
     ImFont* monoFont_ = nullptr;
-    ///
+    /// Flag indicating editor is exiting.
     bool exiting_ = false;
-    ///
+    /// Flag indicating that settings window is open.
+    bool settingsOpen_ = false;
+    /// Project path passed on command line.
     ea::string defaultProjectPath_;
-    ///
+    /// Registered subcommands.
     ea::vector<SharedPtr<SubCommand>> subCommands_;
-    /// Global editor settings.
-    JSONValue editorSettings_;
-    ///
-    ea::string flavorPendingRemoval_;
+    /// A list of of recently opened projects. First one is alaways last project that was opened.
+    StringVector recentProjects_{};
+    /// Window position which is saved between sessions.
+    IntVector2 windowPos_{0, 0};
+    /// Window size which is saved between sessions.
+    IntVector2 windowSize_{1920, 1080};
+    /// Map inspectable object type to inspector type.
+    ea::unordered_map<StringHash /*inspectable*/, StringHash /*inspector*/> registeredInspectorProviders_;
+    /// All currently inspected objects.
+    ea::vector<WeakPtr<Object>> inspected_;
 };
 
 }

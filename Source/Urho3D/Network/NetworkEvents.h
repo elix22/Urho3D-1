@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -39,6 +39,11 @@ URHO3D_EVENT(E_SERVERDISCONNECTED, ServerDisconnected)
 
 /// Server connection failed.
 URHO3D_EVENT(E_CONNECTFAILED, ConnectFailed)
+{
+}
+
+/// Server connection failed because its already connected or tries to connect already.
+URHO3D_EVENT(E_CONNECTIONINPROGRESS, ConnectionInProgress)
 {
 }
 

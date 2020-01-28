@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017-2019 the rbfx project.
+// Copyright (c) 2017-2020 the rbfx project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
 
 
 #include <Toolbox/Graphics/SceneView.h>
-#include "ResourceInspector.h"
+#include "Inspector/InspectorProvider.h"
 
 
 namespace Urho3D
@@ -33,15 +33,13 @@ namespace Urho3D
 class Model;
 
 /// Renders a model preview in attribute inspector.
-class PreviewInspector : public ResourceInspector
+class PreviewInspector : public InspectorProvider
 {
-    URHO3D_OBJECT(PreviewInspector, ResourceInspector);
+    URHO3D_OBJECT(PreviewInspector, InspectorProvider);
 public:
     /// Construct.
     explicit PreviewInspector(Context* context);
 
-    /// Model preview view mouse grabbing.
-    void SetGrab(bool enable);
     /// Copy effects from specified render path.
     void SetEffectSource(RenderPath* renderPath);
     /// Set preview model by passing a resource name.
@@ -54,8 +52,6 @@ protected:
     void CreateObjects();
     /// Render model preview.
     virtual void RenderPreview();
-    /// Handle input of preview viewport.
-    virtual void HandleInput();
 
     /// Preview scene.
     SceneView view_;

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2008-2019 the Urho3D project.
+// Copyright (c) 2008-2020 the Urho3D project.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,8 @@
 #include "../Precompiled.h"
 
 #include "../Core/Context.h"
+#include "../IO/Archive.h"
+#include "../IO/ArchiveSerialization.h"
 #include "../IO/Log.h"
 #include "../Resource/ResourceCache.h"
 #include "../Resource/JSONValue.h"
@@ -72,6 +74,81 @@ void Animatable::RegisterObject(Context* context)
 {
     URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Object Animation", GetObjectAnimationAttr, SetObjectAnimationAttr, ResourceRef,
         ResourceRef(ObjectAnimation::GetTypeStatic()), AM_DEFAULT);
+}
+
+bool Animatable::Serialize(Archive& archive)
+{
+    if (ArchiveBlock block = archive.OpenUnorderedBlock("animatable"))
+        return Serialize(archive, block);
+    return false;
+}
+
+bool Animatable::Serialize(Archive& archive, ArchiveBlock& block)
+{
+    if (!Serializable::Serialize(archive, block))
+        return false;
+
+    if (archive.IsInput())
+    {
+        SetObjectAnimation(nullptr);
+        attributeAnimationInfos_.clear();
+    }
+
+    // Object animation without name is serialized every time
+    const bool uniqueObjectAnimation = objectAnimation_ && objectAnimation_->GetName().empty();
+    SerializeOptional(archive, uniqueObjectAnimation,
+        [&](bool loading)
+    {
+        if (ArchiveBlock block = archive.OpenUnorderedBlock("objectanimation"))
+        {
+            if (loading)
+                objectAnimation_ = MakeShared<ObjectAnimation>(context_);
+            return objectAnimation_->Serialize(archive, block);
+        }
+        return false;
+    });
+
+    // Count animations without owners
+    unsigned numFreeAnimations = 0;
+    for (const auto& elem : attributeAnimationInfos_)
+    {
+        if (!elem.second->GetAnimation()->GetOwner())
+            ++numFreeAnimations;
+    }
+
+    SerializeCustomMap(archive, ArchiveBlockType::Map, "attributeanimation", numFreeAnimations, attributeAnimationInfos_,
+        [&](unsigned /*index*/, const ea::string& name, const SharedPtr<AttributeAnimationInfo>& info, bool loading)
+    {
+        // Skip animations with owners
+        SharedPtr<ValueAnimation> attributeAnimation{ info ? info->GetAnimation() : nullptr };
+        if (attributeAnimation && attributeAnimation->GetOwner())
+            return true;
+
+        ea::string animationName = name;
+        archive.SerializeKey(animationName);
+
+        if (ArchiveBlock infoBlock = archive.OpenUnorderedBlock("attributeanimation"))
+        {
+            if (!attributeAnimation)
+                attributeAnimation = MakeShared<ValueAnimation>(context_);
+
+            attributeAnimation->Serialize(archive, infoBlock);
+
+            WrapMode wrapMode = info ? info->GetWrapMode() : WM_LOOP;
+            SerializeEnum(archive, "wrapmode", wrapModeNames, wrapMode);
+
+            float speed = info ? info->GetSpeed() : 1.0f;
+            SerializeValue(archive, "speed", speed);
+
+            if (loading)
+                SetAttributeAnimation(animationName, attributeAnimation, wrapMode, speed);
+
+            return true;
+        }
+        return false;
+    });
+
+    return true;
 }
 
 bool Animatable::LoadXML(const XMLElement& source)
@@ -244,10 +321,10 @@ bool Animatable::SaveJSON(JSONValue& dest) const
 
         attributeAnimationValue.Set(attr.name_, attributeValue);
     }
-    
+
     if (!attributeAnimationValue.IsNull())
         dest.Set("attributeanimation", attributeAnimationValue);
-    
+
     return true;
 }
 

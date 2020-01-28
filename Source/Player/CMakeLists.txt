@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017-2019 Rokas Kupstys.
+# Copyright (c) 2017-2020 the rbfx project.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,13 +20,53 @@
 # THE SOFTWARE.
 #
 
-if (MINI_URHO OR WEB OR MOBILE)
+if (NOT URHO3D_PLAYER)
     return ()
 endif ()
 
-add_subdirectory(Common)
-
-if (URHO3D_CSHARP)
-    add_subdirectory(PlayerCSharp)
+if (MINI_URHO OR WEB)
+    return ()
 endif ()
-add_subdirectory(Player)
+
+file (GLOB SOURCE_FILES *.cpp *.h)
+
+if (URHO3D_NO_EDITOR_PLAYER_EXE)
+    add_library (libPlayer STATIC ${SOURCE_FILES})
+    set (PLAYER_TARGET libPlayer)
+elseif (ANDROID OR URHO3D_CSHARP)
+    add_library (libPlayer MODULE ${SOURCE_FILES} PlayerHost.cpp)
+    set (PLAYER_TARGET libPlayer)
+    if (URHO3D_CSHARP)
+        add_target_csharp(
+            TARGET Player
+            PROJECT ${CMAKE_CURRENT_SOURCE_DIR}/ManagedHost/Player.csproj
+            OUTPUT ${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG}/Player.exe
+            DEPENDS Urho3DNet)
+		add_dependencies(Player libPlayer Urho3DNet)
+        install(FILES "${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG}/Player.exe" DESTINATION ${DEST_BIN_DIR_CONFIG})
+    endif ()
+else ()
+    if (NOT URHO3D_WIN32_CONSOLE)
+        set (TARGET_TYPE WIN32)
+    endif ()
+    add_executable (Player ${TARGET_TYPE} ${SOURCE_FILES} PlayerHost.cpp)
+    set (PLAYER_TARGET Player)
+endif ()
+
+if (TARGET libPlayer)
+    set_target_properties(libPlayer PROPERTIES PREFIX "")
+endif ()
+
+target_link_libraries(${PLAYER_TARGET} PUBLIC Urho3D)
+target_include_directories(${PLAYER_TARGET} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+if (URHO3D_SAMPLES AND URHO3D_PLUGINS AND NOT BUILD_SHARED_LIBS)
+    target_link_libraries(${PLAYER_TARGET} PRIVATE 103_GamePlugin)
+endif ()
+
+install(TARGETS ${PLAYER_TARGET}
+    LIBRARY DESTINATION ${DEST_LIBRARY_DIR_CONFIG}
+    RUNTIME DESTINATION ${DEST_BIN_DIR_CONFIG}
+    ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG}
+    BUNDLE  DESTINATION ${DEST_BIN_DIR_CONFIG}
+)
