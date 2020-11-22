@@ -43,6 +43,14 @@
 # THE SOFTWARE.
 #
 
+# rbfx - force DirectX initialization if needed
+if (URHO3D_D3D9)
+    find_package(DirectX REQUIRED D3D9)
+endif ()
+if (URHO3D_D3D11)
+    find_package(DirectX REQUIRED D3D11)
+endif ()
+
 # Urho3D - commented out in-source tree build prevention as Urho3D supports both out-of-source and in-source tree builds
 
 # Urho3D - commented out setting SDL2 as project name as we want SDL sub-library to remain within Urho3D "umbrella" project
@@ -280,9 +288,10 @@ set_option(DUMMYAUDIO          "Support the dummy audio driver" ON)
 set_option(VIDEO_DIRECTFB      "Use DirectFB video driver" OFF)
 dep_option(DIRECTFB_SHARED     "Dynamically load directfb support" ON VIDEO_DIRECTFB OFF)
 set_option(VIDEO_DUMMY         "Use dummy video driver" ON)
-set_option(VIDEO_OPENGL        "Include OpenGL support" ON)
-# Urho3D - hide OpenGLES option from MinGW platform because it does not have the necessary header file to build OpenGLES video driver
-dep_option(VIDEO_OPENGLES      "Include OpenGL ES support" ON "NOT MINGW" OFF)
+# Urho3D - hide OpenGL option from all non-desktop platforms
+dep_option(VIDEO_OPENGL        "Include OpenGL support" ON "NOT ANDROID AND NOT IOS AND NOT TVOS AND NOT ARM AND NOT WEB" OFF)
+# Urho3D - hide OpenGLES option from all desktop platforms, although a few of them appears to have the necessary header file to build SDL OpenGLES video driver
+dep_option(VIDEO_OPENGLES      "Include OpenGL ES support" ON "ANDROID OR IOS OR TVOS OR ARM OR WEB" OFF)
 # Urho3D - only make PTHREADS option available on UNIX-like platforms
 dep_option(PTHREADS            "Use POSIX threads for multi-threading" ON UNIX OFF)
 dep_option(PTHREADS_SEM        "Use pthread semaphores" ON PTHREADS OFF)
@@ -317,7 +326,7 @@ dep_option(WAYLAND_SHARED      "Dynamically load Wayland support" ON VIDEO_WAYLA
 # Urho3D - change the VIDEO_WAYLAND_QT_TOUCH default value to FALSE (this is only needed by Sailfish[?] but we don't know way to auto-detect that yet)
 dep_option(VIDEO_WAYLAND_QT_TOUCH  "QtWayland server support for Wayland video driver" OFF VIDEO_WAYLAND OFF)
 # Urho3D - only make VIDEO_RPI option available on Raspberry-Pi platform
-dep_option(VIDEO_RPI           "Use Raspberry Pi video driver" ON RPI OFF)
+dep_option(VIDEO_RPI           "Use Raspberry Pi video driver" ON "RPI AND NOT RPI_ABI STREQUAL RPI4" OFF)
 # Urho3D - bug fix - make VIDEO_X11 build option available for desktop UNIX (including OSX) only
 dep_option(VIDEO_X11           "Use X11 video driver" ON "UNIX_SYS OR APPLE\;NOT RPI AND NOT IOS AND NOT TVOS" OFF)
 dep_option(X11_SHARED          "Dynamically load X11 support" ON VIDEO_X11 OFF)
@@ -1073,7 +1082,7 @@ elseif(UNIX)    # Urho3D - at this point both UNIX and UNIX_SYS should be equiva
     CheckRPI()
     CheckX11()
     CheckDirectFB()
-    # Urho3D - raname macros
+    # Urho3D - rename macros
     CheckOpenGL()
     CheckOpenGLES()
     CheckWayland()
@@ -1604,6 +1613,10 @@ target_include_directories (SDL SYSTEM
            $<BUILD_INTERFACE:${SDL2_SOURCE_DIR}/include>
            ${INCLUDE_DIRS}
 )
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND (NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "10.0"))
+    # Fix multiple definition of `WAYLAND_*' with GCC 10, because -fno-common is a new default.
+    target_compile_options(SDL PRIVATE -fcommon)
+endif ()
 if (BUILD_SHARED_LIBS)
   target_compile_definitions(SDL PRIVATE -DSDL_EXPORTS)
 endif ()
@@ -1612,19 +1625,22 @@ if (WIN32)
 elseif (ANDROID)
   target_link_libraries (SDL dl log android)
 elseif (APPLE)
-  target_compile_options(SDL PUBLIC -stdlib=libc++)
   target_link_libraries (SDL iconv "-framework AudioToolbox" "-framework CoreAudio")
   if (IOS)
     target_link_libraries (SDL "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreBluetooth" "-framework CoreMotion" "-framework Foundation" "-framework GameController" "-framework OpenGLES" "-framework QuartzCore" "-framework UIKit")
   else ()
     target_link_libraries (SDL "-framework Carbon" "-framework Cocoa" "-framework CoreFoundation" "-framework SystemConfiguration" "-framework CoreServices" "-framework CoreVideo" "-framework ForceFeedback" "-framework IOKit" "-framework OpenGL")
   endif ()
+elseif (EMSCRIPTEN)
+  target_link_libraries(SDL PUBLIC "-s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=0")
 endif ()
 
-# Install headers for building and using the Urho3D library (install dependency for InputEvents.h)
-install (DIRECTORY include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.h)    # Note: the trailing slash is significant
-install (FILES ${SDL2_BINARY_DIR}/include/SDL/generated/SDL_config.h DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/SDL)
+if (NOT MINI_URHO)
+    # Install headers for building and using the Urho3D library (install dependency for InputEvents.h)
+    install (DIRECTORY include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.h)    # Note: the trailing slash is significant
+    install (FILES ${SDL2_BINARY_DIR}/include/SDL/generated/SDL_config.h DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/SDL)
 
-if (NOT URHO3D_MERGE_STATIC_LIBS)
-  install(TARGETS SDL EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG})
+    if (NOT URHO3D_MERGE_STATIC_LIBS)
+        install(TARGETS SDL EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG})
+    endif ()
 endif ()

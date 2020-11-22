@@ -31,7 +31,9 @@
 #include "../IO/Log.h"
 #include "../IO/PackageFile.h"
 #include "../Resource/BackgroundLoader.h"
+#include "../Resource/BinaryFile.h"
 #include "../Resource/Image.h"
+#include "../Resource/ImageCube.h"
 #include "../Resource/JSONFile.h"
 #include "../Resource/PListFile.h"
 #include "../Resource/ResourceCache.h"
@@ -258,6 +260,39 @@ void ResourceCache::ReleaseResource(StringHash type, const ea::string& name, boo
     }
 }
 
+void ResourceCache::ReleaseResource(const ea::string& resourceName, bool force)
+{
+    // Some resources refer to others, like materials to textures. Repeat the release logic as many times as necessary to ensure
+    // these get released. This is not necessary if forcing release
+    bool released;
+    do
+    {
+        released = false;
+
+        for (auto i = resourceGroups_.begin(); i != resourceGroups_.end(); ++i)
+        {
+            for (auto j = i->second.resources_.begin(); j != i->second.resources_.end();)
+            {
+                auto current = i->second.resources_.find(resourceName);
+                if (current != i->second.resources_.end())
+                {
+                    // If other references exist, do not release, unless forced
+                    if ((current->second.Refs() == 1 && current->second.WeakRefs() == 0) || force)
+                    {
+                        j = i->second.resources_.erase(current);
+                        released = true;
+                        continue;
+                    }
+                }
+                ++j;
+            }
+            if (released)
+                UpdateResourceGroup(i->first);
+        }
+
+    } while (released && !force);
+}
+
 void ResourceCache::ReleaseResources(StringHash type, bool force)
 {
     bool released = false;
@@ -368,6 +403,13 @@ void ResourceCache::ReleaseAllResources(bool force)
         }
 
     } while (released && !force);
+}
+
+bool ResourceCache::ReloadResource(const ea::string_view resourceName)
+{
+    if (Resource* resource = FindResource(StringHash::ZERO, resourceName))
+        return ReloadResource(resource);
+    return false;
 }
 
 bool ResourceCache::ReloadResource(Resource* resource)
@@ -551,7 +593,7 @@ Resource* ResourceCache::GetExistingResource(StringHash type, const ea::string& 
 
     StringHash nameHash(sanitatedName);
 
-    const SharedPtr<Resource>& existing = FindResource(type, nameHash);
+    const SharedPtr<Resource>& existing = type == StringHash::ZERO ? FindResource(type, nameHash) : FindResource(nameHash);
     return existing;
 }
 
@@ -606,6 +648,7 @@ Resource* ResourceCache::GetResource(StringHash type, const ea::string& name, bo
 
     URHO3D_LOGDEBUG("Loading resource " + sanitatedName);
     resource->SetName(sanitatedName);
+    resource->SetAbsoluteFileName(file->GetAbsoluteName());
 
     if (!resource->Load(*(file.Get())))
     {
@@ -685,6 +728,7 @@ SharedPtr<Resource> ResourceCache::GetTempResource(StringHash type, const ea::st
 
     URHO3D_LOGDEBUG("Loading temporary resource " + sanitatedName);
     resource->SetName(file->GetName());
+    resource->SetAbsoluteFileName(file->GetAbsoluteName());
 
     if (!resource->Load(*(file.Get())))
     {
@@ -1139,7 +1183,9 @@ File* ResourceCache::SearchPackages(const ea::string& name)
 
 void RegisterResourceLibrary(Context* context)
 {
+    BinaryFile::RegisterObject(context);
     Image::RegisterObject(context);
+    ImageCube::RegisterObject(context);
     JSONFile::RegisterObject(context);
     PListFile::RegisterObject(context);
     XMLFile::RegisterObject(context);
@@ -1160,6 +1206,47 @@ void ResourceCache::Scan(ea::vector<ea::string>& result, const ea::string& pathN
     {
         fileSystem->ScanDir(interimResult, resourceDirs_[i] + pathName, filter, flags, recursive);
         result.insert(result.end(), interimResult.begin(), interimResult.end());
+    }
+
+    // Filtering copied from PackageFile::Scan().
+    ea::string sanitizedPath = GetSanitizedPath(pathName);
+    ea::string filterExtension;
+    unsigned dotPos = filter.find_last_of('.');
+    if (dotPos != ea::string::npos)
+        filterExtension = filter.substr(dotPos);
+    if (filterExtension.contains('*'))
+        filterExtension.clear();
+
+    bool caseSensitive = true;
+#ifdef _WIN32
+    // On Windows ignore case in string comparisons
+    caseSensitive = false;
+#endif
+
+    // Manual resources.
+    for (auto group = resourceGroups_.begin(); group != resourceGroups_.end(); ++group)
+    {
+        for (auto res = group->second.resources_.begin(); res != group->second.resources_.end(); ++res)
+        {
+            ea::string entryName = GetSanitizedPath(res->second->GetName());
+            if ((filterExtension.empty() || entryName.ends_with(filterExtension, caseSensitive)) &&
+                entryName.starts_with(sanitizedPath, caseSensitive))
+            {
+                // Manual resources do not exist in resource dirs.
+                bool isPhysicalResource = false;
+                for (unsigned i = 0; i < resourceDirs_.size() && !isPhysicalResource; ++i)
+                    isPhysicalResource = fileSystem->FileExists(resourceDirs_[i] + pathName);
+
+                if (!isPhysicalResource)
+                {
+                    int index = entryName.find("/", sanitizedPath.length());
+                    if (flags & SCAN_DIRS && index >= 0)
+                        result.emplace_back(entryName.substr(sanitizedPath.length(), index - sanitizedPath.length()));
+                    else if (flags & SCAN_FILES && index == -1)
+                        result.emplace_back(entryName.substr(sanitizedPath.length()));
+                }
+            }
+        }
     }
 }
 
@@ -1251,6 +1338,9 @@ bool ResourceCache::RenameResource(const ea::string& source, const ea::string& d
         return false;
     }
 
+    const ea::string sourceDir = AddTrailingSlash(source);
+    const ea::string destinationDir = AddTrailingSlash(destination);
+
     // Update loaded resource information
     for (auto& groupPair : resourceGroups_)
     {
@@ -1260,16 +1350,24 @@ bool ResourceCache::RenameResource(const ea::string& source, const ea::string& d
         {
             SharedPtr<Resource> resource = resourcePair.second;
             ea::string newName;
+            ea::string newNativeFileName;
             if (dirMode)
             {
                 if (!resource->GetName().starts_with(resourceName))
                     continue;
                 newName = destinationName + resource->GetName().substr(resourceName.length());
+
+                newNativeFileName = resource->GetNativeFileName();
+                if (newNativeFileName.starts_with(sourceDir))
+                    newNativeFileName.replace(0u, sourceDir.length(), destinationDir);
             }
             else if (resource->GetName() != resourceName)
                 continue;
             else
+            {
                 newName = destinationName;
+                newNativeFileName = destination;
+            }
 
             if (autoReloadResources_)
             {
@@ -1279,6 +1377,7 @@ bool ResourceCache::RenameResource(const ea::string& source, const ea::string& d
 
             groupPair.second.resources_.erase(resource->GetNameHash());
             resource->SetName(newName);
+            resource->SetAbsoluteFileName(newNativeFileName);
             groupPair.second.resources_[resource->GetNameHash()] = resource;
             movedAny = true;
 

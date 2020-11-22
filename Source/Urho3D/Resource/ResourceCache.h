@@ -68,6 +68,7 @@ enum ResourceRequest
 };
 
 /// Optional resource request processor. Can deny requests, re-route resource file names, or perform other processing per request.
+/// @nobindtemp
 class URHO3D_API ResourceRouter : public Object
 {
 public:
@@ -108,6 +109,8 @@ public:
     void RemovePackageFile(const ea::string& fileName, bool releaseResources = true, bool forceRelease = false);
     /// Release a resource by name.
     void ReleaseResource(StringHash type, const ea::string& name, bool force = false);
+    /// Release a resource by name.
+    void ReleaseResource(const ea::string& resourceName, bool force = false);
     /// Release all resources of a specific type.
     void ReleaseResources(StringHash type, bool force = false);
     /// Release resources of a specific type and partial name.
@@ -117,20 +120,27 @@ public:
     /// Release all resources. When called with the force flag false, releases all currently unused resources.
     void ReleaseAllResources(bool force = false);
     /// Reload a resource. Return true on success. The resource will not be removed from the cache in case of failure.
+    bool ReloadResource(const ea::string_view resourceName);
+    /// Reload a resource. Return true on success. The resource will not be removed from the cache in case of failure.
     bool ReloadResource(Resource* resource);
     /// Reload a resource based on filename. Causes also reload of dependent resources if necessary.
     void ReloadResourceWithDependencies(const ea::string& fileName);
     /// Set memory budget for a specific resource type, default 0 is unlimited.
+    /// @property
     void SetMemoryBudget(StringHash type, unsigned long long budget);
     /// Enable or disable automatic reloading of resources as files are modified. Default false.
+    /// @property
     void SetAutoReloadResources(bool enable);
     /// Enable or disable returning resources that failed to load. Default false. This may be useful in editing to not lose resource ref attributes.
+    /// @property   
     void SetReturnFailedResources(bool enable) { returnFailedResources_ = enable; }
 
     /// Define whether when getting resources should check package files or directories first. True for packages, false for directories.
+    /// @property
     void SetSearchPackagesFirst(bool value) { searchPackagesFirst_ = value; }
 
     /// Set how many milliseconds maximum per frame to spend on finishing background loaded resources.
+    /// @property
     void SetFinishBackgroundResourcesMs(int ms) { finishBackgroundResourcesMs_ = Max(ms, 1); }
 
     /// Add a resource router object. By default there is none, so the routing process is skipped.
@@ -142,24 +152,27 @@ public:
     SharedPtr<File> GetFile(const ea::string& name, bool sendEventOnFailure = true);
     /// Return a resource by type and name. Load if not loaded yet. Return null if not found or if fails, unless SetReturnFailedResources(true) has been called. Can be called only from the main thread.
     Resource* GetResource(StringHash type, const ea::string& name, bool sendEventOnFailure = true);
-    /// Load a resource without storing it in the resource cache. Return null if not found or if fails. Can be called from outside the main thread if the resource itself is safe to load completely (it does not possess for example GPU data.)
+    /// Load a resource without storing it in the resource cache. Return null if not found or if fails. Can be called from outside the main thread if the resource itself is safe to load completely (it does not possess for example GPU data).
     SharedPtr<Resource> GetTempResource(StringHash type, const ea::string& name, bool sendEventOnFailure = true);
     /// Background load a resource. An event will be sent when complete. Return true if successfully stored to the load queue, false if eg. already exists. Can be called from outside the main thread.
     bool BackgroundLoadResource(StringHash type, const ea::string& name, bool sendEventOnFailure = true, Resource* caller = nullptr);
     /// Return number of pending background-loaded resources.
+    /// @property
     unsigned GetNumBackgroundLoadResources() const;
     /// Return all loaded resources of a specific type.
     void GetResources(ea::vector<Resource*>& result, StringHash type) const;
-    /// Return an already loaded resource of specific type & name, or null if not found. Will not load if does not exist.
+    /// Return an already loaded resource of specific type & name, or null if not found. Will not load if does not exist. Specifying zero type will search all types.
     Resource* GetExistingResource(StringHash type, const ea::string& name);
 
     /// Return all loaded resources.
     const ea::unordered_map<StringHash, ResourceGroup>& GetAllResources() const { return resourceGroups_; }
 
     /// Return added resource load directories.
+    /// @property
     const ea::vector<ea::string>& GetResourceDirs() const { return resourceDirs_; }
 
     /// Return added package files.
+    /// @property
     const ea::vector<SharedPtr<PackageFile> >& GetPackageFiles() const { return packages_; }
 
     /// Template version of returning a resource by name.
@@ -169,7 +182,7 @@ public:
     /// Template version of loading a resource without storing it to the cache.
     template <class T> SharedPtr<T> GetTempResource(const ea::string& name, bool sendEventOnFailure = true);
     /// Template version of releasing a resource by name.
-    template <class T> void ReleaseResource(const ea::string& name, bool force = false);
+    template <class T> void ReleaseResource(const ea::string& resourceName, bool force = false);
     /// Template version of queueing a resource background load.
     template <class T> bool BackgroundLoadResource(const ea::string& name, bool sendEventOnFailure = true, Resource* caller = nullptr);
     /// Template version of returning loaded resources of a specific type.
@@ -177,24 +190,31 @@ public:
     /// Return whether a file exists in the resource directories or package files. Does not check manually added in-memory resources.
     bool Exists(const ea::string& name) const;
     /// Return memory budget for a resource type.
+    /// @property
     unsigned long long GetMemoryBudget(StringHash type) const;
     /// Return total memory use for a resource type.
+    /// @property
     unsigned long long GetMemoryUse(StringHash type) const;
     /// Return total memory use for all resources.
+    /// @property
     unsigned long long GetTotalMemoryUse() const;
     /// Return full absolute file name of resource if possible, or empty if not found.
     ea::string GetResourceFileName(const ea::string& name) const;
 
     /// Return whether automatic resource reloading is enabled.
+    /// @property
     bool GetAutoReloadResources() const { return autoReloadResources_; }
 
     /// Return whether resources that failed to load are returned.
+    /// @property
     bool GetReturnFailedResources() const { return returnFailedResources_; }
 
     /// Return whether when getting resources should check package files or directories first.
+    /// @property
     bool GetSearchPackagesFirst() const { return searchPackagesFirst_; }
 
     /// Return how many milliseconds maximum to spend on finishing background loaded resources.
+    /// @property
     int GetFinishBackgroundResourcesMs() const { return finishBackgroundResourcesMs_; }
 
     /// Return a resource router by index.
@@ -217,7 +237,7 @@ public:
     unsigned GetNumResourceDirs() const { return resourceDirs_.size(); }
     /// Get resource directory at a given index
     const ea::string& GetResourceDir(unsigned index) const { return index < resourceDirs_.size() ? resourceDirs_[index] : EMPTY_STRING; }
-    
+
     /// Scan for specified files.
     void Scan(ea::vector<ea::string>& result, const ea::string& pathName, const ea::string& filter, unsigned flags, bool recursive) const;
     /// Returns a formatted string containing the currently loaded resources with optional type name filter.

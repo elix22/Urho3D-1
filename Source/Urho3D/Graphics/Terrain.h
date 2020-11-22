@@ -56,50 +56,72 @@ public:
     void DrawDebugGeometry(DebugRenderer* debug, bool depthTest) override;
 
     /// Set patch quads per side. Must be a power of two.
+    /// @property
     void SetPatchSize(int size);
     /// Set vertex (XZ) and height (Y) spacing.
+    /// @property
     void SetSpacing(const Vector3& spacing);
     /// Set maximum number of LOD levels for terrain patches. This can be between 1-4.
+    /// @property
     void SetMaxLodLevels(unsigned levels);
     /// Set LOD level used for terrain patch occlusion. By default (M_MAX_UNSIGNED) the coarsest. Since the LOD level used needs to be fixed, using finer LOD levels may result in false positive occlusion in cases where the actual rendered geometry is coarser, so use with caution.
+    /// @property
     void SetOcclusionLodLevel(unsigned level);
     /// Set smoothing of heightmap.
+    /// @property
     void SetSmoothing(bool enable);
     /// Set heightmap image. Dimensions should be a power of two + 1. Uses 8-bit grayscale, or optionally red as MSB and green as LSB for 16-bit accuracy. Return true if successful.
+    /// @property
     bool SetHeightMap(Image* image);
     /// Set material.
+    /// @property
     void SetMaterial(Material* material);
     /// Set north (positive Z) neighbor terrain for seamless LOD changes across terrains.
+    /// @property
     void SetNorthNeighbor(Terrain* north);
     /// Set south (negative Z) neighbor terrain for seamless LOD changes across terrains.
+    /// @property
     void SetSouthNeighbor(Terrain* south);
     /// Set west (negative X) neighbor terrain for seamless LOD changes across terrains.
+    /// @property
     void SetWestNeighbor(Terrain* west);
     /// Set east (positive X) neighbor terrain for seamless LOD changes across terrains.
+    /// @property
     void SetEastNeighbor(Terrain* east);
     /// Set all neighbor terrains at once.
     void SetNeighbors(Terrain* north, Terrain* south, Terrain* west, Terrain* east);
     /// Set draw distance for patches.
+    /// @property
     void SetDrawDistance(float distance);
     /// Set shadow draw distance for patches.
+    /// @property
     void SetShadowDistance(float distance);
     /// Set LOD bias for patches. Affects which terrain LOD to display.
+    /// @property
     void SetLodBias(float bias);
     /// Set view mask for patches. Is and'ed with camera's view mask to see if the object should be rendered.
+    /// @property
     void SetViewMask(unsigned mask);
     /// Set light mask for patches. Is and'ed with light's and zone's light mask to see if the object should be lit.
+    /// @property
     void SetLightMask(unsigned mask);
     /// Set shadow mask for patches. Is and'ed with light's light mask and zone's shadow mask to see if the object should be rendered to a shadow map.
+    /// @property
     void SetShadowMask(unsigned mask);
     /// Set zone mask for patches. Is and'ed with zone's zone mask to see if the object should belong to the zone.
+    /// @property
     void SetZoneMask(unsigned mask);
     /// Set maximum number of per-pixel lights for patches. Default 0 is unlimited.
+    /// @property
     void SetMaxLights(unsigned num);
     /// Set shadowcaster flag for patches.
+    /// @property
     void SetCastShadows(bool enable);
     /// Set occlusion flag for patches. Occlusion uses the coarsest LOD by default.
+    /// @property
     void SetOccluder(bool enable);
     /// Set occludee flag for patches.
+    /// @property
     void SetOccludee(bool enable);
     /// Enable drawing debug information. Set this before applying heightmap. Increases memory usage.
     void SetEnableDebug(bool enable);
@@ -107,31 +129,41 @@ public:
     void ApplyHeightMap();
 
     /// Return patch quads per side.
+    /// @property
     int GetPatchSize() const { return patchSize_; }
 
     /// Return vertex and height spacing.
+    /// @property
     const Vector3& GetSpacing() const { return spacing_; }
 
     /// Return heightmap size in vertices.
+    /// @property
     const IntVector2& GetNumVertices() const { return numVertices_; }
 
     /// Return heightmap size in patches.
+    /// @property
     const IntVector2& GetNumPatches() const { return numPatches_; }
 
     /// Return maximum number of LOD levels for terrain patches. This can be between 1-4.
+    /// @property
     unsigned GetMaxLodLevels() const { return maxLodLevels_; }
 
     /// Return LOD level used for occlusion.
+    /// @property
     unsigned GetOcclusionLodLevel() const { return occlusionLodLevel_; }
 
     /// Return whether smoothing is in use.
+    /// @property
     bool GetSmoothing() const { return smoothing_; }
 
     /// Return heightmap image.
+    /// @property
     Image* GetHeightMap() const;
     /// Return material.
+    /// @property
     Material* GetMaterial() const;
     /// Return patch by index.
+    /// @property{get_patches}
     TerrainPatch* GetPatch(unsigned index) const;
     /// Return patch by patch coordinates.
     TerrainPatch* GetPatch(int x, int z) const;
@@ -145,56 +177,73 @@ public:
     IntVector2 WorldToHeightMap(const Vector3& worldPosition) const;
     /// Convert heightmap pixel position to world position.
     Vector3 HeightMapToWorld(const IntVector2& pixelPosition) const;
+    /// Convert heightmap pixel position to UV.
+    Vector2 HeightMapToUV(const IntVector2& pixelPosition) const;
 
     /// Return north neighbor terrain.
+    /// @property
     Terrain* GetNorthNeighbor() const { return north_; }
 
     /// Return south neighbor terrain.
+    /// @property
     Terrain* GetSouthNeighbor() const { return south_; }
 
     /// Return west neighbor terrain.
+    /// @property
     Terrain* GetWestNeighbor() const { return west_; }
 
     /// Return east neighbor terrain.
+    /// @property
     Terrain* GetEastNeighbor() const { return east_; }
 
     /// Return raw height data.
     ea::shared_array<float> GetHeightData() const { return heightData_; }
 
     /// Return draw distance.
+    /// @property
     float GetDrawDistance() const { return drawDistance_; }
 
     /// Return shadow draw distance.
+    /// @property
     float GetShadowDistance() const { return shadowDistance_; }
 
     /// Return LOD bias.
+    /// @property
     float GetLodBias() const { return lodBias_; }
 
     /// Return view mask.
+    /// @property
     unsigned GetViewMask() const { return viewMask_; }
 
     /// Return light mask.
+    /// @property
     unsigned GetLightMask() const { return lightMask_; }
 
     /// Return shadow mask.
+    /// @property
     unsigned GetShadowMask() const { return shadowMask_; }
 
     /// Return zone mask.
+    /// @property
     unsigned GetZoneMask() const { return zoneMask_; }
 
     /// Return maximum number of per-pixel lights.
+    /// @property
     unsigned GetMaxLights() const { return maxLights_; }
 
     /// Return visible flag.
     bool IsVisible() const { return visible_; }
 
     /// Return shadowcaster flag.
+    /// @property
     bool GetCastShadows() const { return castShadows_; }
 
     /// Return occluder flag.
+    /// @property
     bool IsOccluder() const { return occluder_; }
 
     /// Return occludee flag.
+    /// @property
     bool IsOccludee() const { return occludee_; }
 
     /// Regenerate patch geometry.
@@ -215,6 +264,28 @@ public:
     ResourceRef GetHeightMapAttr() const;
     /// Return material attribute.
     ResourceRef GetMaterialAttr() const;
+
+    /// Return world bounding box of the terrain. Calculations are not cached.
+    BoundingBox CalculateWorldBoundingBox() const;
+
+    /// Set whether the lightmap is baked for this object.
+    void SetBakeLightmap(bool bakeLightmap);
+    /// Return whether the lightmap is baked for this object.
+    bool GetBakeLightmap() const { return bakeLightmap_; }
+    /// Return whether the lightmap is baked for this object. Return false for objects with zero scale in lightmap.
+    bool GetBakeLightmapEffective() const { return bakeLightmap_ && scaleInLightmap_ > 0.0f; }
+    /// Set scale in lightmap.
+    void SetScaleInLightmap(float scale) { scaleInLightmap_ = scale; UpdatePatchesLightmaps(); }
+    /// Return scale in lightmap.
+    float GetScaleInLightmap() const { return scaleInLightmap_; }
+    /// Set lightmap index.
+    void SetLightmapIndex(unsigned idx) { lightmapIndex_ = idx; UpdatePatchesLightmaps(); }
+    /// Return lightmap index.
+    unsigned GetLightmapIndex() const { return lightmapIndex_; }
+    /// Set lightmap scale and offset.
+    void SetLightmapScaleOffset(const Vector4& scaleOffset) { lightmapScaleOffset_ = scaleOffset; UpdatePatchesLightmaps(); }
+    /// Return lightmap scale and offset.
+    const Vector4& GetLightmapScaleOffset() const { return lightmapScaleOffset_; }
 
 private:
     /// Regenerate terrain geometry.
@@ -245,6 +316,8 @@ private:
     void MarkNeighborsDirty() { neighborsDirty_ = true; }
     /// Mark terrain dirty.
     void MarkTerrainDirty() { recreateTerrain_ = true; }
+    /// Update lightmap settings in patches.
+    void UpdatePatchesLightmaps();
 
     /// Shared index buffer.
     SharedPtr<IndexBuffer> indexBuffer_;
@@ -256,6 +329,14 @@ private:
     ea::shared_array<float> sourceHeightData_;
     /// Material.
     SharedPtr<Material> material_;
+    /// Whether the lightmap is enabled.
+    bool bakeLightmap_{};
+    /// Texel density scale in lightmap.
+    float scaleInLightmap_{ 1.0f };
+    /// Lightmap index.
+    unsigned lightmapIndex_{};
+    /// Lightmap scale and offset.
+    Vector4 lightmapScaleOffset_{ 1.0f, 1.0f, 0.0f, 0.0f };
     /// Terrain patches.
     ea::vector<WeakPtr<TerrainPatch> > patches_;
     /// Draw ranges for different LODs and stitching combinations.

@@ -30,6 +30,7 @@
 #include <LZ4/lz4hc.h>
 
 #include "Project.h"
+#include "Pipeline/Pipeline.h"
 #include "Pipeline/Asset.h"
 #include "Pipeline/Packager.h"
 
@@ -92,11 +93,11 @@ void Packager::Start()
     {
         logger_.Warning("Resources directory is empty, package was not created.");
         output_.Close();
-        context_->GetFileSystem()->Delete(outputPath_);
+        context_->GetSubsystem<FileSystem>()->Delete(outputPath_);
         return;
     }
 
-    context_->GetWorkQueue()->AddWorkItem([this]() { WritePackage(); });
+    context_->GetSubsystem<WorkQueue>()->AddWorkItem([this]() { WritePackage(); });
 }
 
 void Packager::WritePackage()
@@ -137,8 +138,9 @@ void Packager::WritePackage()
     }
 
     // Has to be done here in case any resources were imported during packaging.
-    project->GetPipeline()->CookSettings(); // TODO: Thread safety
-    project->GetPipeline()->CookCacheInfo();// TODO: Thread safety
+    auto pipeline = GetSubsystem<Pipeline>();
+    pipeline->CookSettings(); // TODO: Thread safety
+    pipeline->CookCacheInfo();// TODO: Thread safety
     AddFile(cachePath, "CacheInfo.json");   filesDone_++;
     AddFile(cachePath, "Settings.json");    filesDone_++;
 

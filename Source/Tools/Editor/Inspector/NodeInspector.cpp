@@ -19,39 +19,44 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
+#include <Urho3D/Core/StringUtils.h>
 #include <Urho3D/Scene/Node.h>
+#include <Urho3D/Scene/Scene.h>
+
 #include <Toolbox/SystemUI/Widgets.h>
 #include <Toolbox/SystemUI/AttributeInspector.h>
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
+
+#include "Editor.h"
 #include "Inspector/NodeInspector.h"
+#include "Tabs/InspectorTab.h"
 
 namespace Urho3D
 {
 
 NodeInspector::NodeInspector(Context* context)
-    : SerializableInspector(context)
+    : Object(context)
 {
+    auto* editor = GetSubsystem<Editor>();
+    editor->onInspect_.Subscribe(this, &NodeInspector::RenderInspector);
 }
 
-void NodeInspector::RenderInspector(const char* filter)
+void NodeInspector::RenderInspector(InspectArgs& args)
 {
-    if (inspected_.Expired())
+    auto* node = args.object_.Expired() ? nullptr : args.object_->Cast<Node>();
+    if (node == nullptr)
         return;
 
-    ui::Columns(2);
-    Node* node = static_cast<Node*>(inspected_.Get());
-    ui::TextUnformatted("ID");
-    ui::NextColumn();
-    ui::Text("%u", node->GetID());
-    if (node->IsReplicated())
+    args.handledTimes_++;
+    ui::IdScope idScope(node);
+    const char* name = node->GetName().empty() ? "Node" : node->GetName().c_str();
+    if (ui::CollapsingHeader(Format("{} ({}) {}", name, node->GetID(),
+        node->IsReplicated() ? ICON_FA_WIFI : "").c_str(), ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ui::SameLine();
-        ui::TextUnformatted(ICON_FA_WIFI);
-        ui::SetHelpTooltip("Replicated over the network.", KEY_UNKNOWN);
+        if (node->IsReplicated())
+            ui::SetHelpTooltip("Replicated over the network.");
+        RenderAttributes(node, args.filter_, args.eventSender_);
     }
-    ui::NextColumn();
-    ui::Columns();
-    RenderAttributes(static_cast<Node*>(inspected_.Get()), filter);
 }
 
 }

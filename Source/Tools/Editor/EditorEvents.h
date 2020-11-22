@@ -36,10 +36,10 @@ URHO3D_EVENT(E_EDITORTOOLBARBUTTONS, EditorToolbarButtons)
     URHO3D_PARAM(P_SCENE, Scene);                     // Scene pointer.
 }
 
-/// Event sent when node selection in scene view changes.
+/// Event sent when selection in any tab changes.
 URHO3D_EVENT(E_EDITORSELECTIONCHANGED, EditorSelectionChanged)
 {
-    URHO3D_PARAM(P_SCENE, Scene);                     // Scene pointer.
+    URHO3D_PARAM(P_TAB, Tab);                         // Tab pointer.
 }
 
 /// Event sent when rendering top menu bar of editor.
@@ -76,13 +76,6 @@ URHO3D_EVENT(E_SIMULATIONSTOP, SimulationStop)
 
 /// Sent when user selects a resource in resource browser.
 URHO3D_EVENT(E_EDITORRESOURCESELECTED, EditorResourceSelected)
-{
-    URHO3D_PARAM(P_CTYPE, CType);                       // ContentType
-    URHO3D_PARAM(P_RESOURCENAME, ResourceName);         // String
-}
-
-/// Sent when user right-clicks a resource in resource browser. Use for extending context menu.
-URHO3D_EVENT(E_EDITORRESOURCECONTEXTMENU, EditorResourceContextMenu)
 {
     URHO3D_PARAM(P_CTYPE, CType);                       // ContentType
     URHO3D_PARAM(P_RESOURCENAME, ResourceName);         // String

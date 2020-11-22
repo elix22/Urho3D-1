@@ -40,14 +40,17 @@ public:
     ~Localization() override;
 
     /// Return the number of languages.
+    /// @property
     int GetNumLanguages() const { return (int) languages_.size(); }
 
     /// Return the index number of current language. The index is determined by the order of loading.
+    /// @property
     int GetLanguageIndex() const { return languageIndex_; }
 
     /// Return the index number of language. The index is determined by the order of loading.
     int GetLanguageIndex(const ea::string& language);
     /// Return the name of current language.
+    /// @property
     ea::string GetLanguage();
     /// Return the name of language.
     ea::string GetLanguage(int index);
@@ -60,7 +63,7 @@ public:
     /// Clear all loaded strings.
     void Reset();
     /// Load strings from JSONFile. The file should be UTF8 without BOM.
-    void LoadJSONFile(const ea::string& name, const ea::string language = EMPTY_STRING);
+    void LoadJSONFile(const ea::string& name, const ea::string& language = EMPTY_STRING);
     /// Load strings from JSONValue.
     void LoadMultipleLanguageJSON(const JSONValue& source);
     /// Load strings from JSONValue for specific language.

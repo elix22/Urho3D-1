@@ -25,7 +25,6 @@
 #include <Urho3D/Engine/Application.h>
 #include <Toolbox/SystemUI/AttributeInspector.h>
 
-#include "Inspector/InspectorProvider.h"
 #include "KeyBindings.h"
 #include "Project.h"
 #include "Pipeline/Commands/SubCommand.h"
@@ -37,16 +36,9 @@ namespace Urho3D
 
 class Tab;
 class SceneTab;
+struct InspectArgs;
 
-static const unsigned EDITOR_VIEW_LAYER = 1U << 31;
-
-struct InspectArgs
-{
-    /// In. Object that is to be inspected.
-    WeakPtr<Object> object_;
-    /// Out. Inspector that is going to perform the inspection.
-    ea::vector<WeakPtr<InspectorProvider>> inspectors_;
-};
+static const unsigned EDITOR_VIEW_LAYER = 1u << 31u;
 
 class Editor : public Application
 {
@@ -54,6 +46,8 @@ class Editor : public Application
 public:
     /// Construct.
     explicit Editor(Context* context);
+    /// Destruct.
+    ~Editor() override = default;
     /// Set up editor application.
     void Setup() override;
     /// Initialize editor application.
@@ -113,14 +107,6 @@ public:
 #endif
     /// Serialize editor user-specific settings.
     bool Serialize(Archive& archive) override;
-    /// Remove all items from inspector.
-    void ClearInspector();
-    /// Request editor to inspect specified object. Reference to this object will not be held.
-    void Inspect(Object* object);
-    /// Returns true when specified object is currently inspected.
-    bool IsInspected(Object* object) const { return object != nullptr && inspected_.contains(WeakPtr(object)); }
-    /// Return a list of currently inspected objects.
-    const ea::vector<WeakPtr<Object>>& GetInspected() const { return inspected_; }
 
     /// Key bindings manager.
     KeyBindings keyBindings_{context_};
@@ -138,10 +124,6 @@ protected:
     void OnExitRequested();
     /// Handle user closing editor with a hotkey.
     void OnExitHotkeyPressed();
-    /// Handle undo request.
-    void OnUndo();
-    /// Handle redo request.
-    void OnRedo();
     /// Renders a project plugins submenu.
     void RenderProjectMenu();
     ///
@@ -154,18 +136,17 @@ protected:
     void OpenOrCreateProject();
     ///
     void OnConsoleUriClick(VariantMap& args);
-    ///
-    template<typename Inspectable, typename Inspector>
-    void RegisterProvider()
-    {
-        context_->RegisterFactory<Inspector>();
-        registeredInspectorProviders_[Inspectable::GetTypeStatic()] = Inspector::GetTypeStatic();
-    }
+    /// Handle selection changes.
+    void OnSelectionChanged(StringHash, VariantMap& args);
 
     /// List of active scene tabs.
     ea::vector<SharedPtr<Tab>> tabs_;
     /// Last focused scene tab.
     WeakPtr<Tab> activeTab_;
+    /// Tab containing current user selection.
+    WeakPtr<Tab> selectionTab_;
+    /// Current selection serialized.
+    ByteVector selectionBuffer_;
     /// Prefix path of CoreData and EditorData.
     ea::string coreResourcePrefixPath_;
     /// Currently loaded project.
@@ -192,10 +173,8 @@ protected:
     IntVector2 windowPos_{0, 0};
     /// Window size which is saved between sessions.
     IntVector2 windowSize_{1920, 1080};
-    /// Map inspectable object type to inspector type.
-    ea::unordered_map<StringHash /*inspectable*/, StringHash /*inspector*/> registeredInspectorProviders_;
-    /// All currently inspected objects.
-    ea::vector<WeakPtr<Object>> inspected_;
+    /// All instances of type-specific inspectors.
+    ea::vector<SharedPtr<RefCounted>> inspectors_;
 };
 
 }

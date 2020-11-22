@@ -32,7 +32,7 @@
 namespace Urho3D
 {
 
-/// Font hinting level (only used for FreeType fonts)
+/// Font hinting level (only used for FreeType fonts).
 enum FontHintLevel
 {
     /// Completely disable font hinting. Output will be blurrier but more "correct".
@@ -68,13 +68,14 @@ public:
     ~UI() override;
 
     /// Set cursor UI element.
+    /// @property
     void SetCursor(Cursor* cursor);
     /// Set focused UI element.
     void SetFocusElement(UIElement* element, bool byKey = false);
     /// Set modal element. Until all the modal elements are dismissed, all the inputs and events are only sent to them. Return true when successful.
     /// Only the modal element can clear its modal status or when it is being destructed.
     bool SetModalElement(UIElement* modalElement, bool enable);
-    /// Clear the UI (excluding the cursor.)
+    /// Clear the UI (excluding the cursor).
     void Clear();
     /// Update the UI logic. Called by HandlePostUpdate().
     void Update(float timeStep);
@@ -91,72 +92,99 @@ public:
     /// Save a UI layout to an XML file. Return true if successful.
     bool SaveLayout(Serializer& dest, UIElement* element);
     /// Set clipboard text.
+    /// @property
     void SetClipboardText(const ea::string& text);
     /// Set UI element double click interval in seconds.
+    /// @property
     void SetDoubleClickInterval(float interval);
     /// Set max screen distance in pixels between double click clicks.
+    /// @property
     void SetMaxDoubleClickDistance(float distPixels);
     /// Set UI drag event start interval in seconds.
+    /// @property
     void SetDragBeginInterval(float interval);
     /// Set UI drag event start distance threshold in pixels.
+    /// @property
     void SetDragBeginDistance(int pixels);
     /// Set tooltip default display delay in seconds.
+    /// @property
     void SetDefaultToolTipDelay(float delay);
     /// Set maximum font face texture size. Must be a power of two. Default is 2048.
+    /// @property
     void SetMaxFontTextureSize(int size);
     /// Set whether mouse wheel can control also a non-focused element.
+    /// @property
     void SetNonFocusedMouseWheel(bool nonFocusedMouseWheel);
     /// Set whether to use system clipboard. Default false.
+    /// @property
     void SetUseSystemClipboard(bool enable);
     /// Set whether to show the on-screen keyboard (if supported) when a %LineEdit is focused. Default true on mobile devices.
+    /// @property
     void SetUseScreenKeyboard(bool enable);
     /// Set whether to use mutable (eraseable) glyphs to ensure a font face never expands to more than one texture. Default false.
+    /// @property
     void SetUseMutableGlyphs(bool enable);
     /// Set whether to force font autohinting instead of using FreeType's TTF bytecode interpreter.
+    /// @property
     void SetForceAutoHint(bool enable);
     /// Set the hinting level used by FreeType fonts.
+    /// @property
     void SetFontHintLevel(FontHintLevel level);
     /// Set the font subpixel threshold. Below this size, if the hint level is LIGHT or NONE, fonts will use subpixel positioning plus oversampling for higher-quality rendering. Has no effect at hint level NORMAL.
+    /// @property
     void SetFontSubpixelThreshold(float threshold);
     /// Set the oversampling (horizonal stretching) used to improve subpixel font rendering. Only affects fonts smaller than the subpixel limit.
+    /// @property
     void SetFontOversampling(int oversampling);
     /// Set %UI scale. 1.0 is default (pixel perfect). Resize the root element to match.
+    /// @property
     void SetScale(float scale);
     /// Scale %UI to the specified width in pixels.
     void SetWidth(float width);
     /// Scale %UI to the specified height in pixels.
     void SetHeight(float height);
     /// Set custom size of the root element. This disables automatic resizing of the root element according to window size. Set custom size 0,0 to return to automatic resizing.
+    /// @property
     void SetCustomSize(const IntVector2& size);
     /// Set custom size of the root element.
     void SetCustomSize(int width, int height);
 
     /// Return root UI element.
+    /// @property
     UIElement* GetRoot() const { return rootElement_; }
     /// Sets new root UI element.
     void SetRoot(UIElement* root);
 
     /// Return root modal element.
+    /// @property{get_modalRoot}
     UIElement* GetRootModalElement() const { return rootModalElement_; }
     /// Sets new root UI element for modals.
     void SetRootModalElement(UIElement* rootModal);
 
     /// Return cursor.
+    /// @property
     Cursor* GetCursor() const { return cursor_; }
 
     /// Return cursor position.
+    /// @property
     IntVector2 GetCursorPosition() const;
     /// Return UI element at global screen coordinates. By default returns only input-enabled elements.
     UIElement* GetElementAt(const IntVector2& position, bool enabledOnly = true);
     /// Return UI element at global screen coordinates. By default returns only input-enabled elements.
     UIElement* GetElementAt(int x, int y, bool enabledOnly = true);
     /// Get a child element at element's screen position relative to specified root element.
-    UIElement* GetElementAt(UIElement* root, const IntVector2& position, bool enabledOnly=true);
+    UIElement* GetElementAt(UIElement* root, const IntVector2& position, bool enabledOnly = true);
+    /// Convert system mouse position (or offset) to scaled UI position (or offset).
+    IntVector2 ConvertSystemToUI(const IntVector2& systemPos) const;
+    /// Convert scaled UI position (or offset) to system mouse position (or offset).
+    IntVector2 ConvertUIToSystem(const IntVector2& uiPos) const;
 
     /// Return focused element.
+    /// @property
     UIElement* GetFocusElement() const { return focusElement_; }
 
     /// Return topmost enabled root-level non-modal element.
+    /// @property
     UIElement* GetFrontElement() const;
     /// Return currently dragged elements.
     const ea::vector<UIElement*>& GetDragElements();
@@ -167,48 +195,63 @@ public:
     /// Return the drag element at index.
     UIElement* GetDragElement(unsigned index);
     /// Return clipboard text.
+    /// @property
     const ea::string& GetClipboardText() const;
 
     /// Return UI element double click interval in seconds.
+    /// @property
     float GetDoubleClickInterval() const { return doubleClickInterval_; }
 
     /// Get max screen distance in pixels for double clicks to register.
+    /// @property
     float GetMaxDoubleClickDistance() const { return maxDoubleClickDist_;}
 
     /// Return UI drag start event interval in seconds.
+    /// @property
     float GetDragBeginInterval() const { return dragBeginInterval_; }
 
     /// Return UI drag start event distance threshold in pixels.
+    /// @property
     int GetDragBeginDistance() const { return dragBeginDistance_; }
 
     /// Return tooltip default display delay in seconds.
+    /// @property
     float GetDefaultToolTipDelay() const { return defaultToolTipDelay_; }
 
     /// Return font texture maximum size.
+    /// @property
     int GetMaxFontTextureSize() const { return maxFontTextureSize_; }
 
     /// Return whether mouse wheel can control also a non-focused element.
+    /// @property
     bool IsNonFocusedMouseWheel() const { return nonFocusedMouseWheel_; }
 
     /// Return whether is using the system clipboard.
+    /// @property
     bool GetUseSystemClipboard() const { return useSystemClipboard_; }
 
     /// Return whether focusing a %LineEdit will show the on-screen keyboard.
+    /// @property
     bool GetUseScreenKeyboard() const { return useScreenKeyboard_; }
 
     /// Return whether is using mutable (eraseable) glyphs for fonts.
+    /// @property
     bool GetUseMutableGlyphs() const { return useMutableGlyphs_; }
 
     /// Return whether is using forced autohinting.
+    /// @property
     bool GetForceAutoHint() const { return forceAutoHint_; }
 
     /// Return the current FreeType font hinting level.
+    /// @property
     FontHintLevel GetFontHintLevel() const { return fontHintLevel_; }
 
     /// Get the font subpixel threshold. Below this size, if the hint level is LIGHT or NONE, fonts will use subpixel positioning plus oversampling for higher-quality rendering. Has no effect at hint level NORMAL.
+    /// @property
     float GetFontSubpixelThreshold() const { return fontSubpixelThreshold_; }
 
     /// Get the oversampling (horizonal stretching) used to improve subpixel font rendering. Only affects fonts smaller than the subpixel limit.
+    /// @property
     int GetFontOversampling() const { return fontOversampling_; }
 
     /// Return true when UI has modal element(s).
@@ -218,9 +261,11 @@ public:
     bool IsDragging() const { return dragConfirmedCount_ > 0; };
 
     /// Return current UI scale.
+    /// @property
     float GetScale() const { return uiScale_; }
 
-    /// Return root element custom size. Returns 0,0 when custom size is not being used and automatic resizing according to window size is in use instead (default.)
+    /// Return root element custom size. Returns 0,0 when custom size is not being used and automatic resizing according to window size is in use instead (default).
+    /// @property
     const IntVector2& GetCustomSize() const { return customSize_; }
 
     /// Set texture to which entire UI will be rendered.
@@ -231,11 +276,6 @@ public:
     /// Returns true if thus UI is already rendered in this frame.
     bool IsRendered() const { return uiRendered_; }
 
-    /// Set to true when UI is rendered as part of SystemUI. This will allow input to function properly.
-    void SetRenderInSystemUI(bool isSystemUIElement) { partOfSystemUI_ = isSystemUIElement; }
-    /// Return true when UI is set to render as part of SystemUI.
-    bool GetRenderInSystemUI() const { return partOfSystemUI_; }
-
     /// Data structure used to represent the drag data associated to a UIElement.
     struct DragData
     {
@@ -243,7 +283,7 @@ public:
         MouseButtonFlags dragButtons;
         /// How many buttons initiated the drag.
         int numDragButtons;
-        /// Sum of all touch locations
+        /// Sum of all touch locations.
         IntVector2 sumPos;
         /// Flag for a drag start event pending.
         bool dragBeginPending;
@@ -264,8 +304,6 @@ private:
     void Render(VertexBuffer* buffer, const ea::vector<UIBatch>& batches, unsigned batchStart, unsigned batchEnd);
     /// Generate batches from an UI element recursively. Skip the cursor element.
     void GetBatches(ea::vector<UIBatch>& batches, ea::vector<float>& vertexData, UIElement* element, IntRect currentScissor);
-    /// Return UI element at global screen coordinates. Return position converted to element's screen coordinates.
-    UIElement* GetElementAt(const IntVector2& position, bool enabledOnly, IntVector2* elementScreenPosition);
     /// Return UI element at screen position recursively.
     void GetElementAt(UIElement*& result, UIElement* current, const IntVector2& position, bool enabledOnly);
     /// Return the first element in hierarchy that can alter focus.
@@ -296,7 +334,7 @@ private:
         (StringHash eventType, UIElement* beginElement, UIElement* endElement, const IntVector2& pos, MouseButton button, MouseButtonFlags buttons,
             QualifierFlags qualifiers);
 
-    /// Send a UI double click event
+    /// Send a UI double click event.
     void SendDoubleClickEvent(UIElement* beginElement, UIElement* endElement, const IntVector2& firstPos, const IntVector2& secondPos, MouseButton button, MouseButtonFlags buttons, QualifierFlags qualifiers);
 
     /// Handle screen mode event.
@@ -342,7 +380,7 @@ private:
     /// Return effective size of the root element, according to UI scale and resolution / custom size.
     IntVector2 GetEffectiveRootElementSize(bool applyScale = true) const;
     /// Return true when subsystem should not process any mouse/keyboard input.
-    bool ShouldIgnoreInput() const;
+    bool IsHandlingInput() const;
 
     /// Graphics subsystem.
     WeakPtr<Graphics> graphics_;
@@ -432,14 +470,12 @@ private:
     ea::vector<UIElement*> dragElementsConfirmed_;
     /// Current scale of UI.
     float uiScale_;
-    /// Root element custom size. 0,0 for automatic resizing (default.)
+    /// Root element custom size. 0,0 for automatic resizing (default).
     IntVector2 customSize_;
     /// Texture that UI will be rendered into.
     WeakPtr<Texture2D> texture_;
     /// Color which will be used to clear target texture.
     Color clearColor_ = Color::TRANSPARENT_BLACK;
-    /// Flag indicating that UI should process input when mouse cursor hovers SystemUI elements.
-    bool partOfSystemUI_ = false;
 };
 
 /// Register UI library objects.

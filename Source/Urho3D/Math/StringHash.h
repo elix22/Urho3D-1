@@ -62,6 +62,8 @@ public:
 #endif
     /// Construct from a string.
     StringHash(const ea::string& str) noexcept;      // NOLINT(google-explicit-constructor)
+    /// Construct from a string.
+    StringHash(const ea::string_view& str) noexcept;      // NOLINT(google-explicit-constructor)
 
     /// Assign from another hash.
     StringHash& operator =(const StringHash& rhs) noexcept = default;
@@ -97,6 +99,7 @@ public:
     explicit operator bool() const { return value_ != 0; }
 
     /// Return hash value.
+    /// @property
     unsigned Value() const { return value_; }
 
     /// Return as string.
@@ -118,7 +121,7 @@ public:
     static unsigned Calculate(const char* str, unsigned hash = 0);
 #endif
     /// Calculate hash value from binary data.
-    static unsigned Calculate(void* data, unsigned length, unsigned hash = 0);
+    static unsigned Calculate(const void* data, unsigned length, unsigned hash = 0);
 
     /// Get global StringHashRegister. Use for debug purposes only. Return nullptr if URHO3D_HASH_DEBUG is off.
     static StringHashRegister* GetGlobalStringHashRegister();

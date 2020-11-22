@@ -1,12 +1,16 @@
 ![rbfx-logo](https://user-images.githubusercontent.com/19151258/57008846-a292be00-6bfb-11e9-8303-d79e6dd36038.png)
 
-![Windows](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Windows&label=Windows) ![Linux](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Linux&label=Linux) ![MacOS](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=MacOS&label=MacOS) ![Web](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Web&label=Web) ![Android](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Android&label=Android) ![iOS](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=iOS&label=iOS)
-
+[![Build Status](https://github.com/rokups/rbfx/workflows/Build/badge.svg)](https://github.com/rokups/rbfx/actions)
 [![Join the chat at https://gitter.im/rokups/rbfx](https://badges.gitter.im/rokups/rbfx.svg)](https://gitter.im/rokups/rbfx?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Discord Chat](https://img.shields.io/discord/560082228928053258.svg?logo=discord)](https://discord.gg/XKs73yf)
 
-**rbfx** is a free lightweight, cross-platform 2D and 3D game engine implemented in C++ and released under the MIT license. Greatly inspired by OGRE and Horde3D.
+**Urho3D Rebel Fork** aka **rbfx** is an experimental fork of [Urho3D](http://urho3d.github.io/) game engine.
 
-This project is a fork of [urho3d.github.io](http://urho3d.github.io/).
+[GitHub Wiki](https://github.com/rokups/rbfx/wiki) contains fork-specific documentation including [build instructions](https://github.com/rokups/rbfx/wiki/first-application) and differences between original project and **rbfx**.
+
+[Doxygen Documentation](https://rbfx.github.io/) is cloned from original project and is not updated (yet?), although it still contains relevant information regarding core functionality of the engine.
+
+Note that **rbfx** is undergoing active developement. Please report all spotted bugs in the [issue tracker](https://github.com/rokups/rbfx/issues).
 
 ## License
 
@@ -66,7 +70,7 @@ Licensed under the MIT license, see [LICENSE](https://github.com/urho3d/Urho3D/b
 * Supported compiler toolchains: MSVC, GCC, Clang, MinGW, and their cross-compiling derivatives
 * Supports both 32-bit and 64-bit build
 * Build as single external library (can be linked against statically or dynamically)
-* ImGui integration used in tools
+* Dear ImGui integration used in tools
 
 ## Screenshots
 
@@ -76,16 +80,16 @@ Licensed under the MIT license, see [LICENSE](https://github.com/urho3d/Urho3D/b
 
 rbfx uses the following third-party libraries:
 - Box2D 2.3.2 WIP (http://box2d.org)
-- Bullet 2.86.1 (http://www.bulletphysics.org)
+- Bullet 3.06+ (http://www.bulletphysics.org)
 - Civetweb 1.7 (https://github.com/civetweb/civetweb)
 - FreeType 2.8 (https://www.freetype.org)
-- GLEW 1.13.0 (http://glew.sourceforge.net)
+- GLEW 2.1 (http://glew.sourceforge.net)
 - SLikeNet (https://github.com/SLikeSoft/SLikeNet)
 - libcpuid 0.4.0+ (https://github.com/anrieff/libcpuid)
 - LZ4 1.7.5 (https://github.com/lz4/lz4)
 - MojoShader (https://icculus.org/mojoshader)
 - Open Asset Import Library 4.1.0 (http://assimp.sourceforge.net)
-- pugixml 1.9 (http://pugixml.org)
+- pugixml 1.10 (http://pugixml.org)
 - rapidjson 1.1.0 (https://github.com/miloyip/rapidjson)
 - Recast/Detour (https://github.com/recastnavigation/recastnavigation)
 - SDL 2.0.10+ (https://www.libsdl.org)
@@ -98,8 +102,9 @@ rbfx uses the following third-party libraries:
 - stb_vorbis 1.13b (https://nothings.org)
 - WebP (https://chromium.googlesource.com/webm/libwebp)
 - ETCPACK (https://github.com/Ericsson/ETCPACK)
-- imgui 1.74 (https://github.com/ocornut/imgui/tree/docking)
+- Dear ImGui 1.75+ (https://github.com/ocornut/imgui/tree/docking)
 - tracy (https://bitbucket.org/wolfpld/tracy/)
+- capstone (http://www.capstone-engine.org/)
 - nativefiledialog (https://github.com/mlabbe/nativefiledialog)
 - IconFontCppHeaders (https://github.com/juliettef/IconFontCppHeaders)
 - ImGuizmo 1.61 (https://github.com/CedricGuillemet/ImGuizmo)
@@ -107,8 +112,10 @@ rbfx uses the following third-party libraries:
 - CLI11 v1.5.1 (https://github.com/CLIUtils/CLI11/)
 - fmt 6.0.0 (http://fmtlib.net/)
 - spdlog 1.4.2 (https://github.com/gabime/spdlog/)
-- EASTL 3.13.04 (https://github.com/electronicarts/EASTL/)
+- EASTL 3.16.01 (https://github.com/electronicarts/EASTL/)
 - SWIG 4.0 (http://swig.org/)
+- Embree 3.11 (https://github.com/embree/embree)
+- RmlUi (https://github.com/mikke89/RmlUi)
 
 rbfx optionally uses the following external third-party libraries:
 - Mono (http://www.mono-project.com/download/stable/)
@@ -121,17 +128,3 @@ rbfx optionally uses the following external third-party libraries:
 | OpenGL 2 / 3.1        | ✔       | ✔     | ✔     |     |         |     |
 | OpenGL ES 2 / 3       |         |       |       | ✔   | ✔       |     |
 | WebGL                 |         |       |       |     |         | ✔   |
-
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Windows&configuration=Windows%20static-msvc-d3d11&label=static-msvc-d3d11)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Windows&configuration=Windows%20shared-msvc-d3d11&label=shared-msvc-d3d11)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Windows&configuration=Windows%20static-mingw-d3d9&label=static-mingw-d3d9)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Windows&configuration=Windows%20shared-mingw-d3d9&label=shared-mingw-d3d9)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Linux&configuration=Linux%20static-gcc-opengl&label=static-gcc-opengl)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Linux&configuration=Linux%20shared-gcc-opengl&label=shared-gcc-opengl)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Linux&configuration=Linux%20static-clang-opengl&label=static-clang-opengl)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Linux&configuration=Linux%20shared-clang-opengl&label=shared-clang-opengl)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=MacOS&configuration=MacOS%20static-clang-opengl&label=static-macos-clang-opengl)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=MacOS&configuration=MacOS%20shared-clang-opengl&label=shared-macos-clang-opengl)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Web&label=web)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=Android&label=android)
-![](https://dev.azure.com/rbfx/rbfx/_apis/build/status/rokups.rbfx?branchName=master&jobName=iOS&label=ios)

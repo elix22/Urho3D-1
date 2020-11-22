@@ -1,4 +1,4 @@
-<Project ToolsVersion="15.0">
+<Project>
   <!-- Works when building on windows using cmake-generated VS solution -->
   <Import Project="$(SolutionDir)/CMake.props" Condition=" '$(SolutionDir)' != '' And Exists('$(SolutionDir)/CMake.props')" />
   <!-- When separate .csproj projects are built by make/ninja -->
@@ -9,22 +9,21 @@
     <LangVersion>7.2</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-	<EnableUnmanagedDebugging>true</EnableUnmanagedDebugging>
+    <EnableUnmanagedDebugging>true</EnableUnmanagedDebugging>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <Configurations>Debug;Release;RelWithDebInfo;MinSizeRel</Configurations>
     <HasDebugInfo Condition=" '$(Configuration)' == 'Debug' Or '$(Configuration)' == 'RelWithDebInfo'">true</HasDebugInfo>
     <BaseOutputPath>bin/</BaseOutputPath>
-    <PlatformTarget Condition=" '$(PlatformTarget)' == '' ">x64</PlatformTarget>
-    <PlatformTarget Condition=" '$(Platform)' == 'x64' ">x64</PlatformTarget>
+    <PlatformTarget Condition=" '$(PlatformTarget)' == '' Or '$(Platform)' == 'x64' ">x64</PlatformTarget>
     <PlatformTarget Condition=" '$(Platform)' == 'Win32' Or '$(Platform)' == 'x86' ">x86</PlatformTarget>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(TargetFramework)' == ''">
-    <TargetFramework Condition=" '$(URHO3D_NETFX)' == '' ">net471</TargetFramework>
-    <TargetFramework Condition=" '$(URHO3D_NETFX)' != '' ">$(URHO3D_NETFX)</TargetFramework>
-    <RuntimeIdentifiers Condition=" '$(OS)' == 'Unix' ">linux-$(PlatformTarget)</RuntimeIdentifiers>
-    <RuntimeIdentifiers Condition=" '$(OS)' == 'Windows_NT' ">win7-$(PlatformTarget)</RuntimeIdentifiers>
-    <RuntimeIdentifiers Condition=" '$(OS)' == 'OSX' ">osx.10.10-$(PlatformTarget)</RuntimeIdentifiers>
+  <PropertyGroup>
+    <TargetFramework>$(URHO3D_NETFX)</TargetFramework>
+    <RuntimeIdentifier>$(URHO3D_NETFX_RUNTIME_IDENTIFIER)</RuntimeIdentifier>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(URHO3D_NETFX_LEGACY_VERSION)' != ''">
+    <DefineConstants>$(DefineConstants);URHO3D_NETFX_LEGACY_VERSION</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(CMAKE_BINARY_DIR)' == '' ">
     <CMAKE_BINARY_DIR Condition=" '$(OS)' == 'Windows_NT' ">$(SolutionDir)</CMAKE_BINARY_DIR>                           <!-- Solution is in cmake binary dir -->
@@ -44,9 +43,5 @@
     <BaseOutputPath>$(CMAKE_BINARY_DIR)$(BaseOutputPath)</BaseOutputPath>
     <OutDir>$(BaseOutputPath)</OutDir>
     <OutputPath>$(BaseOutputPath)</OutputPath>
-  </PropertyGroup>
-  <PropertyGroup>
-    <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>$(CMAKE_BINARY_DIR)/CSharp.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 </Project>

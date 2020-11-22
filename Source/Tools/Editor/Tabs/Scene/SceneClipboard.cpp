@@ -29,9 +29,8 @@
 namespace Urho3D
 {
 
-SceneClipboard::SceneClipboard(Context* context, Undo::Manager& undo)
+SceneClipboard::SceneClipboard(Context* context)
     : Object(context)
-    , undo_(undo)
 {
 }
 
@@ -82,7 +81,10 @@ PasteResult SceneClipboard::Paste(Node* node)
         {
             newNode->ApplyAttributes();
             if (!newNode->GetName().empty())
-                undo_.Track<Undo::EditAttributeAction>(newNode, "Name", EMPTY_STRING, newNode->GetName());
+            {
+                auto undo = GetSubsystem<UndoStack>();
+                undo->Add<UndoEditAttribute>(newNode, "Name", EMPTY_STRING, newNode->GetName());
+            }
             result.nodes_.push_back(newNode);
         }
         else
@@ -92,7 +94,7 @@ PasteResult SceneClipboard::Paste(Node* node)
     return result;
 }
 
-PasteResult SceneClipboard::Paste(const ea::vector<Node*>& nodes)
+PasteResult SceneClipboard::Paste(const ea::hash_set<WeakPtr<Node>>& nodes)
 {
     PasteResult result;
 
@@ -102,29 +104,7 @@ PasteResult SceneClipboard::Paste(const ea::vector<Node*>& nodes)
     return result;
 }
 
-PasteResult SceneClipboard::Paste(const ea::vector<WeakPtr<Node>>& nodes)
-{
-    PasteResult result;
-
-    for (auto& node : nodes)
-        result.Merge(Paste(node));
-
-    return result;
-}
-
-void SceneClipboard::Copy(const ea::vector<Node*>& nodes)
-{
-    for (auto& node : nodes)
-        Copy(node);
-}
-
-void SceneClipboard::Copy(const ea::vector<Component*>& components)
-{
-    for (auto& node : components)
-        Copy(node);
-}
-
-void SceneClipboard::Copy(const ea::vector<WeakPtr<Node>>& nodes)
+void SceneClipboard::Copy(const ea::hash_set<WeakPtr<Node>>& nodes)
 {
     for (auto& node : nodes)
         Copy(node);
@@ -132,8 +112,8 @@ void SceneClipboard::Copy(const ea::vector<WeakPtr<Node>>& nodes)
 
 void SceneClipboard::Copy(const ea::hash_set<WeakPtr<Component>>& components)
 {
-    for (auto& node : components)
-        Copy(node);
+    for (auto& component : components)
+        Copy(component);
 }
 
 }

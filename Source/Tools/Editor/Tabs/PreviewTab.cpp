@@ -34,6 +34,9 @@
 #include <Urho3D/Scene/Scene.h>
 #include <Urho3D/Scene/SceneEvents.h>
 #include <Urho3D/SystemUI/Console.h>
+#if URHO3D_RMLUI
+#   include <Urho3D/RmlUI/RmlUI.h>
+#endif
 #include <Toolbox/SystemUI/Widgets.h>
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
 #include "EditorEventsPrivate.h"
@@ -53,16 +56,21 @@ PreviewTab::PreviewTab(Context* context)
     windowFlags_ = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
     texture_ = context_->CreateObject<Texture2D>();
     noContentPadding_ = true;
+#if URHO3D_RMLUI
+    auto* ui = context->GetSubsystem<RmlUI>();
+    ui->UnsubscribeFromEvent(E_ENDALLVIEWSRENDER);
+    ui->mouseMoveEvent_.Subscribe(this, &PreviewTab::RemapUICursorPos);
+#endif
 
-    SubscribeToEvent(E_CAMERAVIEWPORTRESIZED, URHO3D_HANDLER(PreviewTab, OnCameraViewportResized));
-    SubscribeToEvent(E_COMPONENTADDED, URHO3D_HANDLER(PreviewTab, OnComponentAdded));
-    SubscribeToEvent(E_COMPONENTREMOVED, URHO3D_HANDLER(PreviewTab, OnComponentRemoved));
-    SubscribeToEvent(E_RELOADFINISHED, URHO3D_HANDLER(PreviewTab, OnReloadFinished));
-    SubscribeToEvent(E_EDITORUSERCODERELOADSTART, URHO3D_HANDLER(PreviewTab, OnEditorUserCodeReloadStart));
-    SubscribeToEvent(E_EDITORUSERCODERELOADEND, URHO3D_HANDLER(PreviewTab, OnEditorUserCodeReloadEnd));
-    SubscribeToEvent(E_ENDALLVIEWSRENDER, URHO3D_HANDLER(PreviewTab, OnEndAllViewsRender));
-    SubscribeToEvent(E_SCENEACTIVATED, URHO3D_HANDLER(PreviewTab, OnSceneActivated));
-    SubscribeToEvent(E_ENDRENDERINGSYSTEMUI, URHO3D_HANDLER(PreviewTab, OnEndRenderingSystemUI));
+    SubscribeToEvent(E_CAMERAVIEWPORTRESIZED, &PreviewTab::OnCameraViewportResized);
+    SubscribeToEvent(E_COMPONENTADDED, &PreviewTab::OnComponentAdded);
+    SubscribeToEvent(E_COMPONENTREMOVED, &PreviewTab::OnComponentRemoved);
+    SubscribeToEvent(E_RELOADFINISHED, &PreviewTab::OnReloadFinished);
+    SubscribeToEvent(E_EDITORUSERCODERELOADSTART, &PreviewTab::OnEditorUserCodeReloadStart);
+    SubscribeToEvent(E_EDITORUSERCODERELOADEND, &PreviewTab::OnEditorUserCodeReloadEnd);
+    SubscribeToEvent(E_ENDALLVIEWSRENDER, &PreviewTab::OnEndAllViewsRender);
+    SubscribeToEvent(E_SCENEACTIVATED, &PreviewTab::OnSceneActivated);
+    SubscribeToEvent(E_ENDRENDERINGSYSTEMUI, &PreviewTab::OnEndRenderingSystemUI);
 }
 
 void PreviewTab::OnCameraViewportResized(StringHash type, VariantMap& args)
@@ -113,7 +121,7 @@ void PreviewTab::OnEditorUserCodeReloadStart(StringHash type, VariantMap& args)
     if (tab == nullptr || tab->GetScene() == nullptr)
         return;
 
-    tab->GetUndo().SetTrackingEnabled(false);
+    undo_->SetTrackingEnabled(false);
     tab->SaveState(sceneReloadState_);
     tab->GetScene()->RemoveAllChildren();
     tab->GetScene()->RemoveAllComponents();
@@ -126,7 +134,7 @@ void PreviewTab::OnEditorUserCodeReloadEnd(StringHash type, VariantMap& args)
         return;
 
     tab->RestoreState(sceneReloadState_);
-    tab->GetUndo().SetTrackingEnabled(true);
+    undo_->SetTrackingEnabled(true);
 }
 
 void PreviewTab::OnEndAllViewsRender(StringHash type, VariantMap& args)
@@ -142,9 +150,9 @@ void PreviewTab::OnSceneActivated(StringHash type, VariantMap& args)
 void PreviewTab::OnEndRenderingSystemUI(StringHash type, VariantMap& args)
 {
     if (simulationStatus_ == SCENE_SIMULATION_STOPPED)
-        dim_ = Max(dim_ - context_->GetTime()->GetTimeStep() * 10, 0.f);
+        dim_ = Max(dim_ - context_->GetSubsystem<Time>()->GetTimeStep() * 10, 0.f);
     else
-        dim_ = Min(dim_ + context_->GetTime()->GetTimeStep() * 6, 1.f);
+        dim_ = Min(dim_ + context_->GetSubsystem<Time>()->GetTimeStep() * 6, 1.f);
 
     if (dim_ > M_EPSILON)
     {
@@ -184,9 +192,15 @@ bool PreviewTab::RenderWindowContent()
     ImGuiViewport* viewport = window->Viewport;
 
     ImRect rect = ImRound(window->ContentRegionRect);
+#if 0
+    const float dpi = viewport->DpiScale;
+#else
+    const float dpi = 1.0f;
+#endif
+
     IntVector2 textureSize{
-        static_cast<int>(IM_ROUND(rect.GetWidth() * viewport->DpiScale)),
-        static_cast<int>(IM_ROUND(rect.GetHeight() * viewport->DpiScale))
+        static_cast<int>(IM_ROUND(rect.GetWidth() * dpi)),
+        static_cast<int>(IM_ROUND(rect.GetHeight() * dpi))
     };
     if (textureSize.x_ != texture_->GetWidth() || textureSize.y_ != texture_->GetHeight())
     {
@@ -194,17 +208,32 @@ bool PreviewTab::RenderWindowContent()
         if (auto* surface = texture_->GetRenderSurface())
             surface->SetUpdateMode(SURFACE_UPDATEALWAYS);
         UpdateViewports();
+
+#if URHO3D_RMLUI
+        auto* ui = GetSubsystem<RmlUI>();
+        ui->SetRenderTarget(texture_);
+#endif
     }
 
     ui::Image(texture_.Get(), rect.GetSize());
+    ui::SetCursorScreenPos(ui::GetItemRectMin());
+    ui::InvisibleButton("###preview", rect.GetSize());
 
-    ImVec2 offset = (ui::GetItemRectMin() - viewport->Pos) * viewport->DpiScale;
-    auto* root = static_cast<RootUIElement*>(context_->GetUI()->GetRoot());
-    root->SetOffset({static_cast<int>(IM_ROUND(offset.x)), static_cast<int>(IM_ROUND(offset.y))});
+    viewportRect_.min_ = ui::GetItemRectMin();
+    viewportRect_.max_ = ui::GetItemRectMax();
+    if (!window->ViewportOwned)
+    {
+        viewportRect_.min_ -= static_cast<Vector2>(viewport->Pos);
+        viewportRect_.max_ -= static_cast<Vector2>(viewport->Pos);
+    }
 
-    if (!inputGrabbed_ && simulationStatus_ == SCENE_SIMULATION_RUNNING && ui::IsItemHovered() &&
-        ui::IsAnyMouseDown() && context_->GetInput()->IsMouseVisible())
-        GrabInput();
+    if (simulationStatus_ == SCENE_SIMULATION_RUNNING)
+    {
+        if (ui::IsWindowFocused() && !inputGrabbed_)
+            GrabInput();
+        else if (!ui::IsWindowFocused() && inputGrabbed_)
+            ReleaseInput();
+    }
 
     return true;
 }
@@ -260,13 +289,16 @@ void PreviewTab::RenderButtons()
     {
     case SCENE_SIMULATION_RUNNING:
     {
-        float timeStep = context_->GetTime()->GetTimeStep();
+        float timeStep = context_->GetSubsystem<Time>()->GetTimeStep();
         scene->Update(timeStep);
-        context_->GetUI()->Update(timeStep);
+#if URHO3D_RMLUI
+        if (auto* ui = GetSubsystem<RmlUI>())
+            ui->Update(timeStep);
+#endif
     }
     case SCENE_SIMULATION_PAUSED:
     {
-        if (context_->GetInput()->GetKeyPress(KEY_ESCAPE))
+        if (ui::IsKeyPressed(KEY_ESCAPE))
         {
             if (Time::GetSystemTime() - lastEscPressTime_ > 300)
                 lastEscPressTime_ = Time::GetSystemTime();
@@ -304,22 +336,26 @@ void PreviewTab::Play()
     case SCENE_SIMULATION_STOPPED:
     {
         // Scene was not running. Allow scene to set up input parameters.
-        tab->GetUndo().SetTrackingEnabled(false);
+        undo_->SetTrackingEnabled(false);
         tab->SaveState(sceneState_);
-        context_->GetUI()->SetBlockEvents(false);
-        context_->GetAudio()->Play();
+#if URHO3D_RMLUI
+        if (auto* ui = GetSubsystem<RmlUI>())
+            ui->SetBlockEvents(false);
+#endif
+        context_->GetSubsystem<Audio>()->Play();
         simulationStatus_ = SCENE_SIMULATION_RUNNING;
         SendEvent(E_SIMULATIONSTART);
-        inputGrabbed_ = true;
-        ReleaseInput();
         break;
     }
     case SCENE_SIMULATION_PAUSED:
     {
         // Scene was paused. When resuming restore saved scene input parameters.
         simulationStatus_ = SCENE_SIMULATION_RUNNING;
-        context_->GetUI()->SetBlockEvents(false);
-        context_->GetAudio()->Play();
+#if URHO3D_RMLUI
+        if (auto* ui = GetSubsystem<RmlUI>())
+            ui->SetBlockEvents(false);
+#endif
+        context_->GetSubsystem<Audio>()->Play();
         break;
     }
     default:
@@ -331,8 +367,11 @@ void PreviewTab::Pause()
 {
     if (simulationStatus_ == SCENE_SIMULATION_RUNNING)
         simulationStatus_ = SCENE_SIMULATION_PAUSED;
-    context_->GetUI()->SetBlockEvents(true);
-    context_->GetAudio()->Stop();
+#if URHO3D_RMLUI
+    if (auto* ui = GetSubsystem<RmlUI>())
+        ui->SetBlockEvents(true);
+#endif
+    context_->GetSubsystem<Audio>()->Stop();
 }
 
 void PreviewTab::Toggle()
@@ -360,8 +399,11 @@ void PreviewTab::Step(float timeStep)
         Pause();
 
     scene->Update(timeStep);
-    context_->GetUI()->Update(timeStep);
-    context_->GetAudio()->Update(timeStep);
+#if URHO3D_RMLUI
+    if (auto* ui = GetSubsystem<RmlUI>())
+        ui->Update(timeStep);
+#endif
+    context_->GetSubsystem<Audio>()->Update(timeStep);
 }
 
 void PreviewTab::Stop()
@@ -373,9 +415,12 @@ void PreviewTab::Stop()
         SendEvent(E_SIMULATIONSTOP);
         simulationStatus_ = SCENE_SIMULATION_STOPPED;
         tab->RestoreState(sceneState_);
-        tab->GetUndo().SetTrackingEnabled(true);
-        context_->GetUI()->SetBlockEvents(true);
-        context_->GetAudio()->Stop();
+        undo_->SetTrackingEnabled(true);
+#if URHO3D_RMLUI
+        if (auto* ui = GetSubsystem<RmlUI>())
+            ui->SetBlockEvents(true);
+#endif
+        context_->GetSubsystem<Audio>()->Stop();
     }
 }
 
@@ -383,7 +428,6 @@ void PreviewTab::Snapshot()
 {
     SceneTab* tab = GetSubsystem<Editor>()->GetTab<SceneTab>();
 
-    tab->GetUndo().Clear();
     tab->SaveState(sceneState_);
 }
 
@@ -392,10 +436,13 @@ void PreviewTab::GrabInput()
     if (inputGrabbed_)
         return;
 
+    Input* input = context_->GetSubsystem<Input>();
+    SystemUI* systemUI = context_->GetSubsystem<SystemUI>();
+    input->SetMouseVisible(sceneMouseVisible_);
+    input->SetMouseMode(sceneMouseMode_);
+    input->SetEnabled(true);
+    systemUI->SetPassThroughEvents(true);
     inputGrabbed_ = true;
-    context_->GetInput()->SetMouseVisible(sceneMouseVisible_);
-    context_->GetInput()->SetMouseMode(sceneMouseMode_);
-    context_->GetInput()->SetShouldIgnoreInput(false);
 }
 
 void PreviewTab::ReleaseInput()
@@ -403,27 +450,29 @@ void PreviewTab::ReleaseInput()
     if (!inputGrabbed_)
         return;
 
+    Input* input = context_->GetSubsystem<Input>();
+    SystemUI* systemUI = context_->GetSubsystem<SystemUI>();
     inputGrabbed_ = false;
-    sceneMouseVisible_ = context_->GetInput()->IsMouseVisible();
-    sceneMouseMode_ = context_->GetInput()->GetMouseMode();
-    context_->GetInput()->SetMouseVisible(true);
-    context_->GetInput()->SetMouseMode(MM_ABSOLUTE);
-    context_->GetInput()->SetShouldIgnoreInput(true);
+    sceneMouseVisible_ = input->IsMouseVisible();
+    sceneMouseMode_ = input->GetMouseMode();
+    input->SetMouseVisible(true);
+    input->SetMouseMode(MM_ABSOLUTE);
+    input->SetEnabled(false);
+    systemUI->SetPassThroughEvents(false);
 }
 
 void PreviewTab::RenderUI()
 {
-    Graphics* graphics = context_->GetGraphics();
+#if URHO3D_RMLUI
+    if (auto* ui = GetSubsystem<RmlUI>())
+        ui->Render();
+#endif
+}
 
-    if (RenderSurface* surface = texture_->GetRenderSurface())
-    {
-        context_->GetUI()->SetCustomSize(surface->GetWidth(), surface->GetHeight());
-        graphics->ResetRenderTargets();
-        graphics->SetDepthStencil(surface->GetLinkedDepthStencil());
-        graphics->SetRenderTarget(0, surface);
-        graphics->SetViewport(IntRect(0, 0, surface->GetWidth(), surface->GetHeight()));
-        context_->GetUI()->Render();
-    }
+void PreviewTab::RemapUICursorPos(IntVector2& pos)
+{
+    pos.x_ -= viewportRect_.min_.x_;
+    pos.y_ -= viewportRect_.min_.y_;
 }
 
 }

@@ -55,15 +55,13 @@
 #include "../UI/Sprite.h"
 #include "../UI/Text.h"
 #include "../UI/Text3D.h"
+#include "../UI/TextRenderer3D.h"
 #include "../UI/ToolTip.h"
 #include "../UI/UI.h"
 #include "../UI/UIEvents.h"
 #include "../UI/Window.h"
 #include "../UI/View3D.h"
 #include "../UI/UIComponent.h"
-#ifdef URHO3D_SYSTEMUI
-#include "../SystemUI/SystemUI.h"
-#endif
 
 #include <cassert>
 #include <SDL/SDL.h>
@@ -367,7 +365,7 @@ void UI::Update(float timeStep)
                     dragElement->OnDragBegin(dragElement->ScreenToElement(beginSendPos), beginSendPos, dragData->dragButtons,
                         qualifiers_, cursor_);
                 else
-                    dragElement->OnDragBegin(dragElement->ScreenToElement(beginSendPos), beginSendPos, dragData->dragButtons, 0, nullptr);
+                    dragElement->OnDragBegin(dragElement->ScreenToElement(beginSendPos), beginSendPos, dragData->dragButtons, QUAL_NONE, nullptr);
 
                 SendDragOrHoverEvent(E_DRAGBEGIN, dragElement, beginSendPos, IntVector2::ZERO, dragData);
             }
@@ -376,31 +374,23 @@ void UI::Update(float timeStep)
         }
     }
 
-#ifdef URHO3D_SYSTEMUI
-    // System ui is always takes precedence
-    if (!ShouldIgnoreInput())
+    // Mouse hover
+    if (!mouseGrabbed && !input->GetTouchEmulation())
     {
-#endif
-        // Mouse hover
-        if (!mouseGrabbed && !input->GetTouchEmulation())
-        {
-            if (!usingTouchInput_ && cursorVisible)
-                ProcessHover(cursorPos, mouseButtons_, qualifiers_, cursor_);
-        }
-
-        // Touch hover
-        unsigned numTouches = input->GetNumTouches();
-        for (unsigned i = 0; i < numTouches; ++i)
-        {
-            TouchState* touch = input->GetTouch(i);
-            IntVector2 touchPos = touch->position_;
-            touchPos.x_ = (int)(touchPos.x_ / uiScale_);
-            touchPos.y_ = (int)(touchPos.y_ / uiScale_);
-            ProcessHover(touchPos, MakeTouchIDMask(touch->touchID_), QUAL_NONE, nullptr);
-        }
-#ifdef URHO3D_SYSTEMUI
+        if (!usingTouchInput_ && cursorVisible)
+            ProcessHover(cursorPos, mouseButtons_, qualifiers_, cursor_);
     }
-#endif
+
+    // Touch hover
+    unsigned numTouches = input->GetNumTouches();
+    for (unsigned i = 0; i < numTouches; ++i)
+    {
+        TouchState* touch = input->GetTouch(i);
+        IntVector2 touchPos = touch->position_;
+        touchPos.x_ = (int)(touchPos.x_ / uiScale_);
+        touchPos.y_ = (int)(touchPos.y_ / uiScale_);
+        ProcessHover(touchPos, MakeTouchIDMask(touch->touchID_), QUAL_NONE, nullptr);
+    }
 
     // End hovers that expired without refreshing
     for (auto i = hoveredElements_.begin(); i !=
@@ -710,13 +700,15 @@ void UI::SetCustomSize(int width, int height)
 
 IntVector2 UI::GetCursorPosition() const
 {
-    return cursor_ ? cursor_->GetPosition() : GetSubsystem<Input>()->GetMousePosition();
+    if (cursor_)
+        return ConvertUIToSystem(cursor_->GetPosition());
+
+    return GetSubsystem<Input>()->GetMousePosition();
 }
 
-UIElement* UI::GetElementAt(const IntVector2& position, bool enabledOnly, IntVector2* elementScreenPosition)
+UIElement* UI::GetElementAt(const IntVector2& position, bool enabledOnly)
 {
     UIElement* result = nullptr;
-    IntVector2 screenPosition;
 
     if (HasModalElement())
         result = GetElementAt(rootModalElement_, position, enabledOnly);
@@ -724,15 +716,7 @@ UIElement* UI::GetElementAt(const IntVector2& position, bool enabledOnly, IntVec
     if (!result)
         result = GetElementAt(rootElement_, position, enabledOnly);
 
-    if (result && elementScreenPosition)
-        *elementScreenPosition = position;
-
     return result;
-}
-
-UIElement* UI::GetElementAt(const IntVector2& position, bool enabledOnly)
-{
-    return GetElementAt(position, enabledOnly, nullptr);
 }
 
 UIElement* UI::GetElementAt(UIElement* root, const IntVector2& position, bool enabledOnly)
@@ -765,6 +749,16 @@ UIElement* UI::GetElementAt(UIElement* root, const IntVector2& position, bool en
 UIElement* UI::GetElementAt(int x, int y, bool enabledOnly)
 {
     return GetElementAt(IntVector2(x, y), enabledOnly);
+}
+
+IntVector2 UI::ConvertSystemToUI(const IntVector2& systemPos) const
+{
+    return VectorFloorToInt(static_cast<Vector2>(systemPos) / GetScale());
+}
+
+IntVector2 UI::ConvertUIToSystem(const IntVector2& uiPos) const
+{
+    return VectorFloorToInt(static_cast<Vector2>(uiPos) * GetScale());
 }
 
 UIElement* UI::GetFrontElement() const
@@ -874,15 +868,6 @@ void UI::Update(float timeStep, UIElement* element)
     // Keep a weak pointer to the element in case it destroys itself on update
     WeakPtr<UIElement> elementWeak(element);
 
-#ifdef URHO3D_SYSTEMUI
-    // Unfocus active element if system ui has focus
-    if (ShouldIgnoreInput())
-    {
-        if (GetFocusElement() == element && GetSubsystem<SystemUI>()->IsAnyItemActive())
-            SetFocusElement(nullptr);
-    }
-#endif
-
     element->Update(timeStep);
     if (elementWeak.Expired())
         return;
@@ -973,7 +958,7 @@ void UI::Render(VertexBuffer* buffer, const ea::vector<UIBatch>& batches, unsign
         ShaderVariation* ps;
         ShaderVariation* vs;
 
-        if (!batch.custom_material_)
+        if (!batch.customMaterial_)
         {
             if (!batch.texture_)
             {
@@ -996,7 +981,7 @@ void UI::Render(VertexBuffer* buffer, const ea::vector<UIBatch>& batches, unsign
             vs = diffTextureVS;
             ps = diffTexturePS;
 
-            Technique* technique = batch.custom_material_->GetTechnique(0);
+            Technique* technique = batch.customMaterial_->GetTechnique(0);
             if (technique)
             {
                 Pass* pass = nullptr;
@@ -1005,8 +990,8 @@ void UI::Render(VertexBuffer* buffer, const ea::vector<UIBatch>& batches, unsign
                     pass = technique->GetPass(i);
                     if (pass)
                     {
-                        vs = graphics_->GetShader(VS, pass->GetVertexShader(), batch.custom_material_->GetVertexShaderDefines());
-                        ps = graphics_->GetShader(PS, pass->GetPixelShader(), batch.custom_material_->GetPixelShaderDefines());
+                        vs = graphics_->GetShader(VS, pass->GetVertexShader(), batch.customMaterial_->GetVertexShaderDefines());
+                        ps = graphics_->GetShader(PS, pass->GetPixelShader(), batch.customMaterial_->GetPixelShaderDefines());
                         break;
                     }
                 }
@@ -1044,22 +1029,22 @@ void UI::Render(VertexBuffer* buffer, const ea::vector<UIBatch>& batches, unsign
 
         graphics_->SetBlendMode(batch.blendMode_);
         graphics_->SetScissorTest(true, scissor);
-        if (!batch.custom_material_)
+        if (!batch.customMaterial_)
         {
             graphics_->SetTexture(0, batch.texture_);
         } else
         {
             // Update custom shader parameters if needed
-            if (graphics_->NeedParameterUpdate(SP_MATERIAL, reinterpret_cast<const void*>(batch.custom_material_->GetShaderParameterHash())))
+            if (graphics_->NeedParameterUpdate(SP_MATERIAL, reinterpret_cast<const void*>(batch.customMaterial_->GetShaderParameterHash())))
             {
-                auto shader_parameters = batch.custom_material_->GetShaderParameters();
+                auto shader_parameters = batch.customMaterial_->GetShaderParameters();
                 for (auto it = shader_parameters.begin(); it != shader_parameters.end(); ++it)
                 {
                     graphics_->SetShaderParameter(it->second.name_, it->second.value_);
                 }
             }
             // Apply custom shader textures
-            auto textures = batch.custom_material_->GetTextures();
+            auto textures = batch.customMaterial_->GetTextures();
             for (auto it = textures.begin(); it != textures.end(); ++it)
             {
                 graphics_->SetTexture(it->first, it->second);
@@ -1069,10 +1054,10 @@ void UI::Render(VertexBuffer* buffer, const ea::vector<UIBatch>& batches, unsign
         graphics_->Draw(TRIANGLE_LIST, batch.vertexStart_ / UI_VERTEX_SIZE,
             (batch.vertexEnd_ - batch.vertexStart_) / UI_VERTEX_SIZE);
 
-        if (batch.custom_material_)
+        if (batch.customMaterial_)
         {
             // Reset textures used by the batch custom material
-            auto textures = batch.custom_material_->GetTextures();
+            auto textures = batch.customMaterial_->GetTextures();
             for (auto it = textures.begin(); it != textures.end(); ++it)
             {
                 graphics_->SetTexture(it->first, 0);
@@ -1249,9 +1234,6 @@ void UI::GetCursorPositionAndVisible(IntVector2& pos, bool& visible)
         else
             pos = rootElement_->ScreenToElement(input->GetMousePosition());
     }
-
-    pos.x_ = (int)(pos.x_ / uiScale_);
-    pos.y_ = (int)(pos.y_ / uiScale_);
 }
 
 void UI::SetCursorShape(CursorShape shape)
@@ -1273,8 +1255,8 @@ void UI::ReleaseFontFaces()
 
 void UI::ProcessHover(const IntVector2& windowCursorPos, MouseButtonFlags buttons, QualifierFlags qualifiers, Cursor* cursor)
 {
-    IntVector2 cursorPos;
-    WeakPtr<UIElement> element(GetElementAt(windowCursorPos, true, &cursorPos));
+    IntVector2 cursorPos = windowCursorPos;
+    WeakPtr<UIElement> element(GetElementAt(windowCursorPos, true));
 
     for (auto i = dragElements_.begin(); i !=
         dragElements_.end();)
@@ -1365,8 +1347,8 @@ void UI::ProcessClickBegin(const IntVector2& windowCursorPos, MouseButton button
 {
     if (cursorVisible)
     {
-        IntVector2 cursorPos;
-        WeakPtr<UIElement> element(GetElementAt(windowCursorPos, true, &cursorPos));
+        IntVector2 cursorPos = windowCursorPos;
+        WeakPtr<UIElement> element(GetElementAt(windowCursorPos, true));
 
         bool newButton;
         if (usingTouchInput_)
@@ -1448,7 +1430,7 @@ void UI::ProcessClickEnd(const IntVector2& windowCursorPos, MouseButton button, 
     WeakPtr<UIElement> element;
     IntVector2 cursorPos = windowCursorPos;
     if (cursorVisible)
-        element = GetElementAt(cursorPos, true, &cursorPos);
+        element = GetElementAt(cursorPos, true);
 
     // Handle end of drag
     for (auto i = dragElements_.begin(); i !=
@@ -1515,8 +1497,7 @@ void UI::ProcessMove(const IntVector2& windowCursorPos, const IntVector2& cursor
 {
     if (cursorVisible && dragElementsCount_ > 0 && buttons)
     {
-        IntVector2 cursorPos;
-        GetElementAt(windowCursorPos, true, &cursorPos);
+        IntVector2 cursorPos = windowCursorPos;
 
         auto* input = GetSubsystem<Input>();
         bool mouseGrabbed = input->IsMouseGrabbed();
@@ -1702,12 +1683,6 @@ void UI::HandleMouseButtonDown(StringHash eventType, VariantMap& eventData)
     // Handle drag cancelling
     ProcessDragCancel();
 
-#ifdef URHO3D_SYSTEMUI
-    // SystemUI is rendered on top of game UI
-    if (ShouldIgnoreInput())
-        return;
-#endif
-
     auto* input = GetSubsystem<Input>();
 
     if (!input->IsMouseGrabbed())
@@ -1740,24 +1715,20 @@ void UI::HandleMouseMove(StringHash eventType, VariantMap& eventData)
     const IntVector2& rootSize = rootElement_->GetSize();
     const IntVector2& rootPos = rootElement_->GetPosition();
 
-    IntVector2 DeltaP = IntVector2(eventData[P_DX].GetInt(), eventData[P_DY].GetInt());
+    const IntVector2 mouseDeltaPos{ eventData[P_DX].GetInt(), eventData[P_DY].GetInt() };
+    const IntVector2 mousePos{ eventData[P_X].GetInt(), eventData[P_Y].GetInt() };
 
     if (cursor_)
     {
         if (!input->IsMouseVisible())
         {
             if (!input->IsMouseLocked())
-            {
-                IntVector2 position{eventData[P_X].GetInt(), eventData[P_Y].GetInt()};
-                position = rootElement_->ScreenToElement(position);
-                cursor_->SetPosition(position);
-            }
+                cursor_->SetPosition(rootElement_->ScreenToElement(ConvertSystemToUI(mousePos)));
             else if (cursor_->IsVisible())
             {
                 // Relative mouse motion: move cursor only when visible
                 IntVector2 pos = cursor_->GetPosition();
-                pos.x_ += eventData[P_DX].GetInt();
-                pos.y_ += eventData[P_DY].GetInt();
+                pos += ConvertSystemToUI(mouseDeltaPos);
                 pos.x_ = Clamp(pos.x_, rootPos.x_, rootPos.x_ + rootSize.x_ - 1);
                 pos.y_ = Clamp(pos.y_, rootPos.y_, rootPos.y_ + rootSize.y_ - 1);
                 cursor_->SetPosition(pos);
@@ -1766,23 +1737,15 @@ void UI::HandleMouseMove(StringHash eventType, VariantMap& eventData)
         else
         {
             // Absolute mouse motion: move always
-            IntVector2 position{eventData[P_X].GetInt(), eventData[P_Y].GetInt()};
-            position = rootElement_->ScreenToElement(position);
-            cursor_->SetPosition(position);
+            cursor_->SetPosition(rootElement_->ScreenToElement(ConvertSystemToUI(mousePos)));
         }
     }
-
-#ifdef URHO3D_SYSTEMUI
-    // SystemUI is rendered on top of game UI
-    if (ShouldIgnoreInput())
-        return;
-#endif
 
     IntVector2 cursorPos;
     bool cursorVisible;
     GetCursorPositionAndVisible(cursorPos, cursorVisible);
 
-    ProcessMove(cursorPos, DeltaP, mouseButtons_, qualifiers_, cursor_, cursorVisible);
+    ProcessMove(cursorPos, mouseDeltaPos, mouseButtons_, qualifiers_, cursor_, cursorVisible);
 }
 
 void UI::HandleMouseWheel(StringHash eventType, VariantMap& eventData)
@@ -1790,12 +1753,6 @@ void UI::HandleMouseWheel(StringHash eventType, VariantMap& eventData)
     auto* input = GetSubsystem<Input>();
     if (input->IsMouseGrabbed())
         return;
-
-#ifdef URHO3D_SYSTEMUI
-    // SystemUI is rendered on top of game UI
-    if (ShouldIgnoreInput())
-        return;
-#endif
 
     using namespace MouseWheel;
 
@@ -1834,12 +1791,6 @@ void UI::HandleTouchBegin(StringHash eventType, VariantMap& eventData)
     auto* input = GetSubsystem<Input>();
     if (input->IsMouseGrabbed())
         return;
-
-#ifdef URHO3D_SYSTEMUI
-    // SystemUI is rendered on top of game UI
-    if (ShouldIgnoreInput())
-        return;
-#endif
 
     using namespace TouchBegin;
 
@@ -1885,19 +1836,13 @@ void UI::HandleTouchEnd(StringHash eventType, VariantMap& eventData)
     }
 
     if (element && element->IsEnabled())
-        element->OnHover(element->ScreenToElement(pos), pos, 0, 0, nullptr);
+        element->OnHover(element->ScreenToElement(pos), pos, MOUSEB_NONE, QUAL_NONE, nullptr);
 
     ProcessClickEnd(pos, touchId, MOUSEB_NONE, QUAL_NONE, nullptr, true);
 }
 
 void UI::HandleTouchMove(StringHash eventType, VariantMap& eventData)
 {
-#ifdef URHO3D_SYSTEMUI
-    // SystemUI is rendered on top of game UI
-    if (ShouldIgnoreInput())
-        return;
-#endif
-
     using namespace TouchMove;
 
     IntVector2 pos(eventData[P_X].GetInt(), eventData[P_Y].GetInt());
@@ -1915,11 +1860,6 @@ void UI::HandleTouchMove(StringHash eventType, VariantMap& eventData)
 
 void UI::HandleKeyDown(StringHash eventType, VariantMap& eventData)
 {
-#ifdef URHO3D_SYSTEMUI
-    if (ShouldIgnoreInput())
-        return;
-#endif
-
     using namespace KeyDown;
 
     mouseButtons_ = MouseButtonFlags(eventData[P_BUTTONS].GetUInt());
@@ -1995,11 +1935,6 @@ void UI::HandleKeyDown(StringHash eventType, VariantMap& eventData)
 
 void UI::HandleTextInput(StringHash eventType, VariantMap& eventData)
 {
-#ifdef URHO3D_SYSTEMUI
-    if (ShouldIgnoreInput())
-        return;
-#endif
-
     using namespace TextInput;
 
     UIElement* element = focusElement_;
@@ -2224,25 +2159,6 @@ void UI::SetRootModalElement(UIElement* rootModal)
     ResizeRootElement();
 }
 
-bool UI::ShouldIgnoreInput() const
-{
-    // In in the editor and game view is not focused.
-    if (GetSubsystem<Input>()->ShouldIgnoreInput())
-        return true;
-#if URHO3D_SYSTEMUI
-    // Any systemUI element is hovered except when rendering into texture. Chances are this texture will be displayed
-    // as ui::Image() and hovering mouse.
-    if (GetSubsystem<SystemUI>()->IsAnyItemHovered())
-        return !partOfSystemUI_;
-
-    // Any interaction with systemUI widgets
-    if (GetSubsystem<SystemUI>()->IsAnyItemActive())
-        return true;
-#endif
-
-    return false;
-}
-
 void RegisterUILibrary(Context* context)
 {
     Font::RegisterObject(context);
@@ -2256,6 +2172,7 @@ void RegisterUILibrary(Context* context)
     Cursor::RegisterObject(context);
     Text::RegisterObject(context);
     Text3D::RegisterObject(context);
+    TextRenderer3D::RegisterObject(context);
     Window::RegisterObject(context);
     View3D::RegisterObject(context);
     LineEdit::RegisterObject(context);

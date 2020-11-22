@@ -31,7 +31,6 @@ namespace Urho3D
 
 BaseResourceTab::BaseResourceTab(Context* context)
     : Tab(context)
-    , undo_(context)
 {
     onTabContextMenu_.Subscribe(this, &BaseResourceTab::OnRenderContextMenu);
 
@@ -42,6 +41,15 @@ BaseResourceTab::BaseResourceTab(Context* context)
         if (resourceName_ == nameFrom)
             SetResourceName(args[P_TO].GetString());
     });
+    SubscribeToEvent(this, E_DOCUMENTMODIFIEDREQUEST, [this](StringHash, VariantMap&)
+    {
+        if (!modified_)
+        {
+            undo_->Add<UndoModifiedState>(this, true);
+            modified_ = true;
+        }
+    });
+    SubscribeToEvent(E_DOCUMENTMODIFIED, [this](StringHash, VariantMap& args) { modified_ = args[DocumentModified::P_MODIFIED].GetBool(); });
 }
 
 bool BaseResourceTab::LoadResource(const ea::string& resourcePath)
@@ -52,18 +60,19 @@ bool BaseResourceTab::LoadResource(const ea::string& resourcePath)
     if (resourcePath.empty())
         return false;
 
-    if (IsModified())
+    if (IsModified() && pendingLoadResource_.empty())
     {
         pendingLoadResource_ = resourcePath;
         return false;
     }
 
     SetResourceName(resourcePath);
+    modified_ = false;
 
     return true;
 }
 
-bool Urho3D::BaseResourceTab::SaveResource()
+bool BaseResourceTab::SaveResource()
 {
     if (!Tab::SaveResource())
         return false;
@@ -71,7 +80,12 @@ bool Urho3D::BaseResourceTab::SaveResource()
     if (resourceName_.empty())
         return false;
 
-    lastUndoIndex_ = undo_.Index();
+    // Mark tab as not modified.
+    if (modified_)
+    {
+        undo_->Add<UndoModifiedState>(this, false);
+        modified_ = false;
+    }
 
     return true;
 }
@@ -102,16 +116,11 @@ void BaseResourceTab::SetResourceName(const ea::string& resourceName)
         SetTitle(GetFileName(resourceName_));
 }
 
-bool BaseResourceTab::IsModified() const
-{
-    return lastUndoIndex_ != undo_.Index();
-}
-
 void BaseResourceTab::Close()
 {
-    undo_.Clear();
-    lastUndoIndex_ = 0;
-    context_->GetCache()->ReleaseResource(GetResourceType(), GetResourceName(), true);
+    auto cache = GetSubsystem<ResourceCache>();
+    cache->ReleaseResource(GetResourceType(), GetResourceName(), true);
+    modified_ = false;
     resourceName_.clear();
 }
 
@@ -137,9 +146,15 @@ bool BaseResourceTab::RenderWindowContent()
                 GetFileNameAndExtension(resourceName_).c_str(),
                 GetFileNameAndExtension(pendingLoadResource_).c_str());
 
-            if (ui::Button(ICON_FA_SAVE " Save & Open"))
-            {
+            bool save = ui::Button(ICON_FA_SAVE " Save & Open");
+            ui::SameLine();
+            bool open = save || ui::Button(ICON_FA_EXCLAMATION_TRIANGLE " Close & Open");
+
+            if (save)
                 SaveResource();
+
+            if (open)
+            {
                 LoadResource(pendingLoadResource_);
                 pendingLoadResource_.clear();
                 ui::CloseCurrentPopup();

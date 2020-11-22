@@ -34,9 +34,9 @@ class Graphics;
 /// API-specific GPU object representation.
 union GPUObjectHandle
 {
-    /// Object pointer (Direct3D.)
+    /// Object pointer (Direct3D).
     void* ptr_;
-    /// Object name (OpenGL.)
+    /// Object name (OpenGL).
     unsigned name_;
 };
 
@@ -66,6 +66,7 @@ public:
     /// Return the object name. Applicable only on OpenGL.
     unsigned GetGPUObjectName() const { return object_.name_; }
     /// Return whether data is lost due to context loss.
+    /// @property
     bool IsDataLost() const { return dataLost_; }
     /// Return whether has pending data assigned while graphics context was lost.
     bool HasPendingData() const { return dataPending_; }

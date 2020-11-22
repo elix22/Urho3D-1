@@ -51,10 +51,12 @@ public:
     ~FileSystem() override;
 
     /// Set the current working directory.
+    /// @property
     bool SetCurrentDir(const ea::string& pathName);
     /// Create a directory.
     bool CreateDir(const ea::string& pathName);
     /// Set whether to execute engine console commands as OS-specific system command.
+    /// @property
     void SetExecuteConsoleCommands(bool enable);
     /// Run a program using the command interpreter, block until it exits and return the exit code. Will fail if any allowed paths are defined.
     int SystemCommand(const ea::string& commandLine, bool redirectStdOutToLog = false);
@@ -82,9 +84,11 @@ public:
     bool SetLastModifiedTime(const ea::string& fileName, unsigned newTime);
 
     /// Return the absolute current working directory.
+    /// @property
     ea::string GetCurrentDir() const;
 
     /// Return whether is executing engine console commands as OS-specific system command.
+    /// @property
     bool GetExecuteConsoleCommands() const { return executeConsoleCommands_; }
 
     /// Return whether paths have been registered.
@@ -100,16 +104,18 @@ public:
     bool DirExists(const ea::string& pathName) const;
     /// Scan a directory for specified files.
     void ScanDir(ea::vector<ea::string>& result, const ea::string& pathName, const ea::string& filter, unsigned flags, bool recursive) const;
+    /// Scan a directory for specified files. Appends to result container instead of clearing it.
+    void ScanDirAdd(ea::vector<ea::string>& result, const ea::string& pathName, const ea::string& filter, unsigned flags, bool recursive) const;
     /// Return the program's directory.
+    /// @property
     ea::string GetProgramDir() const;
-#if DESKTOP
-    /// Return the program's executable file path.
+    /// Return the program's executable file path, or empty string if not applicable.
     ea::string GetProgramFileName() const;
-    /// Return executable path of interpreter program (for example path to mono executable on unixes for C# application).
+    /// Return executable path of interpreter program (for example path to mono executable on unixes for C# application), or empty string if not applicable.
     /// If application is executed directly (no interpreter) this will return same result as GetProgramFileName().
     ea::string GetInterpreterFileName() const;
-#endif
     /// Return the user documents directory.
+    /// @property
     ea::string GetUserDocumentsDir() const;
     /// Return the application preferences directory.
     ea::string GetAppPreferencesDir(const ea::string& org, const ea::string& app) const;
@@ -124,6 +130,7 @@ public:
     /// Remove files in a directory, or remove entire directory recursively.
     bool RemoveDir(const ea::string& directoryIn, bool recursive);
     /// Return path of temporary directory. Path always ends with a forward slash.
+    /// @property
     ea::string GetTemporaryDir() const;
 
 private:
@@ -158,13 +165,13 @@ URHO3D_API ea::string GetExtension(const ea::string& fullPath, bool lowercaseExt
 URHO3D_API ea::string GetFileNameAndExtension(const ea::string& fileName, bool lowercaseExtension = false);
 /// Replace the extension of a file name with another.
 URHO3D_API ea::string ReplaceExtension(const ea::string& fullPath, const ea::string& newExtension);
-/// Add a slash at the end of the path if missing and convert to internal format (use slashes.)
+/// Add a slash at the end of the path if missing and convert to internal format (use slashes).
 URHO3D_API ea::string AddTrailingSlash(const ea::string& pathName);
-/// Remove the slash from the end of a path if exists and convert to internal format (use slashes.)
+/// Remove the slash from the end of a path if exists and convert to internal format (use slashes).
 URHO3D_API ea::string RemoveTrailingSlash(const ea::string& pathName);
 /// Return the parent path, or the path itself if not available.
 URHO3D_API ea::string GetParentPath(const ea::string& path);
-/// Convert a path to internal format (use slashes.)
+/// Convert a path to internal format (use slashes).
 URHO3D_API ea::string GetInternalPath(const ea::string& pathName);
 /// Convert a path to the format required by the operating system.
 URHO3D_API ea::string GetNativePath(const ea::string& pathName);

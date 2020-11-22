@@ -23,13 +23,13 @@
 #pragma once
 
 
-#include <array>
-
-#include "ToolboxAPI.h"
 #include <Urho3D/Core/Context.h>
 #include <Urho3D/Core/Object.h>
 #include <Urho3D/Core/Variant.h>
 #include <Urho3D/SystemUI/SystemUI.h>
+
+#include "ToolboxAPI.h"
+#include "SystemUI/Widgets.h"
 
 
 namespace Urho3D
@@ -47,80 +47,83 @@ enum class AttributeInspectorModified : unsigned
 };
 URHO3D_FLAGSET(AttributeInspectorModified, AttributeInspectorModifiedFlags);
 
+enum class AttributeValueKind
+{
+    ATTRIBUTE_VALUE_DEFAULT,
+    ATTRIBUTE_VALUE_INHERITED,
+    ATTRIBUTE_VALUE_CUSTOM,
+};
+
 URHO3D_EVENT(E_INSPECTORLOCATERESOURCE, InspectorLocateResource)
 {
     URHO3D_PARAM(P_NAME, ResourceName);                                         // String
 }
 
-URHO3D_EVENT(E_INSPECTORRENDERSTART, InspectorRenderStart)
-{
-    URHO3D_PARAM(P_SERIALIZABLE, Serializable);                                 // Serializable*
-}
-
-URHO3D_EVENT(E_INSPECTORRENDEREND, InspectorRenderEnd)
-{
-}
-
-URHO3D_EVENT(E_INSPECTORRENDERATTRIBUTE, InspectorRenderAttribute)
-{
-    URHO3D_PARAM(P_ATTRIBUTEINFO, AttributeInfo);                               // void*
-    URHO3D_PARAM(P_SERIALIZABLE, Serializable);                                 // RefCounted*
-    URHO3D_PARAM(P_HANDLED, Handled);                                           // bool
-    URHO3D_PARAM(P_MODIFIED, Modified);                                         // unsigned (AttributeInspectorModifiedFlags)
-}
-
 /// Automate tracking of initial values that are modified by ImGui widget.
-template<typename TValue, typename MValue>
-struct ModifiedStateTracker
+template<typename Value>
+struct ValueHistory
 {
-    MValue TrackModification(MValue modified, std::function<TValue()> getInitial)
+    /// Copy value type.
+    using ValueCopy = typename ea::remove_cvref_t<Value>;
+    /// Reference value type.
+    using ValueRef = typename std::conditional_t<!std::is_reference_v<std::remove_cv_t<Value>>, const ValueCopy&, ValueCopy&>;
+    /// Reference or a copy, depending on whether Value is const.
+    using ValueCurrent = std::conditional_t<!std::is_const_v<Value> && std::is_reference_v<Value>, ValueCopy&, ValueCopy>;
+
+    /// Construct. For internal use. Never construct ValueHistory directly.
+    ValueHistory(ValueRef current) : current_(current) { }
+    /// A helper getter. It should be used to obtain the value.
+    static ValueHistory& Get(ValueRef value)
     {
-        if (modified)
+        auto history = ui::GetUIState<ValueHistory>(value);
+        history->current_ = value;
+        if (history->expired_)
         {
-            if (!lastModified_)
+            history->initial_ = value;
+            history->expired_ = false;
+            history->modified_ = false;
+        }
+        return *history;
+    }
+    /// Returns true when value is modified and no continuous modification is happening.
+    bool IsModified()
+    {
+        if (initial_ != current_ && !ui::IsAnyItemActive())
+        {
+            if (modified_)
             {
-                initial_ = getInitial();
-                lastModified_ = modified;
+                // User changed this value explicitly.
+                expired_ = true;
+                modified_ = false;
+                return true;
             }
-            return {};
+            else
+            {
+                // Change is external.
+                expired_ = true;
+            }
         }
-        else if (!ui::IsAnyItemActive() && lastModified_)
-        {
-            auto result = lastModified_;
-            lastModified_ = MValue{};
-            return result;
-        }
-
-        return {};
+        return false;
     }
+    /// Returns true if value is modified.
+    explicit operator bool() { return IsModified(); }
+    /// Flag value as modified.
+    void SetModified(bool modified) { modified_ = modified; }
 
-    MValue TrackModification(MValue modified, const TValue& initialValue)
-    {
-        std::function<TValue()> fn = [&]() { return initialValue; };
-        return TrackModification(modified, fn);
-    }
-
-    const TValue& GetInitialValue() { return initial_; }
-
-protected:
     /// Initial value.
-    TValue initial_{};
-    /// Flag indicating if value was modified on previous frame.
-    MValue lastModified_{};
-};
-
-/// A dummy object used as namespace for subscribing to events.
-class URHO3D_TOOLBOX_API AttributeInspector : public Object
-{
-    URHO3D_OBJECT(AttributeInspector, Object);
-public:
-    explicit AttributeInspector(Context* context) : Object(context) { }
+    ValueCopy initial_{};
+    /// Last value.
+    ValueCurrent current_{};
+    /// Flag indicating this history entry is expired and initial value can be overwritten.
+    bool expired_ = true;
+    ///
+    bool modified_ = false;
 };
 
 /// Render attribute inspector of `item`.
 /// If `filter` is not null then only attributes containing this substring will be rendered.
-/// If `eventNamespace` is not null then this object will be used to send events.
-URHO3D_TOOLBOX_API bool RenderAttributes(Serializable* item, const char* filter=nullptr, Object* eventNamespace=nullptr);
-URHO3D_TOOLBOX_API bool RenderSingleAttribute(Variant& value);
+/// If `eventSender` is not null then this object will be used to send events.
+URHO3D_TOOLBOX_API bool RenderAttribute(ea::string_view title, Variant& value, const Color& color=Color::WHITE, ea::string_view tooltip="", const AttributeInfo* info=nullptr, Object* eventSender=nullptr, float item_width=0);
+URHO3D_TOOLBOX_API bool RenderAttributes(Serializable* item, ea::string_view filter="", Object* eventSender=nullptr);
 
 }

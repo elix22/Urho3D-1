@@ -1,0 +1,410 @@
+name: Build
+on:
+  push:
+    branches-ignore:
+      - 'no-ci-**'
+      - 'skip-ci-**'
+  pull_request: {}
+
+env:
+  # common settings
+  URHO3D_ENABLE_ALL: ON
+  URHO3D_SAMPLES: ON
+  # ccache configuration
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_COMPRESS: true
+  CCACHE_COMPRESSLEVEL: 9
+  # clcache configuration
+  CLCACHE_DIR: ${{ github.workspace }}/.ccache            # Intentionally same as CCACHE_DIR
+  CLCACHE_COMPRESS: true
+  CLACHE_COMPRESSLEVEL: 9
+  # paths
+  ci_source_dir: ${{ github.workspace }}/source-code
+  ci_build_script: ./source-code/script/ci_build.sh
+  ci_build_dir: ${{ github.workspace }}/cmake-build
+  ci_sdk_dir: ${{ github.workspace }}/SDK
+
+jobs:
+  CheckSkipCI:
+    runs-on: ubuntu-latest
+    if: |
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !contains(github.event.pull_request.title, '[skip ci]') &&
+      !contains(github.event.head_commit.message, '[skip-ci]') &&
+      !contains(github.event.pull_request.title, '[skip-ci]')
+    steps:
+      - run: exit 0
+
+  Windows:
+    runs-on: windows-latest
+    needs: [CheckSkipCI]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ci_arch:
+          - x64
+          - x86
+        ci_lib_type:
+          - dll
+          - lib
+        ci_build_type:
+          - dbg
+          - rel
+        ci_compiler:
+          - msvc
+          - mingw
+        exclude:
+          - { ci_build_type: dbg, ci_compiler: mingw }    # MinGW debugging info is so bug build worker runs out of disk space.
+
+    env:
+      ci_platform: windows
+      ci_arch: ${{ matrix.ci_arch }}
+      ci_lib_type: ${{ matrix.ci_lib_type }}
+      ci_build_type: ${{ matrix.ci_build_type }}
+      ci_compiler: ${{ matrix.ci_compiler }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: ${{ env.ci_source_dir }}
+          fetch-depth: 1
+
+      - name: Build Cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ github.job }}-${{ matrix.ci_arch }}-${{ matrix.ci_lib_type }}-${{ matrix.ci_build_type }}-${{ matrix.ci_compiler }}-${{ hashFiles('**/source-code/Source/**') }}
+          restore-keys: |
+            ${{ github.job }}-${{ matrix.ci_arch }}-${{ matrix.ci_lib_type }}-${{ matrix.ci_build_type }}-${{ matrix.ci_compiler }}
+
+      - name: Dependencies
+        shell: bash
+        run: ${{ env.ci_build_script }} dependencies
+
+      - name: Generate
+        shell: bash
+        run: ${{ env.ci_build_script }} generate
+
+      - name: NuGet Restore
+        if: matrix.ci_lib_type == 'dll'
+        shell: bash
+        run: ${{ env.ci_build_script }} restore
+
+      - name: Build
+        shell: bash
+        run: ${{ env.ci_build_script }} build-${{ env.ci_compiler }}
+
+      - name: Install
+        shell: bash
+        run: ${{ env.ci_build_script }} install
+
+      - uses: actions/upload-artifact@v2
+        if: github.context.ref == 'refs/heads/master' && matrix.ci_build_type == 'rel'
+        with:
+          name: 'rbfx-${{ github.job }}-${{ matrix.ci_arch }}-${{ matrix.ci_build_type }}-${{ github.sha }}'
+          path: ${{ env.ci_sdk_dir }}
+
+  Linux:
+    runs-on: ubuntu-20.04
+    needs: [CheckSkipCI]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ci_arch:
+          - x64
+          # - x86           # TODO: Build script does not implement this fully.
+        ci_lib_type:
+          - dll
+          - lib
+        ci_build_type:
+          - dbg
+          - rel
+        ci_compiler:
+          - gcc
+          - clang
+
+    env:
+      ci_platform: linux
+      ci_arch: ${{ matrix.ci_arch }}
+      ci_lib_type: ${{ matrix.ci_lib_type }}
+      ci_build_type: ${{ matrix.ci_build_type }}
+      ci_compiler: ${{ matrix.ci_compiler }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: ${{ env.ci_source_dir }}
+          fetch-depth: 1
+
+      - name: Build Cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ github.job }}-${{ matrix.ci_arch }}-${{ matrix.ci_lib_type }}-${{ matrix.ci_build_type }}-${{ matrix.ci_compiler }}-${{ github.sha }}
+          restore-keys: |
+            ${{ github.job }}-${{ matrix.ci_arch }}-${{ matrix.ci_lib_type }}-${{ matrix.ci_build_type }}-${{ matrix.ci_compiler }}
+
+      - name: Dependencies
+        shell: bash
+        run: ${{ env.ci_build_script }} dependencies
+
+      - name: Generate
+        shell: bash
+        run: ${{ env.ci_build_script }} generate
+
+      - name: NuGet Restore
+        if: matrix.ci_lib_type == 'dll'
+        shell: bash
+        run: ${{ env.ci_build_script }} restore
+
+      - name: Build
+        shell: bash
+        run: ${{ env.ci_build_script }} build
+
+      - name: Install
+        shell: bash
+        run: ${{ env.ci_build_script }} install
+
+      - uses: actions/upload-artifact@v2
+        if: github.context.ref == 'refs/heads/master' && matrix.ci_build_type == 'rel'
+        with:
+          name: 'rbfx-${{ github.job }}-${{ matrix.ci_arch }}-${{ matrix.ci_build_type }}-${{ github.sha }}'
+          path: ${{ env.ci_sdk_dir }}
+
+  MacOS:
+    runs-on: macos-latest
+    needs: [CheckSkipCI]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ci_arch:
+          - x64
+          # - x86           # TODO: Untested.
+        ci_lib_type:
+          - dll
+          - lib
+        ci_build_type:
+          - dbg
+          - rel
+        ci_compiler:
+          - clang
+
+    env:
+      ci_platform: macos
+      ci_arch: ${{ matrix.ci_arch }}
+      ci_lib_type: ${{ matrix.ci_lib_type }}
+      ci_build_type: ${{ matrix.ci_build_type }}
+      ci_compiler: ${{ matrix.ci_compiler }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: ${{ env.ci_source_dir }}
+          fetch-depth: 1
+
+      - name: Build Cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ github.job }}-${{ matrix.ci_arch }}-${{ matrix.ci_lib_type }}-${{ matrix.ci_build_type }}-${{ matrix.ci_compiler }}-${{ github.sha }}
+          restore-keys: |
+            ${{ github.job }}-${{ matrix.ci_arch }}-${{ matrix.ci_lib_type }}-${{ matrix.ci_build_type }}-${{ matrix.ci_compiler }}
+
+      - name: Bash
+        shell: bash
+        run: brew install bash
+
+      - name: Dependencies
+        shell: bash
+        run: ${{ env.ci_build_script }} dependencies
+
+      - name: Generate
+        shell: bash
+        run: ${{ env.ci_build_script }} generate
+
+      - name: NuGet Restore
+        if: matrix.ci_lib_type == 'dll'
+        shell: bash
+        run: ${{ env.ci_build_script }} restore
+
+      - name: Build
+        shell: bash
+        run: ${{ env.ci_build_script }} build
+
+      - name: Install
+        shell: bash
+        run: ${{ env.ci_build_script }} install
+
+      - uses: actions/upload-artifact@v2
+        if: github.context.ref == 'refs/heads/master' && matrix.ci_build_type == 'rel'
+        with:
+          name: 'rbfx-${{ github.job }}-${{ matrix.ci_arch }}-${{ matrix.ci_build_type }}-${{ github.sha }}'
+          path: ${{ env.ci_sdk_dir }}
+
+  Android:
+    runs-on: ubuntu-20.04
+    needs: [CheckSkipCI]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ci_build_type:
+          - dbg
+          - rel
+
+    env:
+      ci_platform: android
+      ci_arch: ${{ matrix.ci_arch }}
+      ci_lib_type: ${{ matrix.ci_lib_type }}
+      ci_build_type: ${{ matrix.ci_build_type }}
+      ci_compiler: ${{ matrix.ci_compiler }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: ${{ env.ci_source_dir }}
+          fetch-depth: 1
+
+      - name: Build Cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ github.job }}-${{ matrix.ci_build_type }}-${{ github.sha }}
+          restore-keys: |
+            ${{ github.job }}-${{ matrix.ci_build_type }}
+
+      - name: Dependencies
+        shell: bash
+        run: ${{ env.ci_build_script }} dependencies
+
+      - name: Generate
+        shell: bash
+        run: ${{ env.ci_build_script }} generate
+
+      - name: Build
+        shell: bash
+        run: ${{ env.ci_build_script }} build-android
+
+      - uses: actions/upload-artifact@v2
+        if: github.context.ref == 'refs/heads/master' && matrix.ci_build_type == 'rel'
+        with:
+          name: 'rbfx-${{ github.job }}-${{ matrix.build_type }}-${{ github.sha }}'
+          path: '**/*.apk'
+
+  iOS:
+    runs-on: macos-latest
+    needs: [CheckSkipCI]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ci_lib_type:
+          # - dll           # TODO: Linker error failing to find SDL_main.
+          - lib
+        ci_build_type:
+          - dbg
+          - rel
+
+    env:
+      ci_platform: ios
+      ci_arch: ${{ matrix.ci_arch }}
+      ci_lib_type: ${{ matrix.ci_lib_type }}
+      ci_build_type: ${{ matrix.ci_build_type }}
+      ci_compiler: ${{ matrix.ci_compiler }}
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: ${{ env.ci_source_dir }}
+          fetch-depth: 1
+
+      - name: Build Cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ github.job }}-${{ matrix.ci_lib_type }}-${{ matrix.ci_build_type }}-${{ github.sha }}
+          restore-keys: |
+            ${{ github.job }}-${{ matrix.ci_lib_type }}-${{ matrix.ci_build_type }}
+
+      - name: Bash
+        shell: bash
+        run: brew install bash
+
+      - name: Dependencies
+        shell: bash
+        run: ${{ env.ci_build_script }} dependencies
+
+      - name: Generate
+        shell: bash
+        run: ${{ env.ci_build_script }} generate
+
+      - name: Build
+        shell: bash
+        run: ${{ env.ci_build_script }} build
+
+      - uses: actions/upload-artifact@v2
+        if: github.context.ref == 'refs/heads/master' && matrix.ci_build_type == 'rel'
+        with:
+          name: 'rbfx-${{ github.job }}-${{ matrix.build_type }}-${{ github.sha }}'
+          path: '**/*.app'
+
+  Web:
+    runs-on: ubuntu-20.04
+    needs: [CheckSkipCI]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ci_lib_type:
+          - lib
+        ci_build_type:
+          - dbg
+          - rel
+
+    env:
+      ci_platform: web
+      ci_arch: ${{ matrix.ci_arch }}
+      ci_lib_type: ${{ matrix.ci_lib_type }}
+      ci_build_type: ${{ matrix.ci_build_type }}
+      ci_compiler: ${{ matrix.ci_compiler }}
+
+    steps:
+      - uses: mymindstorm/setup-emsdk@v7
+
+      - uses: actions/checkout@v2
+        with:
+          path: ${{ env.ci_source_dir }}
+          fetch-depth: 1
+
+      - name: Build Cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ github.job }}-${{ matrix.ci_lib_type }}-${{ matrix.ci_build_type }}-${{ github.sha }}
+          restore-keys: |
+            ${{ github.job }}-${{ matrix.ci_lib_type }}-${{ matrix.ci_build_type }}
+
+      - name: Dependencies
+        shell: bash
+        run: ${{ env.ci_build_script }} dependencies
+
+      - name: Generate
+        shell: bash
+        run: ${{ env.ci_build_script }} generate
+
+      - name: Build
+        shell: bash
+        run: ${{ env.ci_build_script }} build
+
+      - name: Install
+        shell: bash
+        run: ${{ env.ci_build_script }} install
+
+      - uses: actions/upload-artifact@v2
+        if: github.context.ref == 'refs/heads/master' && matrix.ci_build_type == 'rel'
+        with:
+          name: 'rbfx-${{ github.job }}-${{ matrix.build_type }}-${{ github.sha }}'
+          path: SDK

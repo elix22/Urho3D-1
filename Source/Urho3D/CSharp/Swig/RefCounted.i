@@ -5,99 +5,163 @@
       [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]
       private global::System.Runtime.InteropServices.HandleRef swigCPtr;
       [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]
-      private bool swigCMemOwn;
+      private bool _swigCMemOwn = false;
       internal static $csclassname wrap(global::System.IntPtr cPtr, bool cMemoryOwn) {
+        // This function gets called when we want to turn a native cPtr into managed instance. For example when some
+        // method returns a pointer to a wrapped object.
         if (cPtr == global::System.IntPtr.Zero)
           return null;
-
-        cMemoryOwn = true;  // Managed instances always keep reference to subclass of RefCounted
+        // Obtain GCHandle stored in RefCounted.
         var handle = $imclassname.RefCounted_GetScriptObject(new global::System.Runtime.InteropServices.HandleRef(null, cPtr));
         $csclassname result = null;
         if (handle != global::System.IntPtr.Zero) {
+          // Fetch managed object from returned GCHandle and return it as this particular cPtr already has a wrapper object instance.
           var gchandle = global::System.Runtime.InteropServices.GCHandle.FromIntPtr(handle);
           return ($csclassname)gchandle.Target;
         }
-
+        // GCHandle is null. cPtr does not have a managed wrapper object yet. We will create one.
         global::System.Type type;
+        // Most downstream class always owns instance of RefCounted.
+        cMemoryOwn = true;
+        // Look up a most downstream type in type registry. This is important, because it allows us to use correct
+        // wrapper type for polymorphic classes. For example API may return "UIElement" type, but cPtr would actually be
+        // of type "Text". Here we would fetch type "Text" from type registry.
         if (!$imclassname.SWIGTypeRegistry.TryGetValue($imclassname.$csclazznameSWIGTypeId(cPtr), out type))
           type = typeof($csclassname);
         if (type == typeof($csclassname))
+          // A fast path when type is not polymorphic. Using activator is not exactly cheap.
           result = new $csclassname(cPtr, cMemoryOwn);
         else
+          // Type is polymorphic. Use activator to construct object from opaque Type object.
           result = ($csclassname)global::System.Activator.CreateInstance(type, global::System.Reflection.BindingFlags.Instance|global::System.Reflection.BindingFlags.NonPublic|global::System.Reflection.BindingFlags.Public, null, new object[]{cPtr, cMemoryOwn}, null);
         return result;
       }
 
       internal $csclassname(global::System.IntPtr cPtr, bool cMemoryOwn) {
-        swigCMemOwn = cMemoryOwn;
+        // Construct a wrapper object wrapping a native instance.
+        // Only most downstream class gets cMemoryOwn=true. Base classes do not.
+        _swigCMemOwn = cMemoryOwn;
         swigCPtr = new global::System.Runtime.InteropServices.HandleRef(this, cPtr);
         if (cMemoryOwn) {
-          bool strongRef = AddRef() > 1;
+          var isStrong = Refs() > 0;
+          var handleType = isStrong ? global::System.Runtime.InteropServices.GCHandleType.Normal : global::System.Runtime.InteropServices.GCHandleType.Weak;
           SetScriptObject(global::System.Runtime.InteropServices.GCHandle.ToIntPtr(
-            global::System.Runtime.InteropServices.GCHandle.Alloc(this,
-              strongRef ? global::System.Runtime.InteropServices.GCHandleType.Normal :
-                          global::System.Runtime.InteropServices.GCHandleType.Weak)));
+            global::System.Runtime.InteropServices.GCHandle.Alloc(this, handleType)), isStrong);
         }
       }
 
       internal static global::System.Runtime.InteropServices.HandleRef getCPtr($csclassname obj) {
         return (obj == null) ? new global::System.Runtime.InteropServices.HandleRef(null, global::System.IntPtr.Zero) : obj.swigCPtr;
       }
-
-      internal virtual bool GetOwnsMemory() { return swigCMemOwn; }
-      internal virtual void SetOwnsMemory(bool owns) { swigCMemOwn = owns; }
     %}
 
     %typemap(csbody_derived, directorsetup="\n        SetupSwigDirector();") TYPE %{
       [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]
       private global::System.Runtime.InteropServices.HandleRef swigCPtr;
       [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]
-      private bool swigCMemOwn;
+      private bool _swigCMemOwn = false;
       internal static $csclassname wrap(global::System.IntPtr cPtr, bool cMemoryOwn) {
+        // This function gets called when we want to turn a native cPtr into managed instance. For example when some
+        // method returns a pointer to a wrapped object.
         if (cPtr == global::System.IntPtr.Zero)
           return null;
-
-        cMemoryOwn = true;  // Managed instances always keep reference to subclass of RefCounted
+        // Obtain GCHandle stored in RefCounted.
         var handle = $imclassname.RefCounted_GetScriptObject(new global::System.Runtime.InteropServices.HandleRef(null, cPtr));
         $csclassname result = null;
         if (handle != global::System.IntPtr.Zero) {
+          // Fetch managed object from returned GCHandle and return it as this particular cPtr already has a wrapper object instance.
           var gchandle = global::System.Runtime.InteropServices.GCHandle.FromIntPtr(handle);
           return ($csclassname)gchandle.Target;
         }
-
+        // GCHandle is null. cPtr does not have a managed wrapper object yet. We will create one.
         global::System.Type type;
+        // Most downstream class always owns instance of RefCounted.
+        cMemoryOwn = true;
+        // Look up a most downstream type in type registry. This is important, because it allows us to use correct
+        // wrapper type for polymorphic classes. For example API may return "UIElement" type, but cPtr would actually be
+        // of type "Text". Here we would fetch type "Text" from type registry.
         if (!$imclassname.SWIGTypeRegistry.TryGetValue($imclassname.$csclazznameSWIGTypeId(cPtr), out type))
           type = typeof($csclassname);
         if (type == typeof($csclassname))
+          // A fast path when type is not polymorphic. Using activator is not exactly cheap.
           result = new $csclassname(cPtr, cMemoryOwn);
         else
+          // Type is polymorphic. Use activator to construct object from opaque Type object.
           result = ($csclassname)global::System.Activator.CreateInstance(type, global::System.Reflection.BindingFlags.Instance|global::System.Reflection.BindingFlags.NonPublic|global::System.Reflection.BindingFlags.Public, null, new object[]{cPtr, cMemoryOwn}, null);
         return result;
       }
 
       internal $csclassname(global::System.IntPtr cPtr, bool cMemoryOwn) : base($imclassname.$csclazznameSWIGUpcast(cPtr), false) {
-        swigCMemOwn = cMemoryOwn;
+        // Construct a wrapper object wrapping a native instance.
+        // Only most downstream class gets cMemoryOwn=true. Base classes do not.
+        _swigCMemOwn = cMemoryOwn;
         swigCPtr = new global::System.Runtime.InteropServices.HandleRef(this, cPtr);$directorsetup
         if (cMemoryOwn) {
-          bool strongRef = AddRef() > 1;
+          var isStrong = Refs() > 0;
+          var handleType = isStrong ? global::System.Runtime.InteropServices.GCHandleType.Normal : global::System.Runtime.InteropServices.GCHandleType.Weak;
           SetScriptObject(global::System.Runtime.InteropServices.GCHandle.ToIntPtr(
-            global::System.Runtime.InteropServices.GCHandle.Alloc(this,
-              strongRef ? global::System.Runtime.InteropServices.GCHandleType.Normal :
-                          global::System.Runtime.InteropServices.GCHandleType.Weak)));
+            global::System.Runtime.InteropServices.GCHandle.Alloc(this, handleType)), isStrong);
         }
       }
 
       internal static global::System.Runtime.InteropServices.HandleRef getCPtr($csclassname obj) {
         return (obj == null) ? new global::System.Runtime.InteropServices.HandleRef(null, global::System.IntPtr.Zero) : obj.swigCPtr;
       }
-
-      internal override bool GetOwnsMemory() { return swigCMemOwn; }
-      internal override void SetOwnsMemory(bool owns) { swigCMemOwn = owns; }
     %}
 
-    // C# wrapper does this instead
-    %refobject   TYPE "//$this->AddRef();        // Called by C# wrapper wrap() or constructor."
-    %unrefobject TYPE "//$this->ReleaseRef();    // Called by C# wrapper Dispose().\n  assert(false);   // This destructor should never be called, ReleaseRef() handles destruction."
+    %typemap(csdispose) TYPE %{
+      ~$csclassname() {
+        if (!Expired) {
+          Dispose(false);
+        }
+      }
+
+      public void Dispose() {
+        // Free object when refcounting is not in use. If object had any references added through it's lifetime - last
+        // ReleaseRef() will invoke Dispose(true) instead and this call will be noop.
+        if (!Expired && !IsScriptStrongRef())
+          Dispose(true);
+      }
+    %}
+    %typemap(csdispose_derived) TYPE ""
+
+    %typemap(csdisposing, methodname="Dispose", methodmodifiers="protected", parameters="bool disposing") TYPE {
+      lock(this) {
+        $typemap(csdisposed_extra_early_optional, TYPE)
+        // FreeGCHandle();
+        if (_swigCMemOwn) {
+          if (Refs() > 0)
+            throw new global::System.InvalidOperationException("Objects with active references can not be disposed.");
+          _swigCMemOwn = false;
+          if (!IsScriptStrongRef())
+            $imcall;
+        }
+
+        if (swigCPtr.Handle != global::System.IntPtr.Zero)
+          swigCPtr = new global::System.Runtime.InteropServices.HandleRef(null, global::System.IntPtr.Zero);
+        if (disposing) {
+          global::System.GC.SuppressFinalize(this);
+        }
+        $typemap(csdisposed_extra_optional, TYPE)
+      }
+    }
+
+    %typemap(csdisposing_derived, methodname="Dispose", methodmodifiers="protected", parameters="bool disposing") TYPE {
+      lock(this) {
+        $typemap(csdisposed_extra_early_optional, TYPE)
+        if (_swigCMemOwn) {
+          if (Refs() > 0)
+            throw new global::System.InvalidOperationException("Objects with active references can not be disposed.");
+          _swigCMemOwn = false;
+          if (!IsScriptStrongRef())
+            $imcall;
+        }
+        if (swigCPtr.Handle != global::System.IntPtr.Zero)
+          swigCPtr = new global::System.Runtime.InteropServices.HandleRef(null, global::System.IntPtr.Zero);
+        base.Dispose(disposing);
+        $typemap(csdisposed_extra_optional, TYPE)
+      }
+    }
 
     // SharedPtr
     %typemap(ctype)  Urho3D::SharedPtr<TYPE> "TYPE*"                               // c layer type
@@ -143,84 +207,6 @@
         $*1_ltype $1Ref($input);
         $1 = &$1Ref;
     %}
-
-    %typemap(csdispose) TYPE %{
-      ~$csclassname() {
-        lock (this) {
-          Dispose(false);
-        }
-      }
-
-      public void Dispose() {
-        Dispose(true);
-        global::System.GC.SuppressFinalize(this);
-      }
-    %}
-    %typemap(csdispose_derived) TYPE ""
-
-  %typemap(csdisposing, methodname="Dispose", methodmodifiers="protected", parameters="bool disposing") TYPE {
-    lock(this) {
-      $typemap(csdisposed_extra_early_optional, TYPE)
-      if (swigCPtr.Handle != global::System.IntPtr.Zero) {
-        if (swigCMemOwn) {
-          swigCMemOwn = false;
-          var numReferences = Refs();
-          if (numReferences <= 0)
-            throw new global::System.InvalidOperationException("Wrapper owns instance which expired already. Wrapper is broken.");
-
-          var handle = SwapScriptObject(global::System.IntPtr.Zero);
-          if (disposing) {
-            if (numReferences > 1)
-              throw new global::System.InvalidOperationException($"Disposing of '{GetType().Name}' object that is still referenced is not allowed.");
-            ReleaseRef();           // Possible native object deallocation
-          } else {
-            if (numReferences > 1 && GetType() != typeof($csclassname))
-              throw new global::System.InvalidOperationException($"Disposing of '{GetType().Name}' object that is still referenced is not allowed. Wrapper is broken.");
-            ReleaseRefSafe();       // Possible native object deallocation on the main thread on next frame
-          }
-          if (handle != global::System.IntPtr.Zero) {
-            global::System.Runtime.InteropServices.GCHandle.FromIntPtr(handle).Free();
-          }
-        }
-        swigCPtr = new global::System.Runtime.InteropServices.HandleRef(null, global::System.IntPtr.Zero);
-      }
-      $typemap(csdisposed_extra_optional, TYPE)
-    }
-  }
-
-  %typemap(csdisposing_derived, methodname="Dispose", methodmodifiers="protected", parameters="bool disposing") TYPE {
-    lock(this) {
-      $typemap(csdisposed_extra_early_optional, TYPE)
-      if (swigCPtr.Handle != global::System.IntPtr.Zero) {
-        $typemap(csdisposing_extra_optional, TYPE)
-        if (swigCMemOwn) {
-          swigCMemOwn = false;
-          var numReferences = Refs();
-          if (numReferences <= 0)
-            throw new global::System.Exception("Wrapper owns instance which expired already. Wrapper is broken.");
-
-          if (numReferences > 1 && GetType() != typeof($csclassname))
-            throw new global::System.Exception("Disposing of object that is still referenced is not allowed.");
-          var handle = SwapScriptObject(global::System.IntPtr.Zero);
-          if (disposing) {
-            if (numReferences > 1)
-              throw new global::System.InvalidOperationException($"Disposing of '{GetType().Name}' object that is still referenced is not allowed.");
-            ReleaseRef();           // Possible native object deallocation
-          } else {
-            if (numReferences > 1 && GetType() != typeof($csclassname))
-              throw new global::System.InvalidOperationException($"Disposing of '{GetType().Name}' object that is still referenced is not allowed. Wrapper is broken.");
-            ReleaseRefSafe();       // Possible native object deallocation on the main thread on next frame
-          }
-          if (handle != global::System.IntPtr.Zero) {
-            global::System.Runtime.InteropServices.GCHandle.FromIntPtr(handle).Free();
-          }
-        }
-        swigCPtr = new global::System.Runtime.InteropServices.HandleRef(null, global::System.IntPtr.Zero);
-      }
-      base.Dispose(disposing);
-      $typemap(csdisposed_extra_optional, TYPE)
-    }
-  }
 %enddef
 
 // TODO: Fix autoswig script to output these as well.
@@ -234,6 +220,5 @@ URHO3D_REFCOUNTED(Urho3D::ShaderProgram);
 %ignore Urho3D::RefCount;
 %csmethodmodifiers Urho3D::RefCounted::SetScriptObject "internal"
 %csmethodmodifiers Urho3D::RefCounted::GetScriptObject "internal"
-%csmethodmodifiers Urho3D::RefCounted::SwapScriptObject "internal"
 %include "Urho3D/Container/RefCounted.h"
 %include "Urho3D/Container/Ptr.h"

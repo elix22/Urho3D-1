@@ -19,12 +19,12 @@ public:
         , m_buffer( { m_ptr } )
         , m_usage( BlockSize )
     {
-        memUsage.fetch_add( BlockSize, std::memory_order_relaxed );
+        memUsage += BlockSize;
     }
 
     ~Slab()
     {
-        memUsage.fetch_sub( m_usage, std::memory_order_relaxed );
+        memUsage -= m_usage;
         for( auto& v : m_buffer )
         {
             delete[] v;
@@ -34,27 +34,25 @@ public:
     tracy_force_inline void* AllocRaw( size_t size )
     {
         assert( size <= BlockSize );
-        if( m_offset + size > BlockSize )
+        const auto offset = m_offset;
+        if( offset + size > BlockSize )
         {
-            DoAlloc();
+            return DoAlloc( size );
         }
-        void* ret = m_ptr + m_offset;
-        m_offset += size;
-        return ret;
+        else
+        {
+            void* ret = m_ptr + offset;
+            m_offset += size;
+            return ret;
+        }
     }
 
     template<typename T>
     tracy_force_inline T* AllocInit()
     {
         const auto size = sizeof( T );
-        assert( size <= BlockSize );
-        if( m_offset + size > BlockSize )
-        {
-            DoAlloc();
-        }
-        void* ret = m_ptr + m_offset;
+        auto ret = AllocRaw( size );
         new( ret ) T;
-        m_offset += size;
         return (T*)ret;
     }
 
@@ -62,19 +60,13 @@ public:
     tracy_force_inline T* AllocInit( size_t sz )
     {
         const auto size = sizeof( T ) * sz;
-        assert( size <= BlockSize );
-        if( m_offset + size > BlockSize )
-        {
-            DoAlloc();
-        }
-        void* ret = m_ptr + m_offset;
+        auto ret = AllocRaw( size );
         T* ptr = (T*)ret;
         for( size_t i=0; i<sz; i++ )
         {
             new( ptr ) T;
             ptr++;
         }
-        m_offset += size;
         return (T*)ret;
     }
 
@@ -98,22 +90,20 @@ public:
 
     tracy_force_inline void* AllocBig( size_t size )
     {
-        if( m_offset + size <= BlockSize )
+        const auto offset = m_offset;
+        if( offset + size <= BlockSize )
         {
-            void* ret = m_ptr + m_offset;
+            void* ret = m_ptr + offset;
             m_offset += size;
             return ret;
         }
-        else if( size <= BlockSize && BlockSize - m_offset <= 1024 )
+        else if( size <= BlockSize && BlockSize - offset <= 1024 )
         {
-            DoAlloc();
-            void* ret = m_ptr + m_offset;
-            m_offset += size;
-            return ret;
+            return DoAlloc( size );
         }
         else
         {
-            memUsage.fetch_add( size );
+            memUsage += size;
             m_usage += size;
             auto ret = new char[size];
             m_buffer.emplace_back( ret );
@@ -125,7 +115,7 @@ public:
     {
         if( m_buffer.size() > 1 )
         {
-            memUsage.fetch_sub( m_usage - BlockSize, std::memory_order_relaxed );
+            memUsage -= m_usage - BlockSize;
             m_usage = BlockSize;
             for( int i=1; i<m_buffer.size(); i++ )
             {
@@ -145,13 +135,15 @@ public:
     Slab& operator=( Slab&& ) = delete;
 
 private:
-    void DoAlloc()
+    void* DoAlloc( uint32_t willUseBytes )
     {
-        m_ptr = new char[BlockSize];
-        m_offset = 0;
+        auto ptr = new char[BlockSize];
+        m_ptr = ptr;
+        m_offset = willUseBytes;
         m_buffer.emplace_back( m_ptr );
-        memUsage.fetch_add( BlockSize, std::memory_order_relaxed );
+        memUsage += BlockSize;
         m_usage += BlockSize;
+        return ptr;
     }
 
     char* m_ptr;

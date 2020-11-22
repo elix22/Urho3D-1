@@ -19,8 +19,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-
-#include <Urho3D/Resource/XMLFile.h>
 #include <Urho3D/Core/CoreEvents.h>
 #include <Urho3D/Core/StringUtils.h>
 #include <Urho3D/Graphics/Graphics.h>
@@ -32,6 +30,9 @@
 #include <Urho3D/Resource/ResourceCache.h>
 #include <Urho3D/Resource/ResourceEvents.h>
 #include <Urho3D/SystemUI/SystemUI.h>
+#if URHO3D_RMLUI
+#   include <Urho3D/RmlUI/RmlUI.h>
+#endif
 
 #include <regex>
 #include <EASTL/sort.h>
@@ -41,10 +42,13 @@
 
 #include "Editor.h"
 #include "EditorEvents.h"
+#include "Pipeline/Pipeline.h"
 #include "Project.h"
-#include "Plugins/ModulePlugin.h"
-#include "Plugins/ScriptBundlePlugin.h"
-#include "Tabs/ConsoleTab.h"
+#if URHO3D_PLUGINS
+#   include "Plugins/ModulePlugin.h"
+#   include "Plugins/PluginManager.h"
+#   include "Plugins/ScriptBundlePlugin.h"
+#endif
 #include "Tabs/Scene/SceneTab.h"
 #include "Tabs/ResourceTab.h"
 
@@ -58,33 +62,42 @@ Project::Project(Context* context)
 #if URHO3D_PLUGINS
     , plugins_(new PluginManager(context))
 #endif
+    , undo_(new UndoStack(context))
 {
-    SubscribeToEvent(E_EDITORRESOURCESAVED, URHO3D_HANDLER(Project, OnEditorResourceSaved));
-    SubscribeToEvent(E_RESOURCERENAMED, URHO3D_HANDLER(Project, OnResourceRenamed));
-    SubscribeToEvent(E_RESOURCEBROWSERDELETE, URHO3D_HANDLER(Project, OnResourceBrowserDelete));
-    SubscribeToEvent(E_ENDFRAME, URHO3D_HANDLER(Project, OnEndFrame));
+    SubscribeToEvent(E_EDITORRESOURCESAVED, &Project::OnEditorResourceSaved);
+    SubscribeToEvent(E_RESOURCERENAMED, &Project::OnResourceRenamed);
+    SubscribeToEvent(E_RESOURCEBROWSERDELETE, &Project::OnResourceBrowserDelete);
+    SubscribeToEvent(E_ENDFRAME, &Project::OnEndFrame);
     context_->RegisterSubsystem(pipeline_);
+#if URHO3D_PLUGINS
     context_->RegisterSubsystem(plugins_);
+#endif
+    context_->RegisterSubsystem(undo_);
 
     // Key bindings
     auto* editor = GetSubsystem<Editor>();
     editor->keyBindings_.Bind(ActionType::SaveProject, this, &Project::SaveProject);
+    editor->keyBindings_.Bind(ActionType::Undo, this, &Project::OnUndo);
+    editor->keyBindings_.Bind(ActionType::Redo, this, &Project::OnRedo);
     editor->settingsTabs_.Subscribe(this, &Project::RenderSettingsUI);
 }
 
 Project::~Project()
 {
+    context_->RemoveSubsystem(undo_->GetType());
     context_->RemoveSubsystem(pipeline_->GetType());
+#if URHO3D_PLUGINS
     context_->RemoveSubsystem(plugins_->GetType());
-
-    if (context_->GetSystemUI())
+#endif
+    if (context_->GetSubsystem<SystemUI>())
         ui::GetIO().IniFilename = nullptr;
 
-    if (auto* cache = context_->GetCache())
+    if (auto* cache = context_->GetSubsystem<ResourceCache>())
     {
         cache->RemoveResourceDir(GetCachePath());
         for (const ea::string& resourcePath : resourcePaths_)
             cache->RemoveResourceDir(projectFileDir_ + resourcePath);
+        cache->AddResourceDir(coreDataPath_);
         cache->SetAutoReloadResources(false);
     }
 
@@ -127,12 +140,15 @@ bool Project::LoadProject(const ea::string& projectPath)
 
     // Default resources directory for new projects.
     if (resourcePaths_.empty())
-        resourcePaths_.push_back("Resources");
+    {
+        resourcePaths_.push_back("Resources/");
+        resourcePaths_.push_back("CoreData/");
+    }
 
     // Default resource path is first resource directory in the list.
     defaultResourcePath_ = projectFileDir_ + resourcePaths_.front();
 
-    if (context_->GetSystemUI())
+    if (context_->GetSubsystem<SystemUI>())
     {
         uiConfigPath_ = projectFileDir_ + ".ui.ini";
         defaultUiPlacement_ = !fs->FileExists(uiConfigPath_);
@@ -159,6 +175,20 @@ bool Project::LoadProject(const ea::string& projectPath)
     }
 #endif
 
+    // Find CoreData path, it will be useful for other subsystems later.
+    for (const ea::string& resourcePath : cache->GetResourceDirs())
+    {
+        if (resourcePath.ends_with("/CoreData/"))
+        {
+            coreDataPath_ = resourcePath;
+            break;
+        }
+    }
+    assert(!coreDataPath_.empty());
+    cache->RemoveResourceDir(coreDataPath_);
+    if (!fs->DirExists(projectFileDir_ + "CoreData/"))
+        fs->CopyDir(coreDataPath_, projectFileDir_ + "CoreData/");
+
     // Register asset dirs
     cache->AddResourceDir(GetCachePath(), 0);
     for (int i = 0; i < resourcePaths_.size(); i++)
@@ -171,9 +201,19 @@ bool Project::LoadProject(const ea::string& projectPath)
     }
     cache->SetAutoReloadResources(true);
 
+#if URHO3D_RMLUI
+    // TODO: Sucks. Newly added fonts wont work.
+    auto* ui = GetSubsystem<RmlUI>();
+    ea::vector<ea::string> fonts;
+    cache->Scan(fonts, "Fonts/", "*.ttf", SCAN_FILES, true);
+    cache->Scan(fonts, "Fonts/", "*.otf", SCAN_FILES, true);
+    for (const ea::string& font : fonts)
+        ui->LoadFont(Format("Fonts/{}", font));
+#endif
+
 #if URHO3D_PLUGINS
     // Clean up old copies of reloadable files.
-    if (!context_->GetEngine()->IsHeadless())
+    if (!context_->GetSubsystem<Engine>()->IsHeadless())
     {
         // Normal execution cleans up old versions of plugins.
         StringVector files;
@@ -184,6 +224,9 @@ bool Project::LoadProject(const ea::string& projectPath)
                 fs->Delete(fs->GetProgramDir() + fileName);
         }
     }
+#if URHO3D_CSHARP
+    plugins_->Load(ScriptBundlePlugin::GetTypeStatic(), "Scripts");
+#endif
 #endif
     pipeline_->EnableWatcher();
     pipeline_->BuildCache(nullptr, PipelineBuildFlag::SKIP_UP_TO_DATE);
@@ -192,7 +235,7 @@ bool Project::LoadProject(const ea::string& projectPath)
 
 bool Project::SaveProject()
 {
-    if (context_->GetEngine()->IsHeadless())
+    if (context_->GetSubsystem<Engine>()->IsHeadless())
     {
         URHO3D_LOGERROR("Headless instance is supposed to use project as read-only.");
         return false;
@@ -251,7 +294,7 @@ bool Project::SaveProject()
 bool Project::Serialize(Archive& archive)
 {
     const int version = 1;
-    if (!archive.IsInput() && context_->GetEngine()->IsHeadless())
+    if (!archive.IsInput() && context_->GetSubsystem<Engine>()->IsHeadless())
     {
         URHO3D_LOGERROR("Headless instance is supposed to use project as read-only.");
         return false;
@@ -267,12 +310,18 @@ bool Project::Serialize(Archive& archive)
         SerializeValue(archive, "defaultScene", defaultScene_);
         SerializeValue(archive, "resourcePaths", resourcePaths_);
 
+        if (archive.IsInput())
+        {
+            for (ea::string& path : resourcePaths_)
+                path = AddTrailingSlash(path);
+        }
+
         if (!pipeline_->Serialize(archive))
             return false;
-
+#if URHO3D_PLUGINS
         if (!plugins_->Serialize(archive))
             return false;
-
+#endif
         using namespace EditorProjectSerialize;
         SendEvent(E_EDITORPROJECTSERIALIZE, P_ARCHIVE, (void*)&archive);
     }
@@ -295,7 +344,7 @@ void Project::RenderSettingsUI()
 
             explicit ProjectSettingsState(Project* project)
             {
-                project->context_->GetFileSystem()->ScanDir(scenes_, project->GetResourcePath(), "*.xml", SCAN_FILES, true);
+                project->context_->GetSubsystem<FileSystem>()->ScanDir(scenes_, project->GetResourcePath(), "*.xml", SCAN_FILES, true);
                 for (auto it = scenes_.begin(); it != scenes_.end();)
                 {
                     if (GetContentType(project->context_, *it) == CTYPE_SCENE)
@@ -404,7 +453,7 @@ void Project::RenderSettingsUI()
                 else
                 {
                     pipeline_->watcher_.StopWatching();
-                    resourcePaths_.push_back(state->newResourceDir_);
+                    resourcePaths_.push_back(AddTrailingSlash(state->newResourceDir_));
                     fs->CreateDirsRecursive(absolutePath);
                     cache->AddResourceDir(absolutePath, resourcePaths_.size());
                     pipeline_->EnableWatcher();
@@ -445,10 +494,16 @@ void Project::RenderSettingsUI()
             }
 
             if (i == 0)
+            {
                 ui::PushStyleColor(ImGuiCol_Text, ui::GetStyle().Colors[ImGuiCol_TextDisabled]);
-            bool deleted = ui::Button(ICON_FA_TRASH_ALT) && i > 0;
+                ui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+            }
+            bool deleted = ui::Button(ICON_FA_TRASH_ALT);
             if (i == 0)
+            {
+                ui::PopItemFlag();
                 ui::PopStyleColor();        // ImGuiCol_TextDisabled
+            }
             ui::SameLine();
 
             ui::TextUnformatted(resourcePaths_[i].c_str());
@@ -501,6 +556,22 @@ void Project::OnEndFrame(StringHash, VariantMap&)
         SaveProject();
         saveProjectTimer_.Reset();
     }
+}
+
+void Project::OnUndo()
+{
+    if (ui::IsAnyItemActive() || !undo_->IsTrackingEnabled())
+        return;
+
+    undo_->Undo();
+}
+
+void Project::OnRedo()
+{
+    if (ui::IsAnyItemActive() || !undo_->IsTrackingEnabled())
+        return;
+
+    undo_->Redo();
 }
 
 }

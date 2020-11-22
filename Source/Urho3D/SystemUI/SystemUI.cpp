@@ -65,7 +65,30 @@ SystemUI::SystemUI(Urho3D::Context* context, ImGuiConfigFlags flags)
     // UI subsystem is responsible for managing cursors and that interferes with ImGui.
     io.ConfigFlags |= flags;
 
+    PlatformInitialize();
+
+    // Subscribe to events
+    SubscribeToEvent(E_SDLRAWINPUT, [this](StringHash, VariantMap& args) { OnRawEvent(args); });
+    SubscribeToEvent(E_SCREENMODE, [this](StringHash, VariantMap& args) { OnScreenMode(args); });
+    SubscribeToEvent(E_INPUTEND, [this](StringHash, VariantMap& args) { OnInputEnd(args); });
+    SubscribeToEvent(E_ENDRENDERING, [this](StringHash, VariantMap&) { OnRenderEnd(); });
+    SubscribeToEvent(E_ENDFRAME, [this](StringHash, VariantMap&) { referencedTextures_.clear(); });
+    SubscribeToEvent(E_DEVICELOST, [this](StringHash, VariantMap&) { PlatformShutdown(); });
+    SubscribeToEvent(E_DEVICERESET, [this](StringHash, VariantMap&) { PlatformInitialize(); });
+    SubscribeToEvent(E_MOUSEVISIBLECHANGED, &SystemUI::OnMouseVisibilityChanged);
+}
+
+SystemUI::~SystemUI()
+{
+    PlatformShutdown();
+    ui::DestroyContext(imContext_);
+    imContext_ = nullptr;
+}
+
+void SystemUI::PlatformInitialize()
+{
     Graphics* graphics = GetSubsystem<Graphics>();
+    ImGuiIO& io = ui::GetIO();
     io.DisplaySize = { static_cast<float>(graphics->GetWidth()), static_cast<float>(graphics->GetHeight()) };
 #if URHO3D_OPENGL
     ImGui_ImplSDL2_InitForOpenGL(static_cast<SDL_Window*>(graphics->GetSDLWindow()), graphics->GetImpl()->GetGLContext());
@@ -84,44 +107,13 @@ SystemUI::SystemUI(Urho3D::Context* context, ImGuiConfigFlags flags)
 #else
     ImGui_ImplDX9_Init(graphics->GetImpl()->GetDevice());
 #endif
-
-    // Subscribe to events
-    SubscribeToEvent(E_SDLRAWINPUT, [this](StringHash, VariantMap& args) { OnRawEvent(args); });
-    SubscribeToEvent(E_SCREENMODE, [this](StringHash, VariantMap& args) { OnScreenMode(args); });
-    SubscribeToEvent(E_INPUTEND, [this](StringHash, VariantMap& args) { OnInputEnd(args); });
-    SubscribeToEvent(E_ENDRENDERING, [this](StringHash, VariantMap&) { OnRenderEnd(); });
-    SubscribeToEvent(E_ENDFRAME, [this](StringHash, VariantMap&) { referencedTextures_.clear(); });
-    SubscribeToEvent(E_DEVICELOST, [this](StringHash, VariantMap&) { PlatformShutdown(); });
-    SubscribeToEvent(E_DEVICERESET, [this](StringHash, VariantMap&) { PlatformInitialize(); });
-}
-
-SystemUI::~SystemUI()
-{
-#if URHO3D_OPENGL
-    ImGui_ImplOpenGL3_Shutdown();
-#elif URHO3D_D3D11
-    ImGui_ImplDX11_Shutdown();
-#else
-    ImGui_ImplDX9_Shutdown();
-#endif
-    ImGui_ImplSDL2_Shutdown();
-    ui::DestroyContext(imContext_);
-    imContext_ = nullptr;
-}
-
-void SystemUI::PlatformInitialize()
-{
-#if URHO3D_OPENGL
-    ImGui_ImplOpenGL3_CreateDeviceObjects();
-#elif URHO3D_D3D11
-    ImGui_ImplDX11_CreateDeviceObjects();
-#else
-    ImGui_ImplDX9_CreateDeviceObjects();
-#endif
 }
 
 void SystemUI::PlatformShutdown()
 {
+    ImGuiIO& io = ui::GetIO();
+    referencedTextures_.clear();
+    ClearPerScreenFonts();
 #if URHO3D_OPENGL
     ImGui_ImplOpenGL3_DestroyDeviceObjects();
 #elif URHO3D_D3D11
@@ -129,14 +121,17 @@ void SystemUI::PlatformShutdown()
 #else
     ImGui_ImplDX9_InvalidateDeviceObjects();
 #endif
+    ImGui_ImplSDL2_Shutdown();
 }
 
 void SystemUI::OnRawEvent(VariantMap& args)
 {
     assert(imContext_ != nullptr);
+    using namespace SDLRawInput;
 
-    auto* evt = static_cast<SDL_Event*>(args[SDLRawInput::P_SDLEVENT].Get<void*>());
-    auto& io = ui::GetIO();
+    auto* evt = static_cast<SDL_Event*>(args[P_SDLEVENT].Get<void*>());
+    ImGuiContext& g = *ui::GetCurrentContext();
+    ImGuiIO& io = ui::GetIO();
     switch (evt->type)
     {
     case SDL_MOUSEMOTION:
@@ -163,6 +158,32 @@ void SystemUI::OnRawEvent(VariantMap& args)
         ImGui_ImplSDL2_ProcessEvent(evt);
         break;
     }
+
+    // Consume events handled by imgui, unless explicitly told not to.
+    if (!passThroughEvents_)
+    {
+        switch (evt->type)
+        {
+        case SDL_KEYDOWN:
+        case SDL_KEYUP:
+            args[P_CONSUMED] = io.WantCaptureKeyboard;
+            break;
+        case SDL_TEXTINPUT:
+            args[P_CONSUMED] = io.WantTextInput;
+            break;
+        case SDL_MOUSEMOTION:
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+        case SDL_MOUSEWHEEL:
+        case SDL_FINGERDOWN:
+        case SDL_FINGERUP:
+        case SDL_FINGERMOTION:
+            args[P_CONSUMED] = io.WantCaptureMouse;
+            break;
+        default:
+            break;
+        }
+    }
 }
 
 void SystemUI::OnScreenMode(VariantMap& args)
@@ -186,7 +207,7 @@ void SystemUI::OnInputEnd(VariantMap& args)
 
     ImGuiIO& io = ui::GetIO();
     Graphics* graphics = GetSubsystem<Graphics>();
-    referencedTextures_.push_back(fontTexture_);
+    Input* input = GetSubsystem<Input>();
     if (graphics && graphics->IsInitialized())
     {
 #if URHO3D_OPENGL
@@ -198,7 +219,12 @@ void SystemUI::OnInputEnd(VariantMap& args)
 #endif
         ImGui_ImplSDL2_NewFrame(graphics->GetWindow());
     }
+
     ui::NewFrame();
+
+    if (!input->IsMouseVisible())
+        ui::SetMouseCursor(ImGuiMouseCursor_None);
+
     ImGuizmo::BeginFrame();
 }
 
@@ -212,8 +238,6 @@ void SystemUI::OnRenderEnd()
     URHO3D_PROFILE("SystemUiRender");
     SendEvent(E_ENDRENDERINGSYSTEMUI);
 
-    Graphics* graphics = GetSubsystem<Graphics>();
-
     ImGuiIO& io = ui::GetIO();
     ui::Render();
 
@@ -222,9 +246,11 @@ void SystemUI::OnRenderEnd()
 #elif URHO3D_D3D11
     // Resetting render target view required because if last view we rendered into was a texture
     // ImGui would try to render into that texture and we would see no UI on screen.
+    auto* graphics = GetSubsystem<Graphics>();
     auto* graphicsImpl = graphics->GetImpl();
     ID3D11RenderTargetView* defaultRenderTargetView = graphicsImpl->GetDefaultRenderTargetView();
     graphicsImpl->GetDeviceContext()->OMSetRenderTargets(1, &defaultRenderTargetView, nullptr);
+    graphicsImpl->MarkRenderTargetsDirty();
     ImGui_ImplDX11_RenderDrawData(ui::GetDrawData());
 #else
     ImGui_ImplDX9_RenderDrawData(ui::GetDrawData());
@@ -241,8 +267,15 @@ void SystemUI::OnRenderEnd()
         SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
 #elif URHO3D_D3D11
         graphicsImpl->GetDeviceContext()->OMSetRenderTargets(1, &defaultRenderTargetView, nullptr);
+        graphicsImpl->MarkRenderTargetsDirty();
 #endif
     }
+}
+
+void SystemUI::OnMouseVisibilityChanged(StringHash, VariantMap& args)
+{
+    using namespace MouseVisibleChanged;
+    ui::SetMouseCursor(args[P_VISIBLE].GetBool() ? ImGuiMouseCursor_Arrow : ImGuiMouseCursor_None);
 }
 
 ImFont* SystemUI::AddFont(const ea::string& fontPath, const ImWchar* ranges, float size, bool merge)
@@ -302,37 +335,64 @@ ImFont* SystemUI::AddFontCompressed(const void* data, unsigned dsize, const char
 void SystemUI::ReallocateFontTexture()
 {
     ImGuiIO& io = ui::GetIO();
+    ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+
+    // Store main atlas, imgui expects it.
+    io.Fonts->TexID = AllocateFontTexture(io.Fonts);
+
+#if URHO3D_SYSTEMUI_VIEWPORTS
+    // Initialize per-screen font atlases.
+    ClearPerScreenFonts();
+    io.AllFonts.push_back(io.Fonts);
+    for (ImGuiPlatformMonitor& monitor : platform_io.Monitors)
+    {
+        if (monitor.DpiScale == 1.0f)
+            continue; // io.Fonts has default scale.
+        ImFontAtlas* atlas = new ImFontAtlas();
+        io.Fonts->CloneInto(atlas, monitor.DpiScale);
+        io.AllFonts.push_back(atlas);
+        atlas->TexID = AllocateFontTexture(atlas);
+    }
+#endif
+}
+
+void SystemUI::ClearPerScreenFonts()
+{
+    ImGuiIO& io = ui::GetIO();
+    fontTextures_.clear();
+    for (int i = 1; i < io.AllFonts.Size; i++) // First atlas (which is io.Fonts) is not deleted because it is handled separately by library itself.
+        delete io.AllFonts[i];
+    io.AllFonts.clear();
+}
+
+ImTextureID SystemUI::AllocateFontTexture(ImFontAtlas* atlas)
+{
     // Create font texture.
     unsigned char* pixels;
     int width, height;
-    io.Fonts->ClearTexData();
+    atlas->ClearTexData();
 
-    ImGuiFreeType::BuildFontAtlas(io.Fonts, ImGuiFreeType::ForceAutoHint);
-    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    ImGuiFreeType::BuildFontAtlas(atlas, ImGuiFreeType::ForceAutoHint);
+    atlas->GetTexDataAsRGBA32(&pixels, &width, &height);
 
-    if (!fontTexture_)
-    {
-        fontTexture_ = context_->CreateObject<Texture2D>();
-        fontTexture_->SetNumLevels(1);
-        fontTexture_->SetFilterMode(FILTER_BILINEAR);
-    }
+    SharedPtr<Texture2D> fontTexture = context_->CreateObject<Texture2D>();
+    fontTexture->SetNumLevels(1);
+    fontTexture->SetFilterMode(FILTER_BILINEAR);
+    fontTexture->SetSize(width, height, Graphics::GetRGBAFormat());
+    fontTexture->SetData(0, 0, 0, width, height, pixels);
+    fontTextures_.push_back(fontTexture);
 
-    if (fontTexture_->GetWidth() != width || fontTexture_->GetHeight() != height)
-        fontTexture_->SetSize(width, height, Graphics::GetRGBAFormat());
-
-    fontTexture_->SetData(0, 0, 0, width, height, pixels);
-
-    // Store our identifier
+    // Store return texture identifier
 #if URHO3D_D3D11
-    io.Fonts->TexID = fontTexture_->GetShaderResourceView();
+    return fontTexture->GetShaderResourceView();
 #else
-    io.Fonts->TexID = fontTexture_->GetGPUObject();
+    return fontTexture->GetGPUObject();
 #endif
 }
 
 void SystemUI::ApplyStyleDefault(bool darkStyle, float alpha)
 {
-    ImGuiStyle& style = ui::GetStyle();
+    ImGuiStyle& style = ui::GetStyleTemplate();
     style.ScrollbarSize = 10.f;
     if (darkStyle)
         ui::StyleColorsDark(&style);
@@ -342,38 +402,16 @@ void SystemUI::ApplyStyleDefault(bool darkStyle, float alpha)
     style.FrameRounding = 3.0f;
 }
 
-bool SystemUI::IsAnyItemActive() const
-{
-    return ui::IsAnyItemActive();
-}
-
-bool SystemUI::IsAnyItemHovered() const
-{
-    return ui::IsAnyItemHovered() || ui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
-}
-
-void SystemUI::Start()
-{
-    ImGuiIO& io = ui::GetIO();
-    if (io.Fonts->Fonts.empty())
-    {
-        io.Fonts->AddFontDefault();
-        ReallocateFontTexture();
-    }
-    Graphics* graphics = context_->GetGraphics();
-    io.DisplaySize = {static_cast<float>(graphics->GetWidth()), static_cast<float>(graphics->GetHeight())};
-}
-
 int ToImGui(MouseButton button)
 {
     switch (button)
     {
     case MOUSEB_LEFT:
-        return 0;
+        return ImGuiMouseButton_Left;
     case MOUSEB_MIDDLE:
-        return 2;
+        return ImGuiMouseButton_Middle;
     case MOUSEB_RIGHT:
-        return 1;
+        return ImGuiMouseButton_Right;
     case MOUSEB_X1:
         return 3;
     case MOUSEB_X2:
@@ -420,24 +458,48 @@ ImVec2 ui::GetMouseDragDelta(Urho3D::MouseButton button, float lock_threshold)
     return ui::GetMouseDragDelta(Urho3D::ToImGui(button), lock_threshold);
 }
 
-bool ui::SetDragDropVariant(const char* type, const Urho3D::Variant& variant, ImGuiCond cond)
+bool ui::SetDragDropVariant(const ea::string& types, const Urho3D::Variant& variant, ImGuiCond cond)
 {
-    if (SetDragDropPayload(type, nullptr, 0, cond))
+    if (SetDragDropPayload(types.c_str(), nullptr, 0, cond))
     {
         auto* systemUI = static_cast<Urho3D::SystemUI*>(GetIO().UserData);
-        systemUI->GetContext()->SetGlobalVar(Urho3D::ToString("SystemUI_Drag&Drop_%s", type), variant);
+        systemUI->GetContext()->SetGlobalVar("SystemUI_Drag&Drop_Value", variant);
         return true;
     }
     return false;
 }
 
-const Urho3D::Variant& ui::AcceptDragDropVariant(const char* type, ImGuiDragDropFlags flags)
+const Urho3D::Variant& ui::AcceptDragDropVariant(const ea::string& types, ImGuiDragDropFlags flags)
 {
-    if (AcceptDragDropPayload(type, flags))
+    using namespace Urho3D;
+
+    if (const ImGuiPayload* payload = GetDragDropPayload())
     {
-        auto* systemUI = static_cast<Urho3D::SystemUI*>(GetIO().UserData);
-        return systemUI->GetContext()->GetGlobalVar(Urho3D::ToString("SystemUI_Drag&Drop_%s", type));
+        bool accepted = false;
+        for (const ea::string& type : types.split(','))
+        {
+            const char* t = payload->DataType;
+            while (t < payload->DataType + URHO3D_ARRAYSIZE(payload->DataType))
+            {
+                t = strstr(t, type.c_str());
+                if (t == nullptr)
+                    break;
+
+                const char* tEnd = strstr(t, ",");
+                tEnd = tEnd ? Min(t + strlen(t), tEnd) : t + strlen(t);
+                if ((t == payload->DataType || t[-1] == ',') && (*tEnd == 0 || *tEnd == ','))
+                    accepted = true;
+                t = tEnd;
+            }
+        }
+
+        if (AcceptDragDropPayload(accepted ? payload->DataType : "Smth that won't be accepted.", flags))
+        {
+            SystemUI* systemUI = static_cast<SystemUI*>(GetIO().UserData);
+            return systemUI->GetContext()->GetGlobalVar("SystemUI_Drag&Drop_Value");
+        }
     }
+
     return Urho3D::Variant::EMPTY;
 }
 
@@ -494,14 +556,21 @@ int ui::GetKeyPressedAmount(Urho3D::Key key, float repeat_delay, float rate)
     return GetKeyPressedAmount(SDL_GetScancodeFromKey(key), repeat_delay, rate);
 }
 
-bool ui::ItemMouseActivation(Urho3D::MouseButton button)
+bool ui::ItemMouseActivation(Urho3D::MouseButton button, unsigned flags)
 {
     ImGuiContext& g = *GImGui;
     ImGuiWindow* window = g.CurrentWindow;
     bool hovered = ui::IsItemHovered();
     if (hovered)
         g.HoveredId = window->DC.LastItemId;
-    if (!ui::IsItemActive() && hovered && ui::IsMouseDown(button))
+
+    bool activated = !ui::IsItemActive() && hovered;
+    if (flags == ImGuiItemMouseActivation_Dragging)
+        activated &= ui::IsMouseDragging(button);
+    else
+        activated &= ui::IsMouseClicked(button);
+
+    if (activated)
         ui::SetActiveID(window->DC.LastItemId, window);
     else if (ui::IsItemActive() && !ui::IsMouseDown(button))
         ui::ClearActiveID();

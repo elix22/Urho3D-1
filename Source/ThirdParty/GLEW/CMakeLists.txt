@@ -29,14 +29,15 @@ else ()
     target_compile_definitions(GLEW PUBLIC  -DGLEW_STATIC)
 endif ()
 target_include_directories(GLEW
-    INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/GLEW>
+    SYSTEM BEFORE PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 
 if (WIN32)
     target_link_libraries(GLEW opengl32.lib)
 endif ()
 
-if (NOT URHO3D_MERGE_STATIC_LIBS)
-    install(TARGETS GLEW EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG})
+if (NOT MINI_URHO)
+    if (NOT URHO3D_MERGE_STATIC_LIBS)
+        install(TARGETS GLEW EXPORT Urho3D ARCHIVE DESTINATION ${DEST_ARCHIVE_DIR_CONFIG})
+    endif ()
 endif ()

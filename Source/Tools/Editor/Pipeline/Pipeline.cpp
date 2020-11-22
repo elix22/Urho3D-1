@@ -37,7 +37,6 @@
 #include <Urho3D/Resource/JSONArchive.h>
 
 #include <Toolbox/SystemUI/Widgets.h>
-#include <Toolbox/SystemUI/ResourceBrowser.h>
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
 
 #include <EASTL/sort.h>
@@ -46,7 +45,10 @@
 #include "EditorEvents.h"
 #include "Project.h"
 #include "Pipeline/Pipeline.h"
+#include "Plugins/PluginManager.h"
 #include "Plugins/ModulePlugin.h"
+#include "Tabs/InspectorTab.h"
+#include "Tabs/ResourceTab.h"
 
 namespace Urho3D
 {
@@ -55,10 +57,10 @@ Pipeline::Pipeline(Context* context)
     : Object(context)
     , watcher_(context)
 {
-    if (context_->GetEngine()->IsHeadless())
+    if (context_->GetSubsystem<Engine>()->IsHeadless())
         return;
 
-    SubscribeToEvent(E_ENDFRAME, URHO3D_HANDLER(Pipeline, OnEndFrame));
+    SubscribeToEvent(E_ENDFRAME, &Pipeline::OnEndFrame);
     SubscribeToEvent(E_RESOURCERENAMED, [this](StringHash, VariantMap& args) {
         using namespace ResourceRenamed;
         ea::string from = args[P_FROM].GetString();
@@ -90,8 +92,8 @@ Pipeline::Pipeline(Context* context)
             }
         }
     });
-    SubscribeToEvent(E_UPDATE, [this](StringHash, VariantMap&) { OnUpdate(); });
-    SubscribeToEvent(E_EDITORIMPORTERATTRIBUTEMODIFIED, [this](StringHash, VariantMap& args) { OnImporterModified(args); });
+    SubscribeToEvent(E_UPDATE, &Pipeline::OnUpdate);
+    SubscribeToEvent(E_EDITORIMPORTERATTRIBUTEMODIFIED, &Pipeline::OnImporterModified);
     SubscribeToEvent(E_RESOURCEBROWSERDELETE, [this](StringHash, VariantMap& args) {
         using namespace ResourceBrowserDelete;
         if (Asset* asset = GetAsset(args[P_NAME].GetString(), false))
@@ -138,11 +140,11 @@ void Pipeline::OnEndFrame(StringHash, VariantMap&)
 
     if (!dirtyAssets_.empty())
     {
-        auto* editor = GetSubsystem<Editor>();
+        auto* inspector = GetSubsystem<InspectorTab>();
         MutexLock lock(mutex_);
         Asset* dirty = dirtyAssets_.back();
         dirty->Save();
-        if (editor->IsInspected(dirty))
+        if (inspector->IsInspected(dirty))
         {
             // Asset import may introduce new imported resources which we want to be appear in inspection if importing
             // asset was selected when import triggered.
@@ -170,7 +172,7 @@ Asset* Pipeline::GetAsset(const ea::string& resourceName, bool autoCreate)
 
     for (const ea::string& resourceDir : project->GetResourcePaths())
     {
-        ea::string resourcePath = Format("{}{}/{}", project->GetProjectPath(), resourceDir, resourceName);
+        ea::string resourcePath = Format("{}{}{}", project->GetProjectPath(), resourceDir, resourceName);
         ea::string resourceDirName;
         if (fs->DirExists(resourcePath))
         {
@@ -186,16 +188,14 @@ Asset* Pipeline::GetAsset(const ea::string& resourceName, bool autoCreate)
         if (!autoCreate)
             return nullptr;
 
-        if (fs->Exists(resourcePath))
-        {
-            SharedPtr<Asset> asset(context_->CreateObject<Asset>());
-            asset->SetName(actualResourceName);
-            asset->resourcePath_ = resourcePath;    // TODO: Clean this up!
-            asset->Load();
-            assert(asset->GetName() == actualResourceName);
-            assets_[actualResourceName] = asset;
-            return asset.Get();
-        }
+        SharedPtr<Asset> asset(context_->CreateObject<Asset>());
+        asset->SetName(actualResourceName);
+        asset->virtual_ = !fs->Exists(resourcePath);
+        asset->resourcePath_ = resourcePath;    // TODO: Clean this up!
+        asset->Load();
+        assert(asset->GetName() == actualResourceName);
+        assets_[actualResourceName] = asset;
+        return asset.Get();
     }
 
     return nullptr;
@@ -283,7 +283,7 @@ SharedPtr<WorkItem> Pipeline::ScheduleImport(Asset* asset, Flavor* flavor, Pipel
 
     asset->AddRef();
     asset->importing_ = true;
-    return context_->GetWorkQueue()->AddWorkItem([this, asset, flavor, flags]()
+    return context_->GetSubsystem<WorkQueue>()->AddWorkItem([this, asset, flavor, flags]()
     {
         if (ExecuteImport(asset, flavor, flags))
         {
@@ -332,7 +332,7 @@ bool Pipeline::ExecuteImport(Asset* asset, Flavor* flavor, PipelineBuildFlags fl
 void Pipeline::BuildCache(Flavor* flavor, PipelineBuildFlags flags)
 {
     auto* project = GetSubsystem<Project>();
-    auto* fs = context_->GetFileSystem();
+    auto* fs = context_->GetSubsystem<FileSystem>();
 
     if (flavor == nullptr)
         flavor = GetDefaultFlavor();
@@ -352,7 +352,7 @@ void Pipeline::BuildCache(Flavor* flavor, PipelineBuildFlags flags)
 
 void Pipeline::WaitForCompletion() const
 {
-    context_->GetWorkQueue()->Complete(0);
+    context_->GetSubsystem<WorkQueue>()->Complete(0);
 }
 
 void Pipeline::CreatePaksAsync(Flavor* flavor)
@@ -382,7 +382,7 @@ void Pipeline::CreatePaksAsync(Flavor* flavor)
      */
 }
 
-void Pipeline::OnUpdate()
+void Pipeline::OnUpdate(StringHash, VariantMap&)
 {
     if (packager_.NotNull())
     {
@@ -402,7 +402,7 @@ void Pipeline::OnUpdate()
     }
     else if (!pendingPackageFlavor_.empty())
     {
-        auto* fs = context_->GetFileSystem();
+        auto* fs = context_->GetSubsystem<FileSystem>();
         auto* project = GetSubsystem<Project>();
 
         Flavor* flavor = pendingPackageFlavor_.front();
@@ -569,7 +569,7 @@ Flavor* Pipeline::GetFlavor(const ea::string& name) const
     return *it;
 }
 
-void Pipeline::OnImporterModified(VariantMap& args)
+void Pipeline::OnImporterModified(StringHash, VariantMap& args)
 {
     using namespace EditorImporterAttributeModified;
     auto* asset = static_cast<Asset*>(args[P_ASSET].GetPtr());
@@ -626,7 +626,7 @@ bool Pipeline::CookSettings() const
         JSONOutputArchive archive(&file);
         if (!settings.Serialize(archive))
             return false;
-        context_->GetFileSystem()->CreateDirsRecursive(flavor->GetCachePath());
+        context_->GetSubsystem<FileSystem>()->CreateDirsRecursive(flavor->GetCachePath());
         file.SaveFile(flavor->GetCachePath() + "Settings.json");
     }
     return true;
@@ -672,7 +672,7 @@ bool Pipeline::CookCacheInfo() const
         if (!SerializeStringMap(archive, "cacheInfo", "map", mapping))
             return false;
 
-        context_->GetFileSystem()->CreateDirsRecursive(flavor->GetCachePath());
+        context_->GetSubsystem<FileSystem>()->CreateDirsRecursive(flavor->GetCachePath());
         file.SaveFile(Format("{}CacheInfo.json", flavor->GetCachePath(), flavor->GetName()));
     }
     return true;
@@ -908,7 +908,7 @@ void Pipeline::RenderSettingsUI()
                     ui::SameLine();
                     ui::SetCursorPosX(startPos + 180 + ui::GetStyle().ItemSpacing.x);
                     UI_ITEMWIDTH(100)
-                        RenderSingleAttribute(value);
+                        RenderAttribute("", value);
                     ui::SameLine();
                     ui::SetCursorPosX(startPos + 280 + ui::GetStyle().ItemSpacing.x);
                     if (ui::Button(ICON_FA_TRASH))

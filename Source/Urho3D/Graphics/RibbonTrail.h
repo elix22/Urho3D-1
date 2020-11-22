@@ -81,92 +81,122 @@ public:
     void Update(const FrameInfo &frame) override;
     /// Calculate distance and prepare batches for rendering. May be called from worker thread(s), possibly re-entrantly.
     void UpdateBatches(const FrameInfo& frame) override;
-    /// Prepare geometry for rendering. Called from a worker thread if possible (no GPU update.)
+    /// Prepare geometry for rendering. Called from a worker thread if possible (no GPU update).
     void UpdateGeometry(const FrameInfo& frame) override;
     /// Return whether a geometry update is necessary, and if it can happen in a worker thread.
     UpdateGeometryType GetUpdateGeometryType() override;
 
     /// Set material.
+    /// @property
     void SetMaterial(Material* material);
     /// Set material attribute.
     void SetMaterialAttr(const ResourceRef& value);
     /// Set distance between points.
+    /// @property
     void SetVertexDistance(float length);
     /// Set width of the tail. Only works for face camera trail type.
+    /// @property
     void SetWidth(float width);
     /// Set vertex blended color for start of trail.
+    /// @property
     void SetStartColor(const Color& color);
     /// Set vertex blended scale for end of trail.
+    /// @property
     void SetEndColor(const Color& color);
     /// Set vertex blended color for start of trail.
+    /// @property
     void SetStartScale(float startScale);
     /// Set vertex blended scale for end of trail.
+    /// @property
     void SetEndScale(float endScale);
     /// Set how the trail behave.
+    /// @property
     void SetTrailType(TrailType type);
     /// Set base velocity applied to the trail.
+    /// @property
     void SetBaseVelocity(const Vector3& baseVelocity);
     /// Set whether tails are sorted by distance. Default false.
+    /// @property
     void SetSorted(bool enable);
     /// Set tail time to live.
+    /// @property
     void SetLifetime(float time);
     /// Set whether trail should be emitting.
+    /// @property
     void SetEmitting(bool emitting);
     /// Set whether to update when trail emitter are not visible.
+    /// @property
     void SetUpdateInvisible(bool enable);
     /// Set number of column for every tails. Can be useful for fixing distortion at high angle.
+    /// @property
     void SetTailColumn(unsigned tailColumn);
     /// Set animation LOD bias.
+    /// @property
     void SetAnimationLodBias(float bias);
     /// Mark for bounding box and vertex buffer update. Call after modifying the trails.
     void Commit();
 
     /// Return material.
+    /// @property
     Material* GetMaterial() const;
 
     /// Return material attribute.
     ResourceRef GetMaterialAttr() const;
 
     /// Get distance between points.
+    /// @property
     float GetVertexDistance() const { return vertexDistance_;  }
 
     /// Get width of the trail.
+    /// @property
     float GetWidth() const { return width_; }
 
     /// Get vertex blended color for start of trail.
+    /// @property
     const Color& GetStartColor() const { return startColor_; }
 
     /// Get vertex blended color for end of trail.
+    /// @property
     const Color& GetEndColor() const { return endColor_;  }
 
     /// Get vertex blended scale for start of trail.
+    /// @property
     float GetStartScale() const { return startScale_; }
 
     /// Get vertex blended scale for end of trail.
+    /// @property
     float GetEndScale() const { return endScale_; }
 
     /// Return whether tails are sorted.
+    /// @property
     bool IsSorted() const { return sorted_; }
 
     /// Return tail time to live.
+    /// @property
     float GetLifetime() const {return lifetime_;}
 
     /// Return animation LOD bias.
+    /// @property
     float GetAnimationLodBias() const { return animationLodBias_; }
 
     /// Return how the trail behave.
+    /// @property
     TrailType GetTrailType() const { return trailType_; }
 
     /// Return base trail velocity.
+    /// @property
     const Vector3& GetBaseVelocity() const { return baseVelocity_; }
 
     /// Return number of column for tails.
+    /// @property
     unsigned GetTailColumn() const { return tailColumn_; }
 
     /// Return whether is currently emitting.
+    /// @property
     bool IsEmitting() const { return emitting_ ; }
 
     /// Return whether to update when trail emitter are not visible.
+    /// @property
     bool GetUpdateInvisible() const { return updateInvisible_; }
 
 protected:
@@ -197,7 +227,7 @@ private:
     void UpdateBufferSize();
     /// Rewrite RibbonTrail vertex buffer.
     void UpdateVertexBuffer(const FrameInfo& frame);
-    /// Update/Rebuild tail mesh only if position changed (called by UpdateBatches())
+    /// Update/Rebuild tail mesh only if position changed (called by UpdateBatches()).
     void UpdateTail(float timeStep);
     /// Geometry.
     SharedPtr<Geometry> geometry_;
@@ -211,7 +241,7 @@ private:
     bool bufferSizeDirty_;
     /// Vertex buffer needs rewrite flag.
     bool bufferDirty_;
-    /// Previous position of tail
+    /// Previous position of tail.
     Vector3 previousPosition_;
     /// Distance between points. Basically is tail length.
     float vertexDistance_;
@@ -229,7 +259,7 @@ private:
     float endScale_;
     /// Last scene timestep.
     float lastTimeStep_;
-    /// Lifetime
+    /// Lifetime.
     float lifetime_;
     /// Number of columns for every tails.
     unsigned tailColumn_;
@@ -241,7 +271,7 @@ private:
     Vector3 previousOffset_;
     /// Trail pointers for sorting.
     ea::vector<TrailPoint*> sortedPoints_;
-    /// Force update flag (ignore animation LOD momentarily.)
+    /// Force update flag (ignore animation LOD momentarily).
     bool forceUpdate_;
     /// Currently emitting flag.
     bool emitting_;

@@ -30,94 +30,6 @@ using namespace Urho3D;
 namespace ImGui
 {
 
-struct UIStateWrapper
-{
-    ~UIStateWrapper()
-    {
-        Unset();
-    }
-    
-    void Set(void* state, void(*deleter)(void*)=nullptr)
-    {
-        lastUse_ = ui::GetCurrentContext()->FrameCount;
-        state_ = state;
-        deleter_ = deleter;
-    }
-
-    void Unset()
-    {
-        if (deleter_ && state_)
-            deleter_(state_);
-        state_ = nullptr;
-        deleter_ = nullptr;
-    }
-
-    void* Get()
-    {
-        lastUse_ = ui::GetCurrentContext()->FrameCount;
-        return state_;
-    }
-
-    bool IsExpired()
-    {
-        return (ui::GetCurrentContext()->FrameCount - lastUse_) > 1;
-    }
-
-protected:
-    /// User state pointer.
-    void* state_ = nullptr;
-    /// Function that handles deleting state object when it becomes unused.
-    void(*deleter_)(void* state) = nullptr;
-    /// Frame when value was last used.
-    int lastUse_ = 0;
-};
-
-static ea::unordered_map<ImGuiID, UIStateWrapper> uiState_;
-static int uiStateLastGcFrame_ = 0;
-
-void SetUIStateP(void* state, void(*deleter)(void*))
-{
-    auto id = ui::GetCurrentWindow()->IDStack.back();
-    uiState_[id].Set(state, deleter);
-}
-
-void* GetUIStateP()
-{
-    void* result = nullptr;
-    auto id = ui::GetCurrentWindow()->IDStack.back();
-    auto it = uiState_.find(id);
-    if (it != uiState_.end())
-        result = it->second.Get();
-
-    int currentFrame = ui::GetCurrentContext()->FrameCount;
-    if (uiStateLastGcFrame_ != currentFrame)
-    {
-        uiStateLastGcFrame_ = currentFrame;
-        for (auto jt = uiState_.begin(); jt != uiState_.end();)
-        {
-            if (jt->second.IsExpired())
-            {
-                jt->second.Unset();
-                jt = uiState_.erase(jt);
-            }
-            else
-                ++jt;
-        }
-    }
-
-    return result;
-}
-
-void ExpireUIStateP()
-{
-    auto it = uiState_.find(ui::GetCurrentWindow()->IDStack.back());
-    if (it != uiState_.end())
-    {
-        it->second.Unset();
-        uiState_.erase(it);
-    }
-}
-
 int DoubleClickSelectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags, const ImVec2& size)
 {
     if (ui::Selectable(label, p_selected, flags | ImGuiSelectableFlags_AllowDoubleClick, size))
@@ -168,24 +80,34 @@ void SetHelpTooltip(const char* text, Key requireKey)
         ui::SetTooltip("%s", text);
 }
 
+float IconButtonSize()
+{
+    ImGuiContext& g = *GImGui;
+    return g.FontSize + g.Style.FramePadding.y * 2.0f;
+}
+
 bool IconButton(const char* label)
 {
-    float size = ui::GetItemRectSize().y;
+    float size = ui::IconButtonSize();
     return ui::Button(label, {size, size});
 }
 
-bool MaskSelector(unsigned int* mask)
+bool MaskSelector(const char* title, unsigned int* mask)
 {
     bool modified = false;
     const ImGuiStyle& style = ui::GetStyle();
     ImVec2 pos = ui::GetCursorPos();
+    float w = CalcItemWidth();
+    float x16 = Round(16.0f * style.PointSize);
+    ImVec2 buttonSize(Round(w / (x16 + style.PointSize)), Round(GImGui->FontSize * 0.5f + style.ItemSpacing.y));
 
-    for (auto row = 0; row < 2; row++)
+    ui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+    for (unsigned row = 0; row < 2; row++)
     {
-        for (auto col = 0; col < 16; col++)
+        for (unsigned col = 0; col < 16; col++)
         {
-            auto bitPosition = row * 16 + col;
-            int bitMask = 1 << bitPosition;
+            unsigned bitPosition = row * x16 + col;
+            unsigned bitMask = 1u << bitPosition;
             bool selected = (*mask & bitMask) != 0;
             if (selected)
             {
@@ -199,7 +121,7 @@ bool MaskSelector(unsigned int* mask)
             }
 
             ui::PushID(bitMask);
-            if (ui::Button("", {8, 9}))
+            if (ui::Button("", buttonSize))
             {
                 modified = true;
                 *mask ^= bitMask;
@@ -207,12 +129,19 @@ bool MaskSelector(unsigned int* mask)
             if (ui::IsItemHovered())
                 ui::SetTooltip("%d", bitPosition);
             ui::PopID();
-            ui::SameLine(0, 0);
+            ui::SameLine(0, style.PointSize);
             ui::PopStyleColor(2);
         }
         ui::NewLine();
         if (row < 1)
-            ui::SetCursorPos({pos.x, pos.y + 9});
+            ui::SetCursorPos({pos.x, pos.y + buttonSize.y + style.PointSize});
+    }
+    ui::PopStyleVar();
+
+    if (title && *title)
+    {
+        ui::SetCursorPos(pos + ImVec2(w + style.ItemSpacing.x, 0));
+        ui::TextUnformatted(title);
     }
 
     return modified;
@@ -478,6 +407,175 @@ void TextElided(const char* text, float width)
     }
     ui::SetCursorPosX(x + width);
     ui::NewLine();
+}
+
+bool Autocomplete(ImGuiID id, ea::string* buf, Urho3D::StringVector* suggestions, int maxVisible)
+{
+    IM_ASSERT(buf != nullptr);
+    IM_ASSERT(suggestions != nullptr);
+    if (suggestions->empty())
+        return false;
+
+    bool committed = false;
+    const ImGuiStyle& style = ui::GetStyle();
+    ImGuiWindow* window = ui::GetCurrentWindow();
+    ui::PushID(id);
+    bool& isOpen = *window->StateStorage.GetBoolRef(window->IDStack.back());
+    bool isFocused = ui::IsItemFocused() || ui::IsItemActive();
+    isOpen |= isFocused;
+    if (isOpen)
+    {
+        ui::SetNextWindowPos({ui::GetItemRectMin().x, ui::GetItemRectMax().y});
+        ui::SetNextWindowSize({ui::GetItemRectSize().x, Min(suggestions->size(), maxVisible) * window->CalcFontSize() + style.WindowPadding.y * 2});
+        if (ui::Begin("##autocomplete", &isOpen, ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_Tooltip))
+        {
+            ui::BringWindowToDisplayFront(ui::GetCurrentWindow());
+            isFocused |= ui::IsWindowFocused();
+            for (const ea::string& suggestion : *suggestions)
+            {
+                if (!suggestion.contains(*buf))
+                    continue;
+                if (ui::Selectable(suggestion.c_str()) || (ui::IsItemFocused() && ui::IsKeyPressedMap(ImGuiKey_Enter)))
+                {
+                    *buf = suggestion;
+                    committed = true;
+                }
+            }
+        }
+        ui::End();
+        // isOpen &= isFocused;
+        isOpen &= !ui::IsKeyPressedMap(ImGuiKey_Escape);    // Close on [esc] press.
+    }
+    ui::PopID();
+    if (committed)
+        isOpen = false;
+    return committed;
+}
+
+bool WasItemActive()
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiID lastID = g.CurrentWindow->DC.LastItemId;
+    if ((!g.ActiveId || g.ActiveId != lastID) && g.LastActiveId == lastID)
+    {
+        g.LastActiveId = 0;
+        g.LastActiveIdTimer = 0.0f;
+        return true;
+    }
+    return false;
+}
+
+void ItemAlign(float itemWidth)
+{
+    ui::SetCursorPosX(ui::GetCursorPosX() + ui::CalcItemWidth() - itemWidth);
+}
+
+void TextCentered(const char* text)
+{
+    ui::SetCursorPosX((ui::GetContentRegionMax().x - ui::CalcTextSize(text).x) / 2);
+    ui::TextUnformatted(text);
+}
+
+void ItemLabel(ea::string_view title, const Color* color, ItemLabelFlags flags)
+{
+    ImGuiWindow* window = ui::GetCurrentWindow();
+    const ImVec2 lineStart = ui::GetCursorScreenPos();
+    const ImGuiStyle& style = ui::GetStyle();
+    float fullWidth = ui::GetContentRegionAvail().x;
+    float itemWidth = ui::CalcItemWidth() + style.ItemSpacing.x;
+    ImVec2 textSize = ui::CalcTextSize(title.begin(), title.end());
+    ImRect textRect;
+    textRect.Min = ui::GetCursorScreenPos();
+    if (flags & ItemLabelFlag::Right)
+        textRect.Min.x = textRect.Min.x + itemWidth;
+    textRect.Max = textRect.Min;
+    textRect.Max.x += fullWidth - itemWidth;
+    textRect.Max.y += textSize.y;
+
+    ui::SetCursorScreenPos(textRect.Min);
+
+    ImGui::AlignTextToFramePadding();
+    // Adjust text rect manually because we render it directly into a drawlist instead of using public functions.
+    textRect.Min.y += window->DC.CurrLineTextBaseOffset;
+    textRect.Max.y += window->DC.CurrLineTextBaseOffset;
+
+    ItemSize(textRect);
+    if (ItemAdd(textRect, window->GetID(title.data(), title.data() + title.size())))
+    {
+        if (color != nullptr)
+            ui::PushStyleColor(ImGuiCol_Text, color->ToUInt());
+
+        RenderTextEllipsis(ui::GetWindowDrawList(), textRect.Min, textRect.Max, textRect.Max.x,
+            textRect.Max.x, title.data(), title.data() + title.size(), &textSize);
+
+        if (color != nullptr)
+            ui::PopStyleColor();
+
+        if (textRect.GetWidth() < textSize.x && ui::IsItemHovered())
+            ui::SetTooltip("%.*s", (int)title.size(), title.data());
+    }
+    if (flags & ItemLabelFlag::Left)
+    {
+        ui::SetCursorScreenPos(textRect.Max - ImVec2{0, textSize.y + window->DC.CurrLineTextBaseOffset});
+        ui::SameLine();
+    }
+    else if (flags & ItemLabelFlag::Right)
+        ui::SetCursorScreenPos(lineStart);
+}
+
+static const ImGuiDataTypeInfo GDataTypeInfo[] =
+{
+    { sizeof(char),             "%d",   "%d"    },  // ImGuiDataType_S8
+    { sizeof(unsigned char),    "%u",   "%u"    },
+    { sizeof(short),            "%d",   "%d"    },  // ImGuiDataType_S16
+    { sizeof(unsigned short),   "%u",   "%u"    },
+    { sizeof(int),              "%d",   "%d"    },  // ImGuiDataType_S32
+    { sizeof(unsigned int),     "%u",   "%u"    },
+#ifdef _MSC_VER
+    { sizeof(ImS64),            "%I64d","%I64d" },  // ImGuiDataType_S64
+    { sizeof(ImU64),            "%I64u","%I64u" },
+#else
+    { sizeof(ImS64),            "%lld", "%lld"  },  // ImGuiDataType_S64
+    { sizeof(ImU64),            "%llu", "%llu"  },
+#endif
+    { sizeof(float),            "%f",   "%f"    },  // ImGuiDataType_Float (float are promoted to double in va_arg)
+    { sizeof(double),           "%f",   "%lf"   },  // ImGuiDataType_Double
+};
+IM_STATIC_ASSERT(IM_ARRAYSIZE(GDataTypeInfo) == ImGuiDataType_COUNT);
+// Copied from DragScalarN() from imgui_widgets.cpp and modified to support different formats.
+bool DragScalarFormatsN(const char* label, ImGuiDataType data_type, void* p_data, int components, float v_speed, const void* p_min, const void* p_max, const char** formats, float power)
+{
+    ImGuiWindow* window = ui::GetCurrentWindow();
+    if (window->SkipItems)
+        return false;
+
+    ImGuiContext& g = *GImGui;
+    bool value_changed = false;
+    ui::BeginGroup();
+    ui::PushID(label);
+    ui::PushMultiItemsWidths(components, ui::CalcItemWidth());
+    size_t type_size = GDataTypeInfo[data_type].Size;
+    for (int i = 0; i < components; i++)
+    {
+        ui::PushID(i);
+        if (i > 0)
+            ui::SameLine(0, g.Style.ItemInnerSpacing.x);
+        value_changed |= ui::DragScalar("", data_type, p_data, v_speed, p_min, p_max, formats ? formats[i] : GDataTypeInfo[data_type].PrintFmt, power);
+        ui::PopID();
+        ui::PopItemWidth();
+        p_data = (void*)((char*)p_data + type_size);
+    }
+    ui::PopID();
+
+    const char* label_end = ui::FindRenderedTextEnd(label);
+    if (label != label_end)
+    {
+        ui::SameLine(0, g.Style.ItemInnerSpacing.x);
+        ui::TextEx(label, label_end);
+    }
+
+    ui::EndGroup();
+    return value_changed;
 }
 
 }

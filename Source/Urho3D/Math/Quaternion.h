@@ -104,14 +104,14 @@ public:
         FromAngleAxis(angle, Vector3::FORWARD);
     }
 
-    /// Construct from Euler angles (in degrees.) Equivalent to Y*X*Z.
+    /// Construct from Euler angles (in degrees). Equivalent to Y*X*Z.
     Quaternion(float x, float y, float z) noexcept
     {
         FromEulerAngles(x, y, z);
     }
 
-    /// Construct from Euler angles (in degrees.)
-    explicit Quaternion(Vector3 angles) noexcept
+    /// Construct from Euler angles (in degrees).
+    explicit Quaternion(const Vector3& angles) noexcept
     {
         FromEulerAngles(angles.x_, angles.y_, angles.z_);
     }
@@ -298,7 +298,7 @@ public:
 
     /// Define from an angle (in degrees) and axis.
     void FromAngleAxis(float angle, const Vector3& axis);
-    /// Define from Euler angles (in degrees.) Equivalent to Y*X*Z.
+    /// Define from Euler angles (in degrees). Equivalent to Y*X*Z.
     void FromEulerAngles(float x, float y, float z);
     /// Define from the rotation difference between two direction vectors.
     void FromRotationTo(const Vector3& start, const Vector3& end);
@@ -433,18 +433,25 @@ public:
     }
 
     /// Return Euler angles in degrees.
+    /// @property
     Vector3 EulerAngles() const;
     /// Return yaw angle in degrees.
+    /// @property{get_yaw}
     float YawAngle() const;
     /// Return pitch angle in degrees.
+    /// @property{get_pitch}
     float PitchAngle() const;
     /// Return roll angle in degrees.
+    /// @property{get_roll}
     float RollAngle() const;
     /// Return rotation axis.
+    /// @property
     Vector3 Axis() const;
     /// Return rotation angle.
+    /// @property
     float Angle() const;
     /// Return the rotation matrix that corresponds to this quaternion.
+    /// @property
     Matrix3 RotationMatrix() const;
     /// Spherical interpolation with another quaternion.
     Quaternion Slerp(const Quaternion& rhs, float t) const;

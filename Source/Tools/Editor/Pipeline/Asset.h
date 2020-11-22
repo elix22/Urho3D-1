@@ -31,7 +31,7 @@
 #include <Urho3D/IO/Archive.h>
 #include <Urho3D/Scene/Serializable.h>
 #include <Toolbox/IO/ContentUtilities.h>
-#include <Toolbox/Common/UndoManager.h>
+#include <Toolbox/Common/UndoStack.h>
 
 #include "Importers/AssetImporter.h"
 
@@ -81,8 +81,6 @@ public:
     AssetImporter* GetImporter(Flavor* flavor, StringHash type) const;
     /// Returns true when asset importers of any flavor are being executed in worker threads.
     bool IsImporting() const { return importing_; }
-    ///
-    Undo::Manager& GetUndo() { return undo_; }
 
 protected:
     ///
@@ -99,13 +97,13 @@ protected:
     /// Full path to resource. May point to resources or cache directory.
     ea::string resourcePath_;
     /// A content type of this asset.
-    ContentType contentType_ = CTYPE_UNKNOWN;
+    ContentType contentType_ = CTYPE_BINARY;
     /// Map a flavor to a list of importers that this asset will be executing.
     AssetImporterMap importers_;
     /// Flag indicating that asset is being imported.
     std::atomic<bool> importing_{false};
-    /// Asset changes tracker.
-    Undo::Manager undo_{context_};
+    /// Flag indicating that this asset is virtual, and should not be saved.
+    bool virtual_ = false;
 
     friend class Pipeline;
     friend class AssetImporter;

@@ -24,7 +24,7 @@
 #include "SystemUI/Gizmo.h"
 #include "SystemUI/AttributeInspector.h"
 #include "Scene/DebugCameraController.h"
-#include "Common/UndoManager.h"
+#include "Common/UndoStack.h"
 
 
 namespace Urho3D
@@ -33,10 +33,9 @@ namespace Urho3D
 void RegisterToolboxTypes(Context* context)
 {
     context->RegisterFactory<Gizmo>();
-    context->RegisterFactory<AttributeInspector>();
     context->RegisterFactory<DebugCameraController3D>();
     context->RegisterFactory<DebugCameraController2D>();
-    context->RegisterFactory<Undo::Manager>();
+    context->RegisterFactory<UndoStack>();
 }
 
 };

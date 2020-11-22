@@ -42,6 +42,9 @@
 #include "../IO/FileSystem.h"
 #include "../IO/Log.h"
 #include "../IO/PackageFile.h"
+#ifdef URHO3D_GLOW
+#include "../Glow/StaticModelForLightmap.h"
+#endif
 #ifdef URHO3D_IK
 #include "../IK/IK.h"
 #endif
@@ -60,6 +63,9 @@
 #include "../Scene/Scene.h"
 #include "../Scene/SceneEvents.h"
 #include "../UI/UI.h"
+#ifdef URHO3D_RMLUI
+#include "../RmlUI/RmlUI.h"
+#endif
 #ifdef URHO3D_URHO2D
 #include "../Urho2D/Urho2D.h"
 #endif
@@ -138,9 +144,18 @@ Engine::Engine(Context* context) :
     // there may exist multiple instances of UI.
     RegisterUILibrary(context_);
     context_->RegisterSubsystem(new UI(context_));
-
+#ifdef URHO3D_RMLUI
+    RegisterRmlUILibrary(context_);
+    context_->RegisterSubsystem(new RmlUI(context_));
+#endif
     // Register object factories for libraries which are not automatically registered along with subsystem creation
     RegisterSceneLibrary(context_);
+
+#ifdef URHO3D_GLOW
+    // Light baker needs only one class so far, so register it directly.
+    // Extract this code into function if you are adding more.
+    StaticModelForLightmap::RegisterObject(context_);
+#endif
 
 #ifdef URHO3D_IK
     RegisterIKLibrary(context_);
@@ -907,12 +922,12 @@ void Engine::DefineParameters(CLI::App& commandLine, VariantMap& engineParameter
     addFlag("--nothreads", EP_WORKER_THREADS, false, "Disable multithreading");
     addFlag("-v,--vsync", EP_VSYNC, true, "Enable vsync");
     addFlag("-t,--tripple-buffer", EP_TRIPLE_BUFFER, true, "Enable tripple-buffering");
-    addFlag("-w,--windoed", EP_FULL_SCREEN, false, "Windowed mode");
+    addFlag("-w,--windowed", EP_FULL_SCREEN, false, "Windowed mode");
     addFlag("-f,--full-screen", EP_FULL_SCREEN, true, "Full screen mode");
     addFlag("--borderless", EP_BORDERLESS, true, "Borderless window mode");
     addFlag("--lowdpi", EP_HIGH_DPI, false, "Disable high-dpi handling");
     addFlag("--highdpi", EP_HIGH_DPI, true, "Enable high-dpi handling");
-    addFlag("-s,--resizeable", EP_WINDOW_RESIZABLE, true, "Enable window resizing");
+    addFlag("-s,--resizable", EP_WINDOW_RESIZABLE, true, "Enable window resizing");
     addFlag("-q,--quiet", EP_LOG_QUIET, true, "Disable logging");
     addFlagInternal("-l,--log", "Logging level", [&](CLI::results_t res) {
         unsigned logLevel = GetStringListIndex(ea::string(res[0].c_str()).to_upper().c_str(), logLevelNames, M_MAX_UNSIGNED);
@@ -922,8 +937,8 @@ void Engine::DefineParameters(CLI::App& commandLine, VariantMap& engineParameter
         return true;
     })->set_custom_option(createOptions("string in {%s}", logLevelNames).c_str());
     addOptionString("--log-file", EP_LOG_NAME, "Log output file");
-    addOptionInt("-x,--height", EP_WINDOW_WIDTH, "Window width");
-    addOptionInt("-y,--width", EP_WINDOW_WIDTH, "Window height");
+    addOptionInt("-x,--width", EP_WINDOW_WIDTH, "Window width");
+    addOptionInt("-y,--height", EP_WINDOW_HEIGHT, "Window height");
     addOptionInt("--monitor", EP_MONITOR, "Create window on the specified monitor");
     addOptionInt("--hz", EP_REFRESH_RATE, "Use custom refresh rate");
     addOptionInt("-m,--multisample", EP_MULTI_SAMPLE, "Multisampling samples");

@@ -51,10 +51,10 @@ macro (define_engine_source_files)
     endforeach ()
 endmacro()
 
-define_engine_source_files (Container Core Engine IO Math)
+define_engine_source_files (Container Core IO Math)
 
 if (NOT MINI_URHO)
-    define_engine_source_files (Audio Input Resource Scene UI)
+    define_engine_source_files (Audio Engine Input Resource Scene UI)
     define_engine_source_files (NORECURSE . Graphics)
     if (URHO3D_OPENGL)
         define_engine_source_files (Graphics/OpenGL)
@@ -63,6 +63,17 @@ if (NOT MINI_URHO)
     elseif (URHO3D_D3D9)
         define_engine_source_files (Graphics/Direct3D9)
     endif ()
+else ()
+    # URHO_MINI is a reduced version of library meant for native tools. Scripting is not needed.
+    set (URHO3D_CSHARP OFF)
+endif ()
+
+if (URHO3D_RMLUI)
+    define_engine_source_files (RmlUI)
+endif ()
+
+if (URHO3D_GLOW)
+    define_engine_source_files (Glow)
 endif ()
 
 if (URHO3D_IK)
@@ -100,20 +111,20 @@ if (APPLE AND NOT IOS)
     list (APPEND SOURCE_FILES IO/MacFileWatcher.m)
 endif ()
 
-if (MINI_URHO)
-    # Avoid building freetype
-    list (REMOVE_ITEM SOURCE_FILES UI/FontFaceFreeType.cpp)
-endif ()
-
 add_library(Urho3D ${SOURCE_FILES} ${HEADER_FILES} $<$<CXX_COMPILER_ID:MSVC>:${rbfx_SOURCE_DIR}/script/rbfx.natvis>)
 target_include_directories(Urho3D PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/..>        # For parent projects to find auto-generated engine headers
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>           # Misc configured headers
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>> # Urho3D.h
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>        # For parent projects to find engine headers
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../ThirdParty> # For accessing includes of some third party libs that do not have 'include' folder with headers (like tracy).
     $<INSTALL_INTERFACE:${DEST_BASE_INCLUDE_DIR}>
     $<INSTALL_INTERFACE:${DEST_THIRDPARTY_HEADERS_DIR}>
 )
+
+if (URHO3D_PCH)
+    target_precompile_headers(Urho3D PRIVATE $<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/Precompiled.h>>)
+endif ()
 
 # Add any variables starting with URHO3D_ as project defines
 get_cmake_property(__cmake_variables VARIABLES)
@@ -139,7 +150,7 @@ endforeach()
 
 # Define generated source files
 if (NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/librevision.h)
-    execute_process (COMMAND ${CMAKE_COMMAND} -DFILENAME=${CMAKE_CURRENT_BINARY_DIR}/librevision.h -P ${rbfx_SOURCE_DIR}/CMake/Modules/GetUrhoRevision.cmake
+    execute_process (COMMAND ${CMAKE_COMMAND} -DFILENAME=${CMAKE_CURRENT_BINARY_DIR}/librevision.h -P ${rbfx_SOURCE_DIR}/cmake/Modules/GetUrhoRevision.cmake
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_QUIET ERROR_QUIET)
 endif ()
 
@@ -173,6 +184,9 @@ set (THIRD_PARTY_DEPENDENCIES
     EASTL
     entt
     ETCPACK
+    xatlas
+    embree
+    RmlUi
 )
 
 if (URHO3D_MERGE_STATIC_LIBS)
@@ -313,14 +327,19 @@ if (WEB)
     set_target_properties(Urho3D PROPERTIES LINK_FLAGS_RELEASE "-s AGGRESSIVE_VARIABLE_ELIMINATION=1")
     target_compile_options(Urho3D PUBLIC $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:-g4>)
     target_link_libraries(Urho3D PUBLIC "-s DISABLE_EXCEPTION_CATCHING=1" "-s EXTRA_EXPORTED_RUNTIME_METHODS=['Pointer_stringify']" "-s FORCE_FILESYSTEM=1" "-s DISABLE_DEPRECATED_FIND_EVENT_TARGET_BEHAVIOR=0")
-    target_link_libraries(Urho3D PUBLIC "-s TOTAL_MEMORY=${EMSCRIPTEN_TOTAL_MEMORY}")
+    target_link_libraries(Urho3D PUBLIC "-s TOTAL_MEMORY=${EMSCRIPTEN_TOTAL_MEMORY}" --bind)
     if (EMSCRIPTEN_ALLOW_MEMORY_GROWTH)
         target_link_libraries(Urho3D PUBLIC "-s ALLOW_MEMORY_GROWTH=1" --no-heap-copy)
     endif ()
 endif ()
 
 if (BUILD_SHARED_LIBS)
-    target_compile_definitions(Urho3D PRIVATE -DURHO3D_EXPORTS INTERFACE -DURHO3D_IMPORTS)
+    target_compile_definitions(Urho3D
+        PRIVATE -DURHO3D_EXPORTS=1 -DAL_EXPORTS=1 -DBOX2D_EXPORTS=1 -DCIVETWEB_DLL_EXPORTS=1 -DEASTL_EXPORTS=1
+            -DEASTDC_EXPORTS=1 -DEATHREAD_EXPORTS=1 -DURHO3D_EXPORTS=1 -DFMT_EXPORT=1 -DGLEW_BUILD=1 -DIMGUI_EXPORTS=1
+            -DLZ4_DLL_EXPORT=1 -DNFD_EXPORTS=1 -DPUGIXML_EXPORTS=1 -DSDL_EXPORTS=1 -DTRACY_EXPORTS=1 -DRmlCore_EXPORTS=1
+            -DRmlDebugger_EXPORTS=1
+    )
 else ()
     target_compile_definitions (Urho3D PUBLIC -DURHO3D_STATIC)
 endif ()
@@ -341,6 +360,9 @@ endforeach ()
 if (MINGW)
     include (CheckStructHasMember)
     check_struct_has_member (RTL_OSVERSIONINFOW dwOSVersionInfoSize minwindef.h\;winnt.h HAVE_RTL_OSVERSIONINFOW)
+    if (EXISTS ${CMAKE_BINARY_DIR}/MinGW-crosscompiler-includes)
+        target_include_directories(Urho3D PUBLIC $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/MinGW-crosscompiler-includes>)
+    endif ()
 endif ()
 
 # Workarounds
@@ -349,9 +371,16 @@ if (WEB OR ANDROID)
         target_compile_options(Urho3D PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++${URHO3D_CXX_STANDARD}>)
     endif ()
 endif ()
-if (APPLE)
-    target_link_options(Urho3D PUBLIC -stdlib=libc++)
+
+if (CLANG AND NOT WEB)
+    if (APPLE)
+        target_compile_options(Urho3D INTERFACE $<INSTALL_INTERFACE:-stdlib=libc++>)
+        target_link_libraries(Urho3D INTERFACE $<INSTALL_INTERFACE:c++ c++abi>)
+    else ()
+        target_link_libraries(Urho3D INTERFACE $<INSTALL_INTERFACE:stdc++ m>)
+    endif ()
 endif ()
+
 # Group them together under 'Resources' in Xcode IDE
 source_group(Resources FILES ${RESOURCE_FILES})     # RESOURCE_PAKS could be empty if packaging is not requested
 target_sources(Urho3D PRIVATE ${RESOURCE_DIRS})
@@ -373,44 +402,29 @@ if (URHO3D_CSHARP)
         )
     endif ()
     unset (CMAKE_SWIG_OUTDIR)
-    configure_file(CSharp/Managed/AssemblyInfo.cs.in ${CMAKE_CURRENT_BINARY_DIR}/Urho3DCSharp/Managed/AssemblyInfo.cs @ONLY)
-    file (GLOB_RECURSE EXTRA_NATIVE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/CSharp/Native/*.h ${CMAKE_CURRENT_SOURCE_DIR}/CSharp/Native/*.cpp)
-    file (GLOB_RECURSE WRAPPER_FILES )
 
-    # Prefer binary dir - generated msvc solution with .csproj projects included in it.
-    file (GLOB VS_SOLUTIONS ${CMAKE_BINARY_DIR}/*.sln)
-    if (NOT VS_SOLUTIONS)
-        # On unixes source directory will contain manually crafted .sln
-        file (GLOB VS_SOLUTIONS ${CMAKE_SOURCE_DIR}/*.sln)
-        if (NOT VS_SOLUTIONS)
-            # Otherwise use engine .sln
-            file (GLOB VS_SOLUTIONS ${rbfx_SOURCE_DIR}/*.sln)
-        endif ()
-    endif ()
-
-    add_msbuild_target(TARGET NugetRestore EXCLUDE_FROM_ALL ARGS ${VS_SOLUTIONS} /t:restore /m)
-    # Dummy file which is used by Urho3D target and causes nuget restore to run at
-    # least once automatically.
-    add_custom_command (OUTPUT ${CMAKE_BINARY_DIR}/NugetRestore.h
-        COMMAND ${TERM_WORKAROUND} ${MSBUILD} ${VS_SOLUTIONS} /t:restore /m /nologo
-            /p:CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR}/ /consoleloggerparameters:ErrorsOnly
-        COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_BINARY_DIR}/NugetRestore.h
-        COMMENT "Nuget restore"
+    add_target_csharp(
+        TARGET Urho3DNet.Scripts
+        PROJECT ${CMAKE_CURRENT_SOURCE_DIR}/CSharp/Urho3DNet.Scripts.csproj
+        OUTPUT ${NET_OUTPUT_DIRECTORY}/Urho3DNet.Scripts.dll
+        DEPENDS Urho3DNet
     )
 
-    target_sources(Urho3D PRIVATE ${EXTRA_NATIVE_FILES} ${CMAKE_CURRENT_BINARY_DIR}/Urho3DCSharp/Urho3DCSHARP_wrap.cxx
-        ${CMAKE_BINARY_DIR}/NugetRestore.h)
+    file (GLOB_RECURSE EXTRA_NATIVE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/CSharp/Native/*.h ${CMAKE_CURRENT_SOURCE_DIR}/CSharp/Native/*.cpp)
+    file (GLOB_RECURSE WRAPPER_FILES)
+
+    target_sources(Urho3D PRIVATE ${EXTRA_NATIVE_FILES} ${CMAKE_CURRENT_BINARY_DIR}/Urho3DCSharp/Urho3DCSHARP_wrap.cxx)
     if (URHO3D_SYSTEMUI)
         target_sources(Urho3D PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/ImGuiCSharp/ImGuiCSHARP_wrap.cxx)
     endif ()
     if (MSVC)
         target_compile_options(Urho3D PRIVATE /bigobj)
     endif ()
+endif ()
 
-    # TODO: Can this be automatized?
-    foreach (dll "Mono.Cecil.dll" "Mono.Cecil.Mdb.dll" "Mono.Cecil.Pdb.dll" "Mono.Cecil.Rocks.dll" "System.Numerics.Vectors.dll")
-        install(FILES "${CMAKE_BINARY_DIR}/${DEST_BIN_DIR_CONFIG}/${dll}" DESTINATION ${DEST_BIN_DIR_CONFIG} OPTIONAL)
-    endforeach ()
+# Install C# dependencies
+if (URHO3D_CSHARP)
+   install (SCRIPT ${rbfx_SOURCE_DIR}/cmake/Install.cmake)
 endif ()
 
 ################################################### SDK preparation ####################################################

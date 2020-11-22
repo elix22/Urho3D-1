@@ -37,6 +37,8 @@
 namespace Urho3D
 {
 
+class UndoStack;
+
 class IHierarchyProvider
 {
 public:
@@ -56,8 +58,6 @@ public:
     virtual bool RenderWindowContent() = 0;
     /// Render toolbar buttons.
     virtual void RenderToolbarButtons() { }
-    /// Update window when it is active.
-    virtual void OnActiveUpdate() { }
     /// Render tab content.
     virtual bool RenderWindow();
     /// Save ui settings.
@@ -97,9 +97,17 @@ public:
     /// Make tab active.
     void Activate() { activateTab_ = true; }
     /// Returns true when loaded resource was modified.
-    virtual bool IsModified() const { return false; }
+    bool IsModified() const { return modified_; }
     /// Closes current tab and unloads it's contents from memory.
     virtual void Close() { open_ = false; }
+    /// Clear any user selection tracked by this tab.
+    virtual void ClearSelection() { }
+    /// Serialize or deserialize selection.
+    virtual bool SerializeSelection(Archive& archive) { return false; }
+    /// Serialize current user selection into a buffer and return it.
+    ByteVector SerializeSelection();
+    /// Deserialize selection from provided buffer and apply it to current tab.
+    bool DeserializeSelection(const ByteVector& data);
 
     /// Sent during rendering of tab context menu.
     Signal<void> onTabContextMenu_;
@@ -134,8 +142,10 @@ protected:
     bool noContentPadding_ = false;
     /// Current window flags.
     ImGuiWindowFlags windowFlags_ = 0;
-    /// Attribute inspector.
-    AttributeInspector inspector_{context_};
+    /// Global undo stack reference.
+    WeakPtr<UndoStack> undo_;
+    /// Flag indicating that tab is modified.
+    bool modified_ = false;
 };
 
 }

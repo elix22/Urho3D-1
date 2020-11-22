@@ -29,6 +29,7 @@
 #include <EASTL/unique_ptr.h>
 
 #include "../Container/Ptr.h"
+#include "../Container/ByteVector.h"
 #include "../Core/TypeTrait.h"
 #include "../Math/Color.h"
 #include "../Math/Matrix3.h"
@@ -90,7 +91,8 @@ using StringVector = ea::vector<ea::string>;
 /// Map of variants.
 using VariantMap = ea::unordered_map<StringHash, Variant>;
 
-/// Byte buffer used by variant.
+/// Deprecated. Use ByteVector instead.
+/// TODO: Rename all instances of VariantBuffer to ByteVector.
 using VariantBuffer = ea::vector<unsigned char>;
 
 /// Typed resource reference.
@@ -185,6 +187,7 @@ struct URHO3D_API ResourceRefList
 };
 
 /// Custom variant value. This type is not abstract to store it in the VariantValue by value.
+/// @nobindtemp
 class CustomVariantValue
 {
     // GetValuePtr expects that CustomVariantValue is always convertible to CustomVariantValueImpl<T>.
@@ -692,7 +695,7 @@ public:
         return *this;
     }
 
-    /// Assign from a StringHash (convert to integer.)
+    /// Assign from a StringHash (convert to integer).
     Variant& operator =(const StringHash& rhs)
     {
         SetType(VAR_INT);
@@ -1425,16 +1428,20 @@ public:
     }
 
     /// Return value's type.
+    /// @property
     VariantType GetType() const { return type_; }
 
     /// Return value's type name.
+    /// @property
     ea::string GetTypeName() const;
     /// Convert value to string. Pointers are returned as null, and VariantBuffer or VariantMap are not supported and return empty.
     ea::string ToString() const;
     /// Return true when the variant value is considered zero according to its actual type.
+    /// @property
     bool IsZero() const;
 
     /// Return true when the variant is empty (i.e. not initialized yet).
+    /// @property
     bool IsEmpty() const { return type_ == VAR_NONE; }
 
     /// Return the value, template version.

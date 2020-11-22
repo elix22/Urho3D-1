@@ -22,8 +22,11 @@
 
 add_library(crn_decomp INTERFACE)
 target_include_directories(crn_decomp INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-install (TARGETS crn_decomp EXPORT Urho3D)
-install (DIRECTORY include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.h)
+
+if (NOT MINI_URHO)
+    install (TARGETS crn_decomp EXPORT Urho3D)
+    install (DIRECTORY include/ DESTINATION ${DEST_THIRDPARTY_HEADERS_DIR}/ FILES_MATCHING PATTERN *.h)
+endif ()
 
 if (NOT URHO3D_TOOLS)
     return ()
@@ -58,7 +61,7 @@ if (WIN32)
 endif ()
 
 if (NOT WIN32 OR MINGW)
-    target_compile_options(crnlib PRIVATE -O3 -fomit-frame-pointer -ffast-math -fno-math-errno -g -fno-strict-aliasing -Wall -Wno-unused-value -Wno-unused -march=core2)
+    target_compile_options(crnlib PRIVATE -O3 -fomit-frame-pointer -ffast-math -fno-math-errno -fno-strict-aliasing -Wall -Wno-unused-value -Wno-unused -march=core2)
     target_link_libraries(crnlib pthread)
 endif ()
 
@@ -72,4 +75,7 @@ file (GLOB CRUNCH_SOURCE_FILES crunch/*.cpp crunch/*.h)
 add_executable (crunch ${CRUNCH_SOURCE_FILES})
 target_link_libraries(crunch crnlib)
 set_target_properties(crunch PROPERTIES FOLDER Tools)
-install(TARGETS crunch RUNTIME DESTINATION ${DEST_BIN_DIR_CONFIG})
+
+if (NOT MINI_URHO)
+    install(TARGETS crunch RUNTIME DESTINATION ${DEST_BIN_DIR_CONFIG})
+endif ()

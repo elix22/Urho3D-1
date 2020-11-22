@@ -29,6 +29,8 @@
 #include <Urho3D/IO/FileSystem.h>
 #include <Urho3D/Resource/ResourceCache.h>
 #include <Urho3D/Resource/XMLFile.h>
+#include <Urho3D/Resource/BinaryFile.h>
+#include <Urho3D/Resource/Image.h>
 #include <Urho3D/SystemUI/SystemUI.h>
 #include <Urho3D/Scene/Scene.h>
 #include <Urho3D/Scene/Node.h>
@@ -44,7 +46,7 @@ const ea::vector<ea::string> archiveExtensions_{".rar", ".zip", ".tar", ".gz", "
 const ea::vector<ea::string> wordExtensions_{".doc", ".docx", ".odt"};
 const ea::vector<ea::string> codeExtensions_{".c", ".cpp", ".h", ".hpp", ".hxx", ".py", ".py3", ".js", ".cs"};
 const ea::vector<ea::string> imagesExtensions_{".png", ".jpg", ".jpeg", ".gif", ".ttf", ".dds", ".psd"};
-const ea::vector<ea::string> textExtensions_{".xml", ".json", ".txt", ".yml", ".scene", ".material", ".ui", ".uistyle", ".node", ".particle"};
+const ea::vector<ea::string> textExtensions_{".xml", ".json", ".txt", ".yml", ".scene", ".material", ".rml", ".rcss", ".node", ".particle"};
 const ea::vector<ea::string> audioExtensions_{".waw", ".ogg", ".mp3"};
 
 FileType GetFileType(const ea::string& fileName)
@@ -100,8 +102,8 @@ ea::string GetFileIcon(const ea::string& fileName)
 
 ContentType GetContentType(Context* context, const ea::string& resourcePath)
 {
-    ResourceCache* cache = context->GetCache();
-    FileSystem* fs = context->GetFileSystem();
+    ResourceCache* cache = context->GetSubsystem<ResourceCache>();
+    FileSystem* fs = context->GetSubsystem<FileSystem>();
 
     if (IsAbsolutePath(resourcePath))
     {
@@ -126,13 +128,13 @@ ContentType GetContentType(Context* context, const ea::string& resourcePath)
         {
             xml = SharedPtr<XMLFile>(new XMLFile(context));
             if (!xml->LoadFile(resourcePath))
-                return CTYPE_UNKNOWN;
+                return CTYPE_BINARY;
         }
         else
-            xml = context->GetCache()->GetResource<XMLFile>(resourcePath);
+            xml = context->GetSubsystem<ResourceCache>()->GetResource<XMLFile>(resourcePath, false);
 
         if (!xml)
-            return CTYPE_UNKNOWN;
+            return CTYPE_BINARY;
 
         auto rootElementName = xml->GetRoot().GetName();
         if (rootElementName == "scene")
@@ -174,39 +176,63 @@ ContentType GetContentType(Context* context, const ea::string& resourcePath)
     if (imagesExtensions_.contains(extension))
         return CTYPE_TEXTURE;
 
-    return CTYPE_UNKNOWN;
+    return CTYPE_BINARY;
 }
 
-StringHash GetContentResourceType(Context* context, const ea::string& resourcePath)
+bool GetContentResourceType(Context* context, const ea::string& resourcePath, ResourceContentTypes& types)
 {
+    types.clear();
     switch (GetContentType(context, resourcePath))
     {
     case CTYPE_SCENEOBJECT:
-        return Node::GetTypeStatic();
-    case CTYPE_UILAYOUT:
-        return XMLFile::GetTypeStatic();
-    case CTYPE_UISTYLE:
-        return XMLFile::GetTypeStatic();
-    case CTYPE_MODEL:
-        return Model::GetTypeStatic();
-    case CTYPE_ANIMATION:
-        return Animation::GetTypeStatic();
-    case CTYPE_MATERIAL:
-        return Material::GetTypeStatic();
-    case CTYPE_PARTICLE:
-        return XMLFile::GetTypeStatic();
-    case CTYPE_RENDERPATH:
-        return XMLFile::GetTypeStatic();
-    case CTYPE_SOUND:
-        return Sound::GetTypeStatic();
-    case CTYPE_TEXTURE:
-        return Texture2D::GetTypeStatic();
-    case CTYPE_TEXTUREXML:
-        return XMLFile::GetTypeStatic();
-    default:
+    {
+        types.emplace_back(Node::GetTypeStatic());
         break;
     }
-    return StringHash();
+    case CTYPE_UILAYOUT:
+    case CTYPE_UISTYLE:
+    {
+        types.emplace_back(BinaryFile::GetTypeStatic());    // rml, rcss
+        break;
+    }
+    case CTYPE_MODEL:
+    {
+        types.emplace_back(Model::GetTypeStatic());
+        break;
+    }
+    case CTYPE_ANIMATION:
+    {
+        types.emplace_back(Animation::GetTypeStatic());
+        break;
+    }
+    case CTYPE_MATERIAL:
+    {
+        types.emplace_back(Material::GetTypeStatic());
+        break;
+    }
+    case CTYPE_PARTICLE:
+    case CTYPE_RENDERPATH:
+    case CTYPE_TEXTUREXML:
+    {
+        types.emplace_back(XMLFile::GetTypeStatic());
+        break;
+    }
+    case CTYPE_TEXTURE:
+    {
+        types.emplace_back(Image::GetTypeStatic());
+        types.emplace_back(Texture2D::GetTypeStatic());
+        break;
+    }
+    case CTYPE_SOUND:
+    {
+        types.emplace_back(Sound::GetTypeStatic());
+        break;
+    }
+    default:
+        types.emplace_back(BinaryFile::GetTypeStatic());
+        return false;
+    }
+    return true;
 }
 
 }

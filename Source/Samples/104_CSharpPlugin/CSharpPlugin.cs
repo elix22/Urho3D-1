@@ -26,6 +26,7 @@ using ImGuiNet;
 namespace CSharpPlugin
 {
     // Class can have any name, but it must inherit from PluginApplication.
+    [LoadablePlugin]
     public class SamplePlugin : PluginApplication
     {
         public SamplePlugin(Context context) : base(context)

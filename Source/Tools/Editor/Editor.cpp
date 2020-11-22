@@ -38,6 +38,7 @@
 #include <Urho3D/SystemUI/DebugHud.h>
 #include <Urho3D/LibraryInfo.h>
 #include <Urho3D/Core/CommandLine.h>
+#include <Urho3D/Audio/Sound.h>
 
 #include <Toolbox/ToolboxAPI.h>
 #include <Toolbox/SystemUI/Widgets.h>
@@ -49,28 +50,49 @@
 #include "EditorIconCache.h"
 #include "Tabs/Scene/SceneTab.h"
 #include "Tabs/Scene/EditorSceneSettings.h"
-#include "Tabs/UI/UITab.h"
 #include "Tabs/InspectorTab.h"
 #include "Tabs/HierarchyTab.h"
 #include "Tabs/ConsoleTab.h"
 #include "Tabs/ResourceTab.h"
 #include "Tabs/PreviewTab.h"
+#include "Pipeline/Asset.h"
 #include "Pipeline/Commands/CookScene.h"
 #include "Pipeline/Commands/BuildAssets.h"
 #include "Pipeline/Importers/ModelImporter.h"
 #include "Pipeline/Importers/SceneConverter.h"
 #include "Pipeline/Importers/TextureImporter.h"
-#include "Plugins/ModulePlugin.h"
+#if URHO3D_PLUGINS
+#   include "Plugins/PluginManager.h"
+#   include "Plugins/ModulePlugin.h"
+#endif
 #include "Plugins/ScriptBundlePlugin.h"
 #include "Inspector/AssetInspector.h"
 #include "Inspector/MaterialInspector.h"
 #include "Inspector/ModelInspector.h"
 #include "Inspector/NodeInspector.h"
+#include "Inspector/ComponentInspector.h"
 #include "Inspector/SerializableInspector.h"
+#include "Inspector/SoundInspector.h"
 #include "Tabs/ProfilerTab.h"
+#include "EditorUndo.h"
 
 namespace Urho3D
 {
+
+namespace
+{
+
+const auto&& DEFAULT_TAB_TYPES = {
+    InspectorTab::GetTypeStatic(),
+    HierarchyTab::GetTypeStatic(),
+    ResourceTab::GetTypeStatic(),
+    ConsoleTab::GetTypeStatic(),
+    PreviewTab::GetTypeStatic(),
+    SceneTab::GetTypeStatic(),
+    ProfilerTab::GetTypeStatic()
+};
+
+}
 
 Editor::Editor(Context* context)
     : Application(context)
@@ -93,10 +115,10 @@ void Editor::Setup()
 #endif
 
     // Discover resource prefix path by looking for CoreData and going up.
-    for (coreResourcePrefixPath_ = context_->GetFileSystem()->GetProgramDir();;
+    for (coreResourcePrefixPath_ = context_->GetSubsystem<FileSystem>()->GetProgramDir();;
         coreResourcePrefixPath_ = GetParentPath(coreResourcePrefixPath_))
     {
-        if (context_->GetFileSystem()->DirExists(coreResourcePrefixPath_ + "CoreData"))
+        if (context_->GetSubsystem<FileSystem>()->DirExists(coreResourcePrefixPath_ + "CoreData"))
             break;
         else
         {
@@ -123,15 +145,16 @@ void Editor::Setup()
     engineParameters_[EP_RESOURCE_PREFIX_PATHS] = coreResourcePrefixPath_;
     engineParameters_[EP_WINDOW_MAXIMIZE] = true;
     engineParameters_[EP_ENGINE_AUTO_LOAD_SCRIPTS] = false;
+    engineParameters_[EP_SYSTEMUI_FLAGS] = ImGuiConfigFlags_DpiEnableScaleFonts;
 #if URHO3D_SYSTEMUI_VIEWPORTS
     engineParameters_[EP_HIGH_DPI] = true;
-    engineParameters_[EP_SYSTEMUI_FLAGS] = ImGuiConfigFlags_ViewportsEnable | ImGuiConfigFlags_DpiEnableScaleViewports;
+    engineParameters_[EP_SYSTEMUI_FLAGS] = engineParameters_[EP_SYSTEMUI_FLAGS].GetUInt() | ImGuiConfigFlags_ViewportsEnable /*| ImGuiConfigFlags_DpiEnableScaleViewports*/;
 #else
     engineParameters_[EP_HIGH_DPI] = false;
 #endif
     // Load editor settings
     {
-        auto* fs = context_->GetFileSystem();
+        auto* fs = context_->GetSubsystem<FileSystem>();
         ea::string editorSettingsDir = fs->GetAppPreferencesDir("rbfx", "Editor");
         if (!fs->DirExists(editorSettingsDir))
             fs->CreateDir(editorSettingsDir);
@@ -154,14 +177,13 @@ void Editor::Setup()
         }
     }
 
-    context_->GetLog()->SetLogFormat("[%H:%M:%S] [%l] [%n] : %v");
+    context_->GetSubsystem<Log>()->SetLogFormat("[%H:%M:%S] [%l] [%n] : %v");
 
     SetRandomSeed(Time::GetTimeSinceEpoch());
 
     // Register factories
     context_->RegisterFactory<EditorIconCache>();
     context_->RegisterFactory<SceneTab>();
-    context_->RegisterFactory<UITab>();
     context_->RegisterFactory<ConsoleTab>();
     context_->RegisterFactory<HierarchyTab>();
     context_->RegisterFactory<InspectorTab>();
@@ -169,18 +191,21 @@ void Editor::Setup()
     context_->RegisterFactory<PreviewTab>();
     context_->RegisterFactory<ProfilerTab>();
 
-    // Inspectors
-    RegisterProvider<Asset, AssetInspector>();
-    RegisterProvider<Model, ModelInspector>();
-    RegisterProvider<Material, MaterialInspector>();
-    RegisterProvider<Node, NodeInspector>();
+    // Inspectors.
+    inspectors_.push_back(SharedPtr(new AssetInspector(context_)));
+    inspectors_.push_back(SharedPtr(new ModelInspector(context_)));
+    inspectors_.push_back(SharedPtr(new MaterialInspector(context_)));
+    inspectors_.push_back(SharedPtr(new SoundInspector(context_)));
+    inspectors_.push_back(SharedPtr(new NodeInspector(context_)));
+    inspectors_.push_back(SharedPtr(new ComponentInspector(context_)));
+    // FIXME: If user registers their own inspector later then SerializableInspector would no longer come in last.
+    inspectors_.push_back(SharedPtr(new SerializableInspector(context_)));
 
 #if URHO3D_PLUGINS
     RegisterPluginsLibrary(context_);
 #endif
     RegisterToolboxTypes(context_);
     EditorSceneSettings::RegisterObject(context_);
-    Inspectable::Material::RegisterObject(context_);
     context_->RegisterFactory<SerializableInspector>();
 
     // Importers
@@ -199,8 +224,6 @@ void Editor::Setup()
 
     keyBindings_.Bind(ActionType::OpenProject, this, &Editor::OpenOrCreateProject);
     keyBindings_.Bind(ActionType::Exit, this, &Editor::OnExitHotkeyPressed);
-    keyBindings_.Bind(ActionType::UndoAction, this, &Editor::OnUndo);
-    keyBindings_.Bind(ActionType::RedoAction, this, &Editor::OnRedo);
 }
 
 void Editor::Start()
@@ -210,7 +233,7 @@ void Editor::Start()
     {
         if (GetCommandLineParser().got_subcommand(cmd->GetTypeName().c_str()))
         {
-            context_->GetLog()->SetLogFormat("%v");
+            context_->GetSubsystem<Log>()->SetLogFormat("%v");
             ExecuteSubcommand(cmd);
             engine_->Exit();
             return;
@@ -218,12 +241,14 @@ void Editor::Start()
     }
 
     // Continue with normal editor initialization
+    Input* input = context_->GetSubsystem<Input>();
     context_->RegisterSubsystem(new SceneManager(context_));
     context_->RegisterSubsystem(new EditorIconCache(context_));
-    context_->GetInput()->SetMouseMode(MM_ABSOLUTE);
-    context_->GetInput()->SetMouseVisible(true);
+    input->SetMouseMode(MM_ABSOLUTE);
+    input->SetMouseVisible(true);
+    input->SetEnabled(false);
 
-    context_->GetCache()->SetAutoReloadResources(true);
+    context_->GetSubsystem<ResourceCache>()->SetAutoReloadResources(true);
     engine_->SetAutoExit(false);
 
     SubscribeToEvent(E_UPDATE, [this](StringHash, VariantMap& args) { OnUpdate(args); });
@@ -231,7 +256,7 @@ void Editor::Start()
     // Creates console but makes sure it's UI is not rendered. Console rendering is done manually in editor.
     auto* console = engine_->CreateConsole();
     console->SetAutoVisibleOnError(false);
-    context_->GetFileSystem()->SetExecuteConsoleCommands(false);
+    context_->GetSubsystem<FileSystem>()->SetExecuteConsoleCommands(false);
     SubscribeToEvent(E_CONSOLECOMMAND, [this](StringHash, VariantMap& args) { OnConsoleCommand(args); });
     console->RefreshInterpreters();
 
@@ -239,6 +264,7 @@ void Editor::Start()
     SubscribeToEvent(E_EXITREQUESTED, [this](StringHash, VariantMap&) { OnExitRequested(); });
     SubscribeToEvent(E_EDITORPROJECTSERIALIZE, [this](StringHash, VariantMap&) { UpdateWindowTitle(); });
     SubscribeToEvent(E_CONSOLEURICLICK, [this](StringHash, VariantMap& args) { OnConsoleUriClick(args); });
+    SubscribeToEvent(E_EDITORSELECTIONCHANGED, &Editor::OnSelectionChanged);
     SetupSystemUI();
     if (!defaultProjectPath_.empty())
     {
@@ -247,7 +273,7 @@ void Editor::Start()
     }
 
     // Hud will be rendered manually.
-    context_->GetEngine()->CreateDebugHud()->SetMode(DEBUGHUD_SHOW_NONE);
+    context_->GetSubsystem<Engine>()->CreateDebugHud()->SetMode(DEBUGHUD_SHOW_NONE);
 }
 
 void Editor::ExecuteSubcommand(SubCommand* cmd)
@@ -278,7 +304,7 @@ void Editor::Stop()
         windowPos_ = graphics->GetWindowPosition();
         windowSize_ = graphics->GetSize();
 
-        auto* fs = context_->GetFileSystem();
+        auto* fs = context_->GetSubsystem<FileSystem>();
         ea::string editorSettingsDir = fs->GetAppPreferencesDir("rbfx", "Editor");
         if (!fs->DirExists(editorSettingsDir))
             fs->CreateDir(editorSettingsDir);
@@ -294,7 +320,7 @@ void Editor::Stop()
             URHO3D_LOGERROR("Serializing of editor settings failed.");
     }
 
-    context_->GetWorkQueue()->Complete(0);
+    context_->GetSubsystem<WorkQueue>()->Complete(0);
     if (auto* manager = GetSubsystem<SceneManager>())
         manager->UnloadAll();
     CloseProject();
@@ -344,11 +370,6 @@ void Editor::OnUpdate(VariantMap& args)
                 tabs_.erase(tabs_.find(tab));
         }
 
-        if (!activeTab_.Expired())
-        {
-            activeTab_->OnActiveUpdate();
-        }
-
         if (loadDefaultLayout_ && project_)
         {
             loadDefaultLayout_ = false;
@@ -373,7 +394,7 @@ void Editor::OnUpdate(VariantMap& args)
         {
             explicit State(Editor* editor)
             {
-                FileSystem *fs = editor->GetContext()->GetFileSystem();
+                FileSystem *fs = editor->GetContext()->GetSubsystem<FileSystem>();
                 StringVector& recents = editor->recentProjects_;
                 snapshots_.resize(recents.size());
                 for (int i = 0; i < recents.size();)
@@ -445,7 +466,7 @@ void Editor::OnUpdate(VariantMap& args)
     // Dialog for a warning when application is being closed with unsaved resources.
     if (exiting_)
     {
-        if (!context_->GetWorkQueue()->IsCompleted(0))
+        if (!context_->GetSubsystem<WorkQueue>()->IsCompleted(0))
         {
             ui::OpenPopup("Completing Tasks");
 
@@ -453,8 +474,8 @@ void Editor::OnUpdate(VariantMap& args)
                                                                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_Popup))
             {
                 ui::TextUnformatted("Some tasks are in progress and are being completed. Please wait.");
-                static float totalIncomplete = context_->GetWorkQueue()->GetNumIncomplete(0);
-                ui::ProgressBar(100.f / totalIncomplete * Min(totalIncomplete - (float)context_->GetWorkQueue()->GetNumIncomplete(0), totalIncomplete));
+                static float totalIncomplete = context_->GetSubsystem<WorkQueue>()->GetNumIncomplete(0);
+                ui::ProgressBar(100.f / totalIncomplete * Min(totalIncomplete - (float)context_->GetSubsystem<WorkQueue>()->GetNumIncomplete(0), totalIncomplete));
                 ui::EndPopup();
             }
         }
@@ -498,7 +519,7 @@ void Editor::OnUpdate(VariantMap& args)
         }
         else
         {
-            context_->GetWorkQueue()->Complete(0);
+            context_->GetSubsystem<WorkQueue>()->Complete(0);
             if (project_.NotNull())
             {
                 project_->SaveProject();
@@ -549,11 +570,7 @@ void Editor::OnEndFrame()
         CloseProject();
         // Reset SystemUI so that imgui loads it's config proper.
         context_->RemoveSubsystem<SystemUI>();
-#if URHO3D_SYSTEMUI_VIEWPORTS
-        unsigned flags = ImGuiConfigFlags_ViewportsEnable | ImGuiConfigFlags_DpiEnableScaleViewports;
-#else
-        unsigned flags = 0;
-#endif
+        unsigned flags = engineParameters_[EP_SYSTEMUI_FLAGS].GetUInt();
         context_->RegisterSubsystem(new SystemUI(context_, flags));
         SetupSystemUI();
 
@@ -564,7 +581,7 @@ void Editor::OnEndFrame()
         // subsystem reads this file and loads settings.
         if (loaded)
         {
-            auto* fs = context_->GetFileSystem();
+            auto* fs = context_->GetSubsystem<FileSystem>();
             loadDefaultLayout_ = project_->NeeDefaultUIPlacement();
             StringVector& recents = recentProjects_;
             // Remove latest project if it was already opened or any projects that no longer exists.
@@ -608,14 +625,16 @@ void Editor::OnExitHotkeyPressed()
 
 void Editor::CreateDefaultTabs()
 {
+    for (StringHash type : DEFAULT_TAB_TYPES)
+        context_->RemoveSubsystem(type);
     tabs_.clear();
-    tabs_.emplace_back(new InspectorTab(context_));
-    tabs_.emplace_back(new HierarchyTab(context_));
-    tabs_.emplace_back(new ResourceTab(context_));
-    tabs_.emplace_back(new ConsoleTab(context_));
-    tabs_.emplace_back(new PreviewTab(context_));
-    tabs_.emplace_back(new SceneTab(context_));
-    tabs_.emplace_back(new ProfilerTab(context_));
+
+    for (StringHash type : DEFAULT_TAB_TYPES)
+    {
+        SharedPtr<Tab> tab;
+        tab.StaticCast(context_->CreateObject(type));
+        tabs_.push_back(tab);
+    }
 }
 
 void Editor::LoadDefaultLayout()
@@ -662,34 +681,10 @@ void Editor::CloseProject()
 {
     SendEvent(E_EDITORPROJECTCLOSING);
     context_->RemoveSubsystem<Project>();
+    for (StringHash type : DEFAULT_TAB_TYPES)
+        context_->RemoveSubsystem(type);
     tabs_.clear();
     project_.Reset();
-}
-
-void Editor::OnUndo()
-{
-    if (ui::IsAnyItemActive())
-        return;
-
-    VariantMap args;
-    args[Undo::P_TIME] = 0;
-    SendEvent(E_UNDO, args);
-    auto it = args.find(Undo::P_MANAGER);
-    if (it != args.end())
-        ((Undo::Manager*)it->second.GetPtr())->Undo();
-}
-
-void Editor::OnRedo()
-{
-    if (ui::IsAnyItemActive())
-        return;
-
-    VariantMap args;
-    args[Undo::P_TIME] = M_MAX_UNSIGNED;
-    SendEvent(E_REDO, args);
-    auto it = args.find(Undo::P_MANAGER);
-    if (it != args.end())
-        ((Undo::Manager*)it->second.GetPtr())->Redo();
 }
 
 Tab* Editor::GetTabByName(const ea::string& uniqueName)
@@ -725,6 +720,8 @@ Tab* Editor::GetTab(StringHash type)
 
 void Editor::SetupSystemUI()
 {
+    auto& io = ui::GetIO();
+    auto& style = ImGui::GetStyleTemplate();
     static ImWchar fontAwesomeIconRanges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
     static ImWchar notoSansRanges[] = {0x20, 0x52f, 0x1ab0, 0x2189, 0x2c60, 0x2e44, 0xa640, 0xab65, 0};
     static ImWchar notoMonoRanges[] = {0x20, 0x513, 0x1e00, 0x1f4d, 0};
@@ -735,9 +732,8 @@ void Editor::SetupSystemUI()
     systemUI->AddFont("Fonts/" FONT_ICON_FILE_NAME_FAS, fontAwesomeIconRanges, 14.f, true);
     monoFont_ = systemUI->AddFont("Fonts/NotoMono-Regular.ttf", notoMonoRanges, 14.f);
     systemUI->AddFont("Fonts/" FONT_ICON_FILE_NAME_FAS, fontAwesomeIconRanges, 12.f, true);
-    ui::GetStyle().WindowRounding = 3;
+    style.WindowRounding = 3;
     // Disable imgui saving ui settings on it's own. These should be serialized to project file.
-    auto& io = ui::GetIO();
 #if URHO3D_SYSTEMUI_VIEWPORTS
     io.ConfigViewportsNoAutoMerge = true;
 #endif
@@ -747,11 +743,10 @@ void Editor::SetupSystemUI()
     io.ConfigWindowsResizeFromEdges = true;
 
     // TODO: Make configurable.
-    auto& style = ImGui::GetStyle();
     style.FrameBorderSize = 0;
     style.WindowBorderSize = 1;
     style.ItemSpacing = {4, 4};
-    ImVec4* colors = ImGui::GetStyle().Colors;
+    ImVec4* colors = style.Colors;
     colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
     colors[ImGuiCol_TextDisabled]           = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
     colors[ImGuiCol_WindowBg]               = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
@@ -842,7 +837,7 @@ void Editor::SetupSystemUI()
 
 void Editor::UpdateWindowTitle(const ea::string& resourcePath)
 {
-    if (context_->GetEngine()->IsHeadless())
+    if (context_->GetSubsystem<Engine>()->IsHeadless())
         return;
 
     auto* project = GetSubsystem<Project>();
@@ -857,7 +852,7 @@ void Editor::UpdateWindowTitle(const ea::string& resourcePath)
             title += ToString(" | %s", GetFileName(resourcePath).c_str());
     }
 
-    context_->GetGraphics()->SetWindowTitle(title);
+    context_->GetSubsystem<Graphics>()->SetWindowTitle(title);
 }
 
 template<typename T>
@@ -897,49 +892,29 @@ void Editor::OnConsoleUriClick(VariantMap& args)
         const ea::string& protocol = args[P_PROTOCOL].GetString();
         const ea::string& address = args[P_ADDRESS].GetString();
         if (protocol == "res")
-            context_->GetFileSystem()->SystemOpen(context_->GetCache()->GetResourceFileName(address));
+            context_->GetSubsystem<FileSystem>()->SystemOpen(context_->GetSubsystem<ResourceCache>()->GetResourceFileName(address));
     }
 }
 
-void Editor::ClearInspector()
+void Editor::OnSelectionChanged(StringHash, VariantMap& args)
 {
-    inspected_.clear();
-    GetTab<InspectorTab>()->ClearProviders();
-}
-
-void Editor::Inspect(Object* object)
-{
-    if (object == nullptr)
+    using namespace EditorSelectionChanged;
+    auto tab = static_cast<Tab*>(args[P_TAB].GetPtr());
+    auto undo = GetSubsystem<UndoStack>();
+    ByteVector newSelection = tab->SerializeSelection();
+    if (tab == selectionTab_)
     {
-        URHO3D_LOGERROR("Editor can not inspect a null object.");
-        return;
+        if (newSelection == selectionBuffer_)
+            return;
     }
-    bool inspected = false;
-    for (const auto& pair : registeredInspectorProviders_)
+    else
     {
-        if (object->IsInstanceOf(pair.first))
-        {
-            inspected = true;
-            inspected_.push_back(WeakPtr(object));
-            SharedPtr<InspectorProvider> provider(context_->CreateObject(pair.second)->Cast<InspectorProvider>());
-            provider->SetInspected(object);
-            GetTab<InspectorTab>()->AddProvider(provider);
-        }
+        if (!selectionTab_.Expired())
+            selectionTab_->ClearSelection();
     }
-
-    if (!inspected)
-    {
-        // A special case. If no custom inspector exists we use default inspector for Serializable items. This inspector
-        // is not registered to registeredInspectorProviders_ because we want to use it only if no other inspectors
-        // supporting specified object exist.
-        if (auto* serializable = object->Cast<Serializable>())
-        {
-            inspected_.push_back(WeakPtr(serializable));
-            SharedPtr<InspectorProvider> provider(context_->CreateObject<SerializableInspector>());
-            provider->SetInspected(serializable);
-            GetTab<InspectorTab>()->AddProvider(provider);
-        }
-    }
+    undo->Add<UndoSetSelection>(selectionTab_, selectionBuffer_, tab, newSelection);
+    selectionTab_ = tab;
+    selectionBuffer_ = newSelection;
 }
 
 }

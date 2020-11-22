@@ -47,7 +47,7 @@
 #include <GLES2/gl2ext.h>
 #endif
 #else
-#include <GLEW/glew.h>
+#include <GL/glew.h>
 #endif
 
 #ifndef GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
@@ -91,7 +91,7 @@ class Context;
 using ConstantBufferMap = ea::unordered_map<unsigned, SharedPtr<ConstantBuffer> >;
 using ShaderProgramMap = ea::unordered_map<ea::pair<ShaderVariation*, ShaderVariation*>, SharedPtr<ShaderProgram> >;
 
-/// Cached state of a frame buffer object
+/// Cached state of a frame buffer object.
 struct FrameBufferObject
 {
     /// Frame buffer handle.

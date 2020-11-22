@@ -322,7 +322,11 @@ int Win32_ResizingEventWatcher(void* data, SDL_Event* event)
                     if (graphics->IsInitialized())
                     {
                         graphics->OnWindowResized();
-                        ctx->GetSubsystem<Engine>()->RunFrame();
+                        if (auto* engine = ctx->GetSubsystem<Engine>())
+                        {
+                            if (engine->IsInitialized())
+                                engine->RunFrame();
+                        }
                     }
                 }
             }
@@ -394,11 +398,16 @@ Input::Input(Context* context) :
 
     SubscribeToEvent(E_SCREENMODE, URHO3D_HANDLER(Input, HandleScreenMode));
 
-#if defined(__ANDROID__)
+#ifdef __EMSCRIPTEN__
+    // Toggle fullscreen is implemented at the level of the shell
+    toggleFullscreen_ = false;
+#endif
+
     // Prevent mouse events from being registered as synthetic touch events and vice versa
     SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
-#elif defined(__EMSCRIPTEN__)
+
+#if defined(__EMSCRIPTEN__)
     emscriptenInput_ = ea::make_unique<EmscriptenInput>(this);
 #endif
 
@@ -428,6 +437,9 @@ void Input::Update()
     SDL_Event evt;
     while (SDL_PollEvent(&evt))
         HandleSDLEvent(&evt);
+
+    if (!enabled_)
+        return;
 
     if (suppressNextMouseMove_ && (mouseMove_ != IntVector2::ZERO || mouseMoved))
         UnsuppressMouseMove();
@@ -1660,9 +1672,9 @@ void Input::ResetState()
     ResetTouches();
 
     // Use SetMouseButton() to reset the state so that mouse events will be sent properly
-    SetMouseButton(MOUSEB_LEFT, false);
-    SetMouseButton(MOUSEB_RIGHT, false);
-    SetMouseButton(MOUSEB_MIDDLE, false);
+    SetMouseButton(MOUSEB_LEFT, false, 0);
+    SetMouseButton(MOUSEB_RIGHT, false, 0);
+    SetMouseButton(MOUSEB_MIDDLE, false, 0);
 
     mouseMove_ = IntVector2::ZERO;
     mouseMoveWheel_ = 0;
@@ -1759,7 +1771,7 @@ void Input::SendInputFocusEvent()
     SendEvent(E_INPUTFOCUS, eventData);
 }
 
-void Input::SetMouseButton(MouseButton button, bool newState)
+void Input::SetMouseButton(MouseButton button, bool newState, int clicks)
 {
     if (newState)
     {
@@ -1787,6 +1799,7 @@ void Input::SetMouseButton(MouseButton button, bool newState)
     eventData[P_BUTTON] = button;
     eventData[P_BUTTONS] = (unsigned)mouseButtonDown_;
     eventData[P_QUALIFIERS] = (unsigned)GetQualifiers();
+    eventData[P_CLICKS] = clicks;
     SendEvent(newState ? E_MOUSEBUTTONDOWN : E_MOUSEBUTTONUP, eventData);
 }
 
@@ -1895,6 +1908,50 @@ void Input::HandleSDLEvent(void* sdlEvent)
             return;
     }
 
+    if (!enabled_)
+    {
+        switch (evt.type)
+        {
+        case SDL_KEYDOWN:
+        case SDL_KEYUP:
+        case SDL_TEXTEDITING:
+        case SDL_TEXTINPUT:
+        case SDL_KEYMAPCHANGED:
+        case SDL_MOUSEMOTION:
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+        case SDL_MOUSEWHEEL:
+        case SDL_JOYAXISMOTION:
+        case SDL_JOYBALLMOTION:
+        case SDL_JOYHATMOTION:
+        case SDL_JOYBUTTONDOWN:
+        case SDL_JOYBUTTONUP:
+        case SDL_JOYDEVICEADDED:
+        case SDL_JOYDEVICEREMOVED:
+        case SDL_CONTROLLERAXISMOTION:
+        case SDL_CONTROLLERBUTTONDOWN:
+        case SDL_CONTROLLERBUTTONUP:
+        case SDL_CONTROLLERDEVICEADDED:
+        case SDL_CONTROLLERDEVICEREMOVED:
+        case SDL_CONTROLLERDEVICEREMAPPED:
+        case SDL_FINGERDOWN:
+        case SDL_FINGERUP:
+        case SDL_FINGERMOTION:
+        case SDL_DOLLARGESTURE:
+        case SDL_DOLLARRECORD:
+        case SDL_MULTIGESTURE:
+        case SDL_CLIPBOARDUPDATE:
+        case SDL_DROPFILE:
+        case SDL_DROPTEXT:
+        case SDL_DROPBEGIN:
+        case SDL_DROPCOMPLETE:
+        case SDL_SENSORUPDATE:
+            return;
+        default:
+            break;
+        }
+    }
+
     // While not having input focus, skip key/mouse/touch/joystick events, except for the "click to focus" mechanism
     if (!inputFocus_ && evt.type >= SDL_KEYDOWN && evt.type <= SDL_MULTIGESTURE)
     {
@@ -1954,7 +2011,7 @@ void Input::HandleSDLEvent(void* sdlEvent)
         if (!touchEmulation_)
         {
             const auto mouseButton = static_cast<MouseButton>(1u << (evt.button.button - 1u));  // NOLINT(misc-misplaced-widening-cast)
-            SetMouseButton(mouseButton, true);
+            SetMouseButton(mouseButton, true, evt.button.clicks);
         }
         else
         {
@@ -1980,7 +2037,7 @@ void Input::HandleSDLEvent(void* sdlEvent)
         if (!touchEmulation_)
         {
             const auto mouseButton = static_cast<MouseButton>(1u << (evt.button.button - 1u));  // NOLINT(misc-misplaced-widening-cast)
-            SetMouseButton(mouseButton, false);
+            SetMouseButton(mouseButton, false, evt.button.clicks);
         }
         else
         {

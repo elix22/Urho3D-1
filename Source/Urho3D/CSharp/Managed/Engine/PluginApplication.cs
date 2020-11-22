@@ -19,40 +19,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-using System;
-using System.Reflection;
-using Urho3DNet.CSharp;
-
 namespace Urho3DNet
 {
-    public partial class PluginApplication
+    /// Tag subclasses of PluginApplication in order to make a C# dll a loadable plugin.
+    public class LoadablePluginAttribute : System.Attribute
     {
-        private Assembly _hostAssembly;
-        /// Sets assembly that is being managed by this plugin.
-        internal void SetHostAssembly(Assembly assembly)
-        {
-            _hostAssembly = assembly;
-        }
-
-        private void OnSetupInstance()
-        {
-            _hostAssembly = GetType().Assembly;
-            SubscribeToEvent(E.PluginLoad, this, map =>
-            {
-                // Register factories marked with attributes
-                if (_hostAssembly != null)
-                {
-                    foreach ((Type type, ObjectFactoryAttribute attr) in _hostAssembly.GetTypesWithAttribute<ObjectFactoryAttribute>())
-                        RegisterFactory(type, attr.Category);
-                }
-                UnsubscribeFromEvent(E.PluginLoad);
-            });
-        }
-
-        public void RegisterFactory(Type type, string category = "")
-        {
-            Context.RegisterFactory(type, category);
-            RecordPluginFactory(type, category);
-        }
     }
 }

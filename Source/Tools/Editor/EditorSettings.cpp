@@ -19,12 +19,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-#include <Urho3D/IO/FileSystem.h>
 #include <Urho3D/IO/ArchiveSerialization.h>
+#include <Urho3D/IO/FileSystem.h>
+#include <Urho3D/IO/Log.h>
+
 #include <Toolbox/SystemUI/Widgets.h>
 
 #include "Editor.h"
-
+#include "Pipeline/Pipeline.h"
 
 namespace Urho3D
 {
@@ -47,7 +49,8 @@ void Editor::RenderSettingsWindow()
     if (!settingsOpen_)
     {
         // Settings window is closing.
-        if (!project_->GetPipeline()->CookSettings())
+        auto pipeline = GetSubsystem<Pipeline>();
+        if (!pipeline->CookSettings())
             URHO3D_LOGERROR("Cooking settings failed");
     }
 }

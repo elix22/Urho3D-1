@@ -243,6 +243,9 @@ public:
     {
     }
 
+    /// Construct from 2D vector in X0Z plane.
+    static Vector3 FromXZ(const Vector2& vector) { return { vector.x_, 0.0f, vector.y_ }; }
+
     /// Assign from another vector.
     Vector3& operator =(const Vector3& rhs) noexcept = default;
 
@@ -342,9 +345,11 @@ public:
     }
 
     /// Return length.
+    /// @property
     float Length() const { return sqrtf(x_ * x_ + y_ * y_ + z_ * z_); }
 
     /// Return squared length.
+    /// @property
     float LengthSquared() const { return x_ * x_ + y_ * y_ + z_ * z_; }
 
     /// Calculate dot product.
@@ -413,12 +418,11 @@ public:
     /// Returns the angle between this vector and another vector in degrees.
     float Angle(const Vector3& rhs) const { return Urho3D::Acos(DotProduct(rhs) / (Length() * rhs.Length())); }
 
-    /// Return whether is NaN.
+    /// Return whether any component is NaN.
     bool IsNaN() const { return Urho3D::IsNaN(x_) || Urho3D::IsNaN(y_) || Urho3D::IsNaN(z_); }
 
-    /// Return whether is Inf.
+    /// Return whether any component is Inf.
     bool IsInf() const { return Urho3D::IsInf(x_) || Urho3D::IsInf(y_) || Urho3D::IsInf(z_); }
-
 
     /// Return normalized to unit length.
     Vector3 Normalized() const
@@ -520,6 +524,9 @@ inline Vector3 VectorRound(const Vector3& vec) { return Vector3(Round(vec.x_), R
 /// Per-component ceil of 3-vector.
 inline Vector3 VectorCeil(const Vector3& vec) { return Vector3(Ceil(vec.x_), Ceil(vec.y_), Ceil(vec.z_)); }
 
+/// Per-component absolute value of 3-vector.
+inline Vector3 VectorAbs(const Vector3& vec) { return Vector3(Abs(vec.x_), Abs(vec.y_), Abs(vec.z_)); }
+
 /// Per-component floor of 3-vector. Returns IntVector3.
 inline IntVector3 VectorFloorToInt(const Vector3& vec) { return IntVector3(FloorToInt(vec.x_), FloorToInt(vec.y_), FloorToInt(vec.z_)); }
 
@@ -534,6 +541,9 @@ inline IntVector3 VectorMin(const IntVector3& lhs, const IntVector3& rhs) { retu
 
 /// Per-component max of two 3-vectors.
 inline IntVector3 VectorMax(const IntVector3& lhs, const IntVector3& rhs) { return IntVector3(Max(lhs.x_, rhs.x_), Max(lhs.y_, rhs.y_), Max(lhs.z_, rhs.z_)); }
+
+/// Per-component absolute value of integer 3-vector.
+inline IntVector3 VectorAbs(const IntVector3& vec) { return IntVector3(Abs(vec.x_), Abs(vec.y_), Abs(vec.z_)); }
 
 /// Return a random value from [0, 1) from 3-vector seed.
 inline float StableRandom(const Vector3& seed) { return StableRandom(Vector2(StableRandom(Vector2(seed.x_, seed.y_)), seed.z_)); }

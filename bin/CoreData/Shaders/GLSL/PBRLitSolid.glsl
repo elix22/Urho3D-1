@@ -20,6 +20,10 @@ varying vec4 vWorldPos;
 #ifdef VERTEXCOLOR
     varying vec4 vColor;
 #endif
+#if defined(LIGHTMAP)
+    varying vec2 vTexCoord2;
+#endif
+varying vec3 vVertexLight;
 #ifdef PERPIXEL
     #ifdef SHADOW
         #ifndef GL_ES
@@ -35,13 +39,9 @@ varying vec4 vWorldPos;
         varying vec3 vCubeMaskVec;
     #endif
 #else
-    varying vec3 vVertexLight;
     varying vec4 vScreenPos;
     #ifdef ENVCUBEMAP
         varying vec3 vReflectionVec;
-    #endif
-    #if defined(LIGHTMAP) || defined(AO)
-        varying vec2 vTexCoord2;
     #endif
 #endif
 
@@ -57,13 +57,27 @@ void VS()
         vColor = iColor;
     #endif
 
+    #ifdef NOUV
+        vTexCoord.xy = vec2(0.0, 0.0);
+    #else
+        vTexCoord.xy = GetTexCoord(iTexCoord);
+    #endif
+
     #if defined(NORMALMAP) || defined(DIRBILLBOARD)
         vec4 tangent = GetWorldTangent(modelMatrix);
         vec3 bitangent = cross(tangent.xyz, vNormal) * tangent.w;
-        vTexCoord = vec4(GetTexCoord(iTexCoord), bitangent.xy);
+        vTexCoord.zw = bitangent.xy;
         vTangent = vec4(tangent.xyz, bitangent.z);
+    #endif
+
+    // Ambient & per-vertex lighting
+    #if defined(LIGHTMAP)
+        // If using lightmap, disregard zone ambient light
+        // If using AO, calculate ambient in the PS
+        vVertexLight = vec3(0.0, 0.0, 0.0);
+        vTexCoord2 = GetLightMapTexCoord(iTexCoord1);
     #else
-        vTexCoord = GetTexCoord(iTexCoord);
+        vVertexLight = GetAmbientLight(vec4(vNormal, 1.0)) + GetAmbient(0.0);
     #endif
 
     #ifdef PERPIXEL
@@ -85,16 +99,6 @@ void VS()
             vCubeMaskVec = (worldPos - cLightPos.xyz) * mat3(cLightMatrices[0][0].xyz, cLightMatrices[0][1].xyz, cLightMatrices[0][2].xyz);
         #endif
     #else
-        // Ambient & per-vertex lighting
-        #if defined(LIGHTMAP) || defined(AO)
-            // If using lightmap, disregard zone ambient light
-            // If using AO, calculate ambient in the PS
-            vVertexLight = vec3(0.0, 0.0, 0.0);
-            vTexCoord2 = iTexCoord1;
-        #else
-            vVertexLight = GetAmbient(GetZonePos(worldPos));
-        #endif
-
         #ifdef NUMVERTEXLIGHTS
             for (int i = 0; i < NUMVERTEXLIGHTS; ++i)
                 vVertexLight += GetVertexLight(i, worldPos, vNormal) * cVertexLights[i * 3].rgb;
@@ -172,7 +176,7 @@ void PS()
         vec3 lightDir;
         vec3 finalColor;
 
-        float atten = 1;
+        float atten = 1.0;
 
         #if defined(DIRLIGHT)
             atten = GetAtten(normal, vWorldPos.xyz, lightDir);
@@ -203,8 +207,14 @@ void PS()
         finalColor.rgb = BRDF * lightColor * (atten * shadow) / M_PI;
 
         #ifdef AMBIENT
-            finalColor += cAmbientColor.rgb * diffColor.rgb;
-            finalColor += cMatEmissiveColor;
+            finalColor += vVertexLight * diffColor.rgb;
+            #ifdef LIGHTMAP
+                finalColor += (texture2D(sEmissiveMap, vTexCoord2).rgb * 2.0 + cAmbientColor.rgb) * diffColor.rgb;
+            #elif defined(EMISSIVEMAP)
+                finalColor += cMatEmissiveColor * texture2D(sEmissiveMap, vTexCoord.xy).rgb;
+            #else
+                finalColor += cMatEmissiveColor;
+            #endif
             gl_FragColor = vec4(GetFog(finalColor, fogFactor), diffColor.a);
         #else
             gl_FragColor = vec4(GetLitFog(finalColor, fogFactor), diffColor.a);
@@ -219,9 +229,11 @@ void PS()
     #else
         // Ambient & per-vertex lighting
         vec3 finalColor = vVertexLight * diffColor.rgb;
+        vec3 ambientOcclusion = vec3(1.0, 1.0, 1.0);
         #ifdef AO
             // If using AO, the vertex light ambient is black, calculate occluded ambient here
-            finalColor += texture2D(sEmissiveMap, vTexCoord2).rgb * cAmbientColor.rgb * diffColor.rgb;
+            ambientOcclusion = texture2D(sEmissiveMap, vTexCoord.xy).rgb;
+            finalColor += ambientOcclusion * cAmbientColor.rgb * diffColor.rgb;
         #endif
 
         #ifdef MATERIAL
@@ -240,17 +252,15 @@ void PS()
 
         #ifdef IBL
           vec3 iblColor = ImageBasedLighting(reflection, normal, toCamera, diffColor.rgb, specColor.rgb, roughness, cubeColor);
-          float gamma = 0.0;
-          finalColor.rgb += iblColor;
+          finalColor.rgb += iblColor * ambientOcclusion;
         #endif
 
         #ifdef ENVCUBEMAP
             finalColor += cMatEnvMapColor * textureCube(sEnvCubeMap, reflect(vReflectionVec, normal)).rgb;
         #endif
         #ifdef LIGHTMAP
-            finalColor += texture2D(sEmissiveMap, vTexCoord2).rgb * diffColor.rgb;
-        #endif
-        #ifdef EMISSIVEMAP
+            finalColor += (texture2D(sEmissiveMap, vTexCoord2).rgb * 2.0 + cAmbientColor.rgb) * diffColor.rgb;
+        #elif defined(EMISSIVEMAP)
             finalColor += cMatEmissiveColor * texture2D(sEmissiveMap, vTexCoord.xy).rgb;
         #else
             finalColor += cMatEmissiveColor;

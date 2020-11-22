@@ -40,6 +40,7 @@ class Matrix3x4;
 class Sphere;
 
 /// Three-dimensional axis-aligned bounding box.
+/// @allfloats
 class URHO3D_API BoundingBox
 {
 public:
@@ -71,7 +72,7 @@ public:
     {
     }
 
-    /// Construct from minimum and maximum floats (all dimensions same.)
+    /// Construct from minimum and maximum floats (all dimensions same).
     BoundingBox(float min, float max) noexcept :
         min_(Vector3(min, min, min)),
         max_(Vector3(max, max, max))
@@ -79,6 +80,7 @@ public:
     }
 
 #ifdef URHO3D_SSE
+    /// @nobind
     BoundingBox(__m128 min, __m128 max) noexcept
     {
         _mm_storeu_ps(&min_.x_, min);
@@ -159,7 +161,7 @@ public:
         max_ = max;
     }
 
-    /// Define from minimum and maximum floats (all dimensions same.)
+    /// Define from minimum and maximum floats (all dimensions same).
     void Define(float min, float max)
     {
         min_ = Vector3(min, min, min);
@@ -259,12 +261,15 @@ public:
     }
 
     /// Return center.
+    /// @property
     Vector3 Center() const { return (max_ + min_) * 0.5f; }
 
     /// Return size.
+    /// @property
     Vector3 Size() const { return max_ - min_; }
 
     /// Return half-size.
+    /// @property
     Vector3 HalfSize() const { return (max_ - min_) * 0.5f; }
 
     /// Return transformed by a 3x3 matrix.

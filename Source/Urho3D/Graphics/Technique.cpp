@@ -352,6 +352,7 @@ SharedPtr<Technique> Technique::Clone(const ea::string& cloneName) const
             continue;
 
         Pass* newPass = ret->CreatePass(srcPass->GetName());
+        newPass->SetCullMode(srcPass->GetCullMode());
         newPass->SetBlendMode(srcPass->GetBlendMode());
         newPass->SetDepthTestMode(srcPass->GetDepthTestMode());
         newPass->SetLightingMode(srcPass->GetLightingMode());

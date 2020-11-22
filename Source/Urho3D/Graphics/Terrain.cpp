@@ -147,6 +147,10 @@ void Terrain::RegisterObject(Context* context)
     URHO3D_ACCESSOR_ATTRIBUTE("Shadow Mask", GetShadowMask, SetShadowMask, unsigned, DEFAULT_SHADOWMASK, AM_DEFAULT);
     URHO3D_ACCESSOR_ATTRIBUTE("Zone Mask", GetZoneMask, SetZoneMask, unsigned, DEFAULT_ZONEMASK, AM_DEFAULT);
     URHO3D_ACCESSOR_ATTRIBUTE("Occlusion LOD level", GetOcclusionLodLevel, SetOcclusionLodLevelAttr, unsigned, M_MAX_UNSIGNED, AM_DEFAULT);
+    URHO3D_ATTRIBUTE_EX("Bake Lightmap", bool, bakeLightmap_, MarkTerrainDirty, false, AM_DEFAULT);
+    URHO3D_ATTRIBUTE("Scale in Lightmap", float, scaleInLightmap_, 1.0f, AM_DEFAULT);
+    URHO3D_ATTRIBUTE_EX("Lightmap Index", unsigned, lightmapIndex_, UpdatePatchesLightmaps, 0, AM_FILE | AM_NOEDIT);
+    URHO3D_ATTRIBUTE_EX("Lightmap Scale & Offset", Vector4, lightmapScaleOffset_, UpdatePatchesLightmaps, Vector4(1.0f, 1.0f, 0.0f, 0.0f), AM_FILE | AM_NOEDIT);
 }
 
 void Terrain::ApplyAttributes()
@@ -653,6 +657,13 @@ Vector3 Terrain::HeightMapToWorld(const IntVector2& pixelPosition) const
     return wPos;
 }
 
+Vector2 Terrain::HeightMapToUV(const IntVector2& pixelPosition) const
+{
+    const float u = static_cast<float>(pixelPosition.x_) / (numVertices_.x_ - 1);
+    const float v = static_cast<float>(pixelPosition.y_) / (numVertices_.y_ - 1);
+    return { u, v };
+}
+
 void Terrain::CreatePatchGeometry(TerrainPatch* patch)
 {
     URHO3D_PROFILE("CreatePatchGeometry");
@@ -663,8 +674,14 @@ void Terrain::CreatePatchGeometry(TerrainPatch* patch)
     Geometry* maxLodGeometry = patch->GetMaxLodGeometry();
     Geometry* occlusionGeometry = patch->GetOcclusionGeometry();
 
-    if (vertexBuffer->GetVertexCount() != row * row)
-        vertexBuffer->SetSize(row * row, MASK_POSITION | MASK_NORMAL | MASK_TEXCOORD1 | MASK_TANGENT);
+    // Scale in lightmap is intentionally ignored here
+    // because lightmapper itself needs Terrain with lightmap UV but without lightmapping during rendering
+    VertexMaskFlags vertexMask{ MASK_POSITION | MASK_NORMAL | MASK_TEXCOORD1 | MASK_TANGENT };
+    if (bakeLightmap_)
+        vertexMask |= MASK_TEXCOORD2;
+
+    if (vertexBuffer->GetVertexCount() != row * row || vertexBuffer->GetElementMask() != vertexMask)
+        vertexBuffer->SetSize(row * row, vertexMask);
 
     ea::shared_array<unsigned char> cpuVertexData(new unsigned char[row * row * sizeof(Vector3)]);
     ea::shared_array<unsigned char> occlusionCpuVertexData(new unsigned char[row * row * sizeof(Vector3)]);
@@ -727,10 +744,16 @@ void Terrain::CreatePatchGeometry(TerrainPatch* patch)
                 *vertexData++ = normal.y_;
                 *vertexData++ = normal.z_;
 
-                // Texture coordinate
-                Vector2 texCoord((float)xPos / (float)(numVertices_.x_ - 1), 1.0f - (float)zPos / (float)(numVertices_.y_ - 1));
+                // Texture coordinate(s)
+                const Vector2 texCoord = HeightMapToUV({ xPos, numVertices_.y_ - 1 - zPos });
                 *vertexData++ = texCoord.x_;
                 *vertexData++ = texCoord.y_;
+
+                if (bakeLightmap_)
+                {
+                    *vertexData++ = texCoord.x_;
+                    *vertexData++ = texCoord.y_;
+                }
 
                 // Tangent
                 Vector3 xyz = (Vector3::RIGHT - normal * normal.DotProduct(Vector3::RIGHT)).Normalized();
@@ -848,6 +871,27 @@ ResourceRef Terrain::GetMaterialAttr() const
 ResourceRef Terrain::GetHeightMapAttr() const
 {
     return GetResourceRef(heightMap_, Image::GetTypeStatic());
+}
+
+BoundingBox Terrain::CalculateWorldBoundingBox() const
+{
+    BoundingBox boundingBox;
+    for (TerrainPatch* patch : patches_)
+    {
+        if (patch)
+            boundingBox.Merge(patch->GetWorldBoundingBox());
+    }
+    return boundingBox;
+}
+
+void Terrain::SetBakeLightmap(bool bakeLightmap)
+{
+    if (bakeLightmap_ != bakeLightmap)
+    {
+        bakeLightmap_ = bakeLightmap;
+        lastPatchSize_ = 0; // Force full recreate
+        CreateGeometry();
+    }
 }
 
 void Terrain::CreateGeometry()
@@ -1073,6 +1117,10 @@ void Terrain::CreateGeometry()
                         patch->SetOccluder(occluder_);
                         patch->SetOccludee(occludee_);
                     }
+
+                    patch->SetBakeLightmap(GetBakeLightmapEffective());
+                    patch->SetLightmapIndex(lightmapIndex_);
+                    patch->SetLightmapScaleOffset(lightmapScaleOffset_);
 
                     patches_.push_back(WeakPtr<TerrainPatch>(patch));
                 }
@@ -1471,6 +1519,19 @@ void Terrain::UpdateEdgePatchNeighbors()
     SetPatchNeighbors(GetPatch(numPatches_.x_ - 1, 0));
     SetPatchNeighbors(GetPatch(0, numPatches_.y_ - 1));
     SetPatchNeighbors(GetPatch(numPatches_.x_ - 1, numPatches_.y_ - 1));
+}
+
+void Terrain::UpdatePatchesLightmaps()
+{
+    for (TerrainPatch* patch : patches_)
+    {
+        if (patch)
+        {
+            patch->SetBakeLightmap(GetBakeLightmapEffective());
+            patch->SetLightmapIndex(lightmapIndex_);
+            patch->SetLightmapScaleOffset(lightmapScaleOffset_);
+        }
+    }
 }
 
 void Terrain::DrawDebugGeometry(DebugRenderer* debug, bool depthTest)

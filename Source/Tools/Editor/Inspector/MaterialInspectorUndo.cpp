@@ -25,10 +25,7 @@
 namespace Urho3D
 {
 
-namespace Undo
-{
-
-TechniqueChangedAction::TechniqueChangedAction(const Material* material, unsigned index, const TechniqueEntry* oldEntry, const TechniqueEntry* newEntry)
+UndoTechniqueChanged::UndoTechniqueChanged(const Material* material, unsigned index, const TechniqueEntry* oldEntry, const TechniqueEntry* newEntry)
     : context_(material->GetContext())
     , materialName_(material->GetName())
     , index_(index)
@@ -47,9 +44,9 @@ TechniqueChangedAction::TechniqueChangedAction(const Material* material, unsigne
     }
 }
 
-void TechniqueChangedAction::RemoveTechnique()
+void UndoTechniqueChanged::RemoveTechnique()
 {
-    if (auto* material = context_->GetCache()->GetResource<Material>(materialName_))
+    if (auto* material = context_->GetSubsystem<ResourceCache>()->GetResource<Material>(materialName_))
     {
         // Shift techniques back
         for (auto i = index_ + 1; i < material->GetNumTechniques(); i++)
@@ -62,11 +59,11 @@ void TechniqueChangedAction::RemoveTechnique()
     }
 }
 
-void TechniqueChangedAction::AddTechnique(const TechniqueChangedAction::TechniqueInfo& info)
+void UndoTechniqueChanged::AddTechnique(const UndoTechniqueChanged::TechniqueInfo& info)
 {
-    if (auto* material = context_->GetCache()->GetResource<Material>(materialName_))
+    if (auto* material = context_->GetSubsystem<ResourceCache>()->GetResource<Material>(materialName_))
     {
-        if (auto* technique = context_->GetCache()->GetResource<Technique>(info.techniqueName_))
+        if (auto* technique = context_->GetSubsystem<ResourceCache>()->GetResource<Technique>(info.techniqueName_))
         {
             auto index = material->GetNumTechniques();
             material->SetNumTechniques(index + 1);
@@ -83,18 +80,18 @@ void TechniqueChangedAction::AddTechnique(const TechniqueChangedAction::Techniqu
     }
 }
 
-void TechniqueChangedAction::SetTechnique(const TechniqueChangedAction::TechniqueInfo& info)
+void UndoTechniqueChanged::SetTechnique(const UndoTechniqueChanged::TechniqueInfo& info)
 {
-    if (auto* material = context_->GetCache()->GetResource<Material>(materialName_))
+    if (auto* material = context_->GetSubsystem<ResourceCache>()->GetResource<Material>(materialName_))
     {
-        if (auto* technique = context_->GetCache()->GetResource<Technique>(info.techniqueName_))
+        if (auto* technique = context_->GetSubsystem<ResourceCache>()->GetResource<Technique>(info.techniqueName_))
             material->SetTechnique(static_cast<unsigned int>(index_), technique, info.qualityLevel_, info.lodDistance_);
     }
 }
 
-void TechniqueChangedAction::Undo()
+bool UndoTechniqueChanged::Undo(Context* context)
 {
-    if (auto* material = context_->GetCache()->GetResource<Material>(materialName_))
+    if (auto* material = context_->GetSubsystem<ResourceCache>()->GetResource<Material>(materialName_))
     {
         if (oldValue_.techniqueName_.empty() && !newValue_.techniqueName_.empty())
             // Was added
@@ -106,14 +103,16 @@ void TechniqueChangedAction::Undo()
             // Was modified
             SetTechnique(oldValue_);
 
-        context_->GetCache()->IgnoreResourceReload(material);
-        material->SaveFile(context_->GetCache()->GetResourceFileName(material->GetName()));
+        context_->GetSubsystem<ResourceCache>()->IgnoreResourceReload(material);
+        material->SaveFile(context_->GetSubsystem<ResourceCache>()->GetResourceFileName(material->GetName()));
+        return true;
     }
+    return false;
 }
 
-void TechniqueChangedAction::Redo()
+bool UndoTechniqueChanged::Redo(Context* context)
 {
-    if (auto* material = context_->GetCache()->GetResource<Material>(materialName_))
+    if (auto* material = context_->GetSubsystem<ResourceCache>()->GetResource<Material>(materialName_))
     {
         if (oldValue_.techniqueName_.empty() && !newValue_.techniqueName_.empty())
             // Was added
@@ -125,12 +124,14 @@ void TechniqueChangedAction::Redo()
             // Was modified
             SetTechnique(newValue_);
 
-        context_->GetCache()->IgnoreResourceReload(material);
-        material->SaveFile(context_->GetCache()->GetResourceFileName(material->GetName()));
+        context_->GetSubsystem<ResourceCache>()->IgnoreResourceReload(material);
+        material->SaveFile(context_->GetSubsystem<ResourceCache>()->GetResourceFileName(material->GetName()));
+        return true;
     }
+    return false;
 }
 
-ShaderParameterChangedAction::ShaderParameterChangedAction(const Material* material, const ea::string& parameterName, const Variant& oldValue, const Variant& newValue)
+UndoShaderParameterChanged::UndoShaderParameterChanged(const Material* material, const ea::string& parameterName, const Variant& oldValue, const Variant& newValue)
     : context_(material->GetContext())
     , materialName_(material->GetName())
     , parameterName_(parameterName)
@@ -139,9 +140,9 @@ ShaderParameterChangedAction::ShaderParameterChangedAction(const Material* mater
 {
 }
 
-void ShaderParameterChangedAction::Undo()
+bool UndoShaderParameterChanged::Undo(Context* context)
 {
-    if (auto* material = context_->GetCache()->GetResource<Material>(materialName_))
+    if (auto* material = context_->GetSubsystem<ResourceCache>()->GetResource<Material>(materialName_))
     {
         if (oldValue_.IsEmpty() && !newValue_.IsEmpty())
             // Was added
@@ -150,14 +151,16 @@ void ShaderParameterChangedAction::Undo()
             // Was removed or modified
             material->SetShaderParameter(parameterName_, oldValue_);
 
-        context_->GetCache()->IgnoreResourceReload(material);
-        material->SaveFile(context_->GetCache()->GetResourceFileName(material->GetName()));
+        context_->GetSubsystem<ResourceCache>()->IgnoreResourceReload(material);
+        material->SaveFile(context_->GetSubsystem<ResourceCache>()->GetResourceFileName(material->GetName()));
+        return true;
     }
+    return false;
 }
 
-void ShaderParameterChangedAction::Redo()
+bool UndoShaderParameterChanged::Redo(Context* context)
 {
-    if (auto* material = context_->GetCache()->GetResource<Material>(materialName_))
+    if (auto* material = context_->GetSubsystem<ResourceCache>()->GetResource<Material>(materialName_))
     {
         if (!oldValue_.IsEmpty() && newValue_.IsEmpty())
             // Was removed
@@ -166,11 +169,11 @@ void ShaderParameterChangedAction::Redo()
             // Was added or modified
             material->SetShaderParameter(parameterName_, newValue_);
 
-        context_->GetCache()->IgnoreResourceReload(material);
-        material->SaveFile(context_->GetCache()->GetResourceFileName(material->GetName()));
+        context_->GetSubsystem<ResourceCache>()->IgnoreResourceReload(material);
+        material->SaveFile(context_->GetSubsystem<ResourceCache>()->GetResourceFileName(material->GetName()));
+        return true;
     }
+    return false;
 }
-
-}   // namespace Undo
 
 }   // namespace Urho3D

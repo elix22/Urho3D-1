@@ -89,8 +89,8 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #ifndef EASTL_VERSION
-	#define EASTL_VERSION   "3.13.04"
-	#define EASTL_VERSION_N  31304
+	#define EASTL_VERSION   "3.16.07"
+	#define EASTL_VERSION_N  31607
 #endif
 
 
@@ -146,15 +146,15 @@
 
 	#if defined(EA_COMPILER_MSVC_2015)
 		#define EA_CPP14_CONSTEXPR  // not supported
-		#define EA_NO_CPP14_CONSTEXPR
+		#define EA_NO_CPP14_CONSTEXPR 
 	#elif defined(__GNUC__) && (EA_COMPILER_VERSION < 9000)   // Before GCC 9.0
 		#define EA_CPP14_CONSTEXPR  // not supported
-		#define EA_NO_CPP14_CONSTEXPR
+		#define EA_NO_CPP14_CONSTEXPR 
 	#elif defined(EA_COMPILER_CPP14_ENABLED)
 		#define EA_CPP14_CONSTEXPR constexpr
 	#else
 		#define EA_CPP14_CONSTEXPR  // not supported
-		#define EA_NO_CPP14_CONSTEXPR
+		#define EA_NO_CPP14_CONSTEXPR 
 	#endif
 #endif
 
@@ -250,6 +250,20 @@ namespace eastl
 
 
 ///////////////////////////////////////////////////////////////////////////////
+// EASTL_IF_NOT_DLL
+//
+// Utility to include expressions only for static builds. 
+//
+#ifndef EASTL_IF_NOT_DLL
+	#if EASTL_DLL
+		#define EASTL_IF_NOT_DLL(x) 
+	#else
+		#define EASTL_IF_NOT_DLL(x) x
+	#endif
+#endif
+
+
+///////////////////////////////////////////////////////////////////////////////
 // EASTL_API
 //
 // This is used to label functions as DLL exports under Microsoft platforms.
@@ -276,7 +290,7 @@ namespace eastl
 #ifndef EASTL_API // If the build file hasn't already defined this to be dllexport...
 	#if EASTL_DLL
 		#if defined(_WIN32)
-			#if defined(EASTL_EXPORTS) || defined(URHO3D_EXPORTS)
+			#if defined(EASTL_EXPORTS)
 				#define EASTL_API      __declspec(dllexport)
 			#else
 				#define EASTL_API      __declspec(dllimport)
@@ -307,7 +321,7 @@ namespace eastl
 #ifndef EASTL_EASTDC_API
 	#if EASTL_DLL
 		#if defined(_WIN32)
-			#if defined(EASTL_EXPORTS) || defined(URHO3D_EXPORTS)
+			#if defined(EASTL_EXPORTS)
 				#define EASTL_EASTDC_API      __declspec(dllexport)
 			#else
 				#define EASTL_EASTDC_API      __declspec(dllimport)
@@ -442,6 +456,8 @@ namespace eastl
 // the front of the container, but not use it if the container is empty.
 // In practice it's often easier and more efficient to do this than to write
 // extra code to check if the container is empty.
+//
+// NOTE: If this is enabled, EASTL_ASSERT_ENABLED must also be enabled
 //
 // Example usage:
 //     template <typename T, typename Allocator>
@@ -647,6 +663,9 @@ namespace eastl
 			#define EASTL_DEBUG_BREAK() { __asm int 3 }
 		#elif (defined(EA_PROCESSOR_X86) || defined(EA_PROCESSOR_X86_64)) && (defined(EA_ASM_STYLE_ATT) || defined(__GNUC__))
 			#define EASTL_DEBUG_BREAK() asm("int3")
+		#elif defined(EA_PLATFORM_POSIX)
+			#include <signal.h>
+			#define EASTL_DEBUG_BREAK() raise(SIGTRAP)  // Urho3D
 		#else
 			void EASTL_DEBUG_BREAK(); // User must define this externally.
 		#endif
@@ -1538,13 +1557,8 @@ namespace eastl
 //    size_t alignment = EASTL_ALIGN_OF(int);
 //
 ///////////////////////////////////////////////////////////////////////////////
-
 #ifndef EASTL_ALIGN_OF
-	#if !defined(__GNUC__) || (__GNUC__ >= 3) // GCC 2.x doesn't do __alignof correctly all the time.
-		#define EASTL_ALIGN_OF __alignof
-	#else
-		#define EASTL_ALIGN_OF(type) ((size_t)offsetof(struct{ char c; type m; }, m))
-	#endif
+	#define EASTL_ALIGN_OF alignof
 #endif
 
 
@@ -1762,20 +1776,13 @@ typedef EASTL_SSIZE_T eastl_ssize_t; // Signed version of eastl_size_t. Concept 
 	#endif
 #endif
 
+
 /// EASTL_TUPLE_ENABLED
 /// EASTL tuple implementation depends on variadic template support
 #if EASTL_VARIADIC_TEMPLATES_ENABLED && !defined(EA_COMPILER_NO_TEMPLATE_ALIASES)
 	#define EASTL_TUPLE_ENABLED 1
 #else
 	#define EASTL_TUPLE_ENABLED 0
-#endif
-
-/// EA_ONCE
-///
-/// This is a fix for the EA_ONCE define that's broken in EABase versions prior to 2.00.40
-///
-#ifndef EA_ONCE
-	#define EA_ONCE()
 #endif
 
 
@@ -1861,10 +1868,10 @@ typedef EASTL_SSIZE_T eastl_ssize_t; // Signed version of eastl_size_t. Concept 
 
 
 /// EASTL_ENABLE_PAIR_FIRST_ELEMENT_CONSTRUCTOR
-/// This feature define allows users to toggle the problematic eastl::pair implicit
+/// This feature define allows users to toggle the problematic eastl::pair implicit 
 /// single element constructor.
 #ifndef EASTL_ENABLE_PAIR_FIRST_ELEMENT_CONSTRUCTOR
-	#define EASTL_ENABLE_PAIR_FIRST_ELEMENT_CONSTRUCTOR 1
+	#define EASTL_ENABLE_PAIR_FIRST_ELEMENT_CONSTRUCTOR 0
 #endif
 
 

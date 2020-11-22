@@ -1,4 +1,5 @@
 ## Credits
+
 Urho3D development, contributions and bugfixes by:
 - Lasse Öörni
 - Wei Tjong Yao
@@ -14,6 +15,7 @@ Urho3D development, contributions and bugfixes by:
 - Danny Boisvert
 - Sergey Bosko
 - Lisandro Bruzzo
+- Steven Burns
 - Thomas Böhm
 - Carlo Carollo
 - Pete Chown
@@ -91,6 +93,7 @@ Urho3D development, contributions and bugfixes by:
 - Fastran
 - Firegorilla
 - Gordon-F
+- Igor Segalla
 - LordGolias
 - Lumak
 - Magic.Lixin
@@ -101,6 +104,7 @@ Urho3D development, contributions and bugfixes by:
 - OvermindDL1
 - Polynominal
 - PredatorMF
+- PsychoCircuitry
 - Scellow
 - Skrylar
 - SuperWangKai
@@ -137,7 +141,9 @@ Urho3D development, contributions and bugfixes by:
 - ninjastone
 - orefkov
 - pat2nav
+- pflat
 - proller
+- r-a-sattarov
 - raould
 - rasteron
 - reattiva
@@ -147,12 +153,16 @@ Urho3D development, contributions and bugfixes by:
 - smortex
 - ssinai1
 - sssooonnnggg
+- stievie
 - svifylabs
 - szamq
 - thebluefish
 - tommy3
 - yushli
 - zlum
+- ChrisDenham
+- Katekov Anton
+- SirNate0
 
 Urho3D is greatly inspired by OGRE (http://www.ogre3d.org) and Horde3D
 (http://www.horde3d.org). Additional inspiration & research used:

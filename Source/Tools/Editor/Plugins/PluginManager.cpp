@@ -117,7 +117,7 @@ void PluginManager::OnEndFrame()
         bool pluginOutOfDate = false;
 
         // Plugin reloading is not used in headless executions.
-        if (!context_->GetEngine()->IsHeadless())
+        if (!context_->GetSubsystem<Engine>()->IsHeadless())
         {
             // Check for modified plugins once in a while, do not hammer syscalls on every frame.
             if (checkOutOfDatePlugins)
@@ -136,11 +136,7 @@ void PluginManager::OnEndFrame()
             plugin->application_->Unload();
 
             int allowedPluginRefs = 1;
-#if URHO3D_CSHARP
-            if (plugin->application_->HasScriptObject())
-                allowedPluginRefs = 2;
-#endif
-            if (plugin->application_->Refs() != allowedPluginRefs)
+            if (plugin->application_->Refs() != 1)
             {
                 URHO3D_LOGERROR("Plugin application '{}' has more than one reference remaining. "
                                  "This will lead to memory leaks or crashes.",
@@ -219,7 +215,7 @@ const StringVector& PluginManager::GetPluginNames()
 
     if (pluginNames->empty())
     {
-        FileSystem* fs = context_->GetFileSystem();
+        FileSystem* fs = context_->GetSubsystem<FileSystem>();
 
         StringVector files;
         ea::unordered_map<ea::string, ea::string> nameToPath;
@@ -300,11 +296,6 @@ bool PluginManager::Serialize(Archive& archive)
             }
         }
     }
-#endif
-
-#if URHO3D_CSHARP
-    if (archive.IsInput())
-        Load(ScriptBundlePlugin::GetTypeStatic(), "Scripts");
 #endif
 
     return true;

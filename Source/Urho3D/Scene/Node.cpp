@@ -501,16 +501,18 @@ void Node::AddTag(const ea::string& tag)
     impl_->tags_.push_back(tag);
 
     // Cache
-    scene_->NodeTagAdded(this, tag);
-
-    // Send event
-    using namespace NodeTagAdded;
-    VariantMap& eventData = GetEventDataMap();
-    eventData[P_SCENE] = scene_;
-    eventData[P_NODE] = this;
-    eventData[P_TAG] = tag;
-    scene_->SendEvent(E_NODETAGADDED, eventData);
-
+    if (scene_)
+    {
+        scene_->NodeTagAdded(this, tag);
+    
+        // Send event
+        using namespace NodeTagAdded;
+        VariantMap& eventData = GetEventDataMap();
+        eventData[P_SCENE] = scene_;
+        eventData[P_NODE] = this;
+        eventData[P_TAG] = tag;
+        scene_->SendEvent(E_NODETAGADDED, eventData);
+    }
     // Sync
     MarkNetworkUpdate();
 }
@@ -1583,11 +1585,6 @@ Component* Node::GetParentComponent(StringHash type, bool fullTraversal) const
 void Node::SetID(unsigned id)
 {
     id_ = id;
-}
-
-void Node::SetEntity(entt::entity entity)
-{
-    entity_ = entity;
 }
 
 void Node::SetScene(Scene* scene)

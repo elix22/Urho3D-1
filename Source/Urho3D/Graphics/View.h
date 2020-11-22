@@ -35,6 +35,7 @@ namespace Urho3D
 
 class Camera;
 class DebugRenderer;
+class GlobalIllumination;
 class Light;
 class Drawable;
 class Graphics;
@@ -68,9 +69,9 @@ struct LightQueryResult
     unsigned shadowCasterEnd_[MAX_LIGHT_SPLITS];
     /// Combined bounding box of shadow casters in light projection space. Only used for focused spot lights.
     BoundingBox shadowCasterBox_[MAX_LIGHT_SPLITS];
-    /// Shadow camera near splits (directional lights only.)
+    /// Shadow camera near splits (directional lights only).
     float shadowNearSplits_[MAX_LIGHT_SPLITS];
-    /// Shadow camera far splits (directional lights only.)
+    /// Shadow camera far splits (directional lights only).
     float shadowFarSplits_[MAX_LIGHT_SPLITS];
     /// Shadow map split count.
     unsigned numSplits_;
@@ -136,6 +137,9 @@ public:
     /// Return octree.
     Octree* GetOctree() const { return octree_; }
 
+    /// Return global illumination manager.
+    GlobalIllumination* GetGlobalIllumination() const { return globalIllumination_; }
+
     /// Return viewport camera.
     Camera* GetCamera() const { return camera_; }
 
@@ -147,6 +151,13 @@ public:
 
     /// Return the rendertarget. 0 if using the backbuffer.
     RenderSurface* GetRenderTarget() const { return renderTarget_; }
+
+    /// Return extra render target declared in render path.
+    Texture* GetExtraRenderTarget(const StringHash& name) const
+    {
+        auto iter = renderTargets_.find(name);
+        return iter != renderTargets_.end() ? iter->second : nullptr;
+    }
 
     /// Return whether should draw debug geometry.
     bool GetDrawDebug() const { return drawDebug_; }
@@ -212,7 +223,7 @@ private:
     void ExecuteRenderPathCommands();
     /// Set rendertargets for current render command.
     void SetRenderTargets(RenderPathCommand& command);
-    /// Set textures for current render command. Return whether depth write is allowed (depth-stencil not bound as a texture.)
+    /// Set textures for current render command. Return whether depth write is allowed (depth-stencil not bound as a texture).
     bool SetTextures(RenderPathCommand& command);
     /// Perform a quad rendering command.
     void RenderQuad(RenderPathCommand& command);
@@ -238,7 +249,7 @@ private:
     void ProcessShadowCasters(LightQueryResult& query, const ea::vector<Drawable*>& drawables, unsigned splitIndex);
     /// Set up initial shadow camera view(s).
     void SetupShadowCameras(LightQueryResult& query);
-    /// Set up a directional light shadow camera
+    /// Set up a directional light shadow camera.
     void SetupDirLightShadowCamera(Camera* shadowCamera, Light* light, float nearSplit, float farSplit);
     /// Finalize shadow camera view after shadow casters and the shadow map are known.
     void
@@ -255,7 +266,7 @@ private:
     void FindZone(Drawable* drawable);
     /// Return material technique, considering the drawable's LOD distance.
     Technique* GetTechnique(Drawable* drawable, Material* material);
-    /// Check if material should render an auxiliary view (if it has a camera attached.)
+    /// Check if material should render an auxiliary view (if it has a camera attached).
     void CheckMaterialForAuxView(Material* material);
     /// Set shader defines for a batch queue if used.
     void SetQueueShaderDefines(BatchQueue& queue, const RenderPathCommand& command);
@@ -314,6 +325,8 @@ private:
     Scene* scene_{};
     /// Octree to use.
     Octree* octree_{};
+    /// Global illumination manager.
+    GlobalIllumination* globalIllumination_{};
     /// Viewport (rendering) camera.
     Camera* camera_{};
     /// Culling camera. Usually same as the viewport camera.

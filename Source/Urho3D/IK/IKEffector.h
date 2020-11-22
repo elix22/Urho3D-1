@@ -35,7 +35,7 @@ class IKSolver;
 
 class URHO3D_API IKEffector : public Component
 {
-    URHO3D_OBJECT(IKEffector, Component)
+    URHO3D_OBJECT(IKEffector, Component);
 
 public:
 
@@ -70,15 +70,19 @@ public:
     /// Registers this class as an object factory.
     static void RegisterObject(Context* context);
 
-    /// Test if a certain feature is enabled (see IKEffector::Feature)
+    /// Test if a certain feature is enabled (see IKEffector::Feature).
+    /// @nobind
     bool GetFeature(Feature feature) const;
-    /// Enable or disable a certain feature (see IKEffector::Feature)
+    /// Enable or disable a certain feature (see IKEffector::Feature).
+    /// @nobind
     void SetFeature(Feature feature, bool enable);
 
     /// Retrieves the node that is being used as a target. Can be NULL.
+    /// @property
     Node* GetTargetNode() const;
 
     /*!
+     * @property
      * @brief The position of the target node provides the target position of
      * the effector node.
      *
@@ -93,12 +97,14 @@ public:
     void SetTargetNode(Node* targetNode);
 
     /*!
+     * @property
      * @brief Retrieves the name of the target node. The node doesn't
      * necessarily have to exist in the scene graph.
      */
     const ea::string& GetTargetName() const;
 
     /*!
+     * @property
      * @brief Sets the name of the target node. The node doesn't necessarily
      * have to exist in the scene graph. When a node is created that matches
      * this name, it is selected as the target.
@@ -107,29 +113,37 @@ public:
     void SetTargetName(const ea::string& nodeName);
 
     /// Returns the current target position in world space.
+    /// @property
     const Vector3& GetTargetPosition() const;
     /// Sets the current target position. If the effector has a target node then this will have no effect.
+    /// @property
     void SetTargetPosition(const Vector3& targetPosition);
 
     /// Gets the current target rotation in world space.
+    /// @property
     const Quaternion& GetTargetRotation() const;
     /// Sets the current target rotation. If the effector has a target node then this will have no effect.
+    /// @property
     void SetTargetRotation(const Quaternion& targetRotation);
 
-    /// Required for the editor, get the target rotation in euler angles
+    /// Required for the editor, get the target rotation in euler angles.
     Vector3 GetTargetRotationEuler() const;
-    /// Required for the editor, sets the target rotation in euler angles
+    /// Required for the editor, sets the target rotation in euler angles.
     void SetTargetRotationEuler(const Vector3& targetRotation);
 
     /// Returns the number of segments that will be affected by this effector. 0 Means all nodes between this effector and the next IKSolver.
+    /// @property
     unsigned GetChainLength() const;
     /// Sets the number of segments that will be affected. 0 Means all nodes between this effector and the next IKSolver.
+    /// @property
     void SetChainLength(unsigned chainLength);
 
     /// How strongly the effector affects the solution.
+    /// @property
     float GetWeight() const;
 
     /*!
+     * @property
      * @brief Sets how much influence the effector has on the solution.
      *
      * You can use this value to smoothly transition between a solved pose and
@@ -138,10 +152,12 @@ public:
      */
     void SetWeight(float weight);
 
-    /// How strongly the target node's rotation influences the solution
+    /// How strongly the target node's rotation influences the solution.
+    /// @property
     float GetRotationWeight() const;
 
     /*!
+     * @property
      * @brief Sets how much influence the target rotation should have on the
      * solution. A value of 1 means to match the target rotation exactly, if
      * possible. A value of 0 means to not match it at all.
@@ -151,9 +167,11 @@ public:
     void SetRotationWeight(float weight);
 
     /// Retrieves the rotation decay factor. See SetRotationDecay() for info.
+    /// @property
     float GetRotationDecay() const;
 
     /*!
+     * @property
      * @brief A factor with which to control the target rotation influence of
      * the next segments down the chain.
      *
@@ -171,15 +189,15 @@ public:
 private:
     friend class IKSolver;
 
-    /// Intended to be used only by IKSolver
+    /// Intended to be used only by IKSolver.
     void SetIKSolver(IKSolver* solver);
-    /// Intended to be used only by IKSolver
+    /// Intended to be used only by IKSolver.
     void SetIKEffectorNode(ik_node_t* effectorNode);
-    /// Intended to be used by IKSolver. Copies the positions/rotations of the target node into the effector
+    /// Intended to be used by IKSolver. Copies the positions/rotations of the target node into the effector.
     void UpdateTargetNodePosition();
 
 public:
-    /// Need these wrapper functions flags of GetFeature/SetFeature can be correctly exposed to the editor and to AngelScript and lua
+    /// Need these wrapper functions flags of GetFeature/SetFeature can be correctly exposed to the editor and to AngelScript and lua.
     bool GetWEIGHT_NLERP() const;
     bool GetINHERIT_PARENT_ROTATION() const;
     void SetWEIGHT_NLERP(bool enable);

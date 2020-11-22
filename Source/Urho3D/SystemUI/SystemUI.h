@@ -23,6 +23,7 @@
 #pragma once
 
 
+#include "../Container/ValueCache.h"
 #include "../Core/Object.h"
 #include "../Graphics/IndexBuffer.h"
 #include "../Graphics/Texture2D.h"
@@ -77,30 +78,36 @@ public:
     /// \param darkStyle enables dark style, otherwise it is a light style.
     /// \param alpha value between 0.0f - 1.0f
     void ApplyStyleDefault(bool darkStyle, float alpha);
-    /// Return whether user is interacting with any ui element.
-    bool IsAnyItemActive() const;
-    /// Return whether mouse is hovering any system ui component.
-    bool IsAnyItemHovered() const;
-    /// Prepares font textures, updates projection matrix and does other things that are required to start this subsystem.
-    void Start();
     /// Hold a reference to this texture until end of frame.
     void ReferenceTexture(Texture2D* texture) { referencedTextures_.push_back(SharedPtr(texture)); }
+    /// Return value cache for storing temporary UI state that expires when unused.
+    ValueCache& GetValueCache() { return cache_; }
+    /// When set to true, SystemUI will not consume SDL events and they will be passed to to Input and other subsystems.
+    void SetPassThroughEvents(bool enabled) { passThroughEvents_ = enabled; }
+    /// Return true if SystemUI is allowing events through even when SystemUI is handling them.
+    bool GetPassThroughEvents() const { return passThroughEvents_; }
 
 protected:
     VertexBuffer vertexBuffer_;
     IndexBuffer indexBuffer_;
-    SharedPtr<Texture2D> fontTexture_;
+    ea::vector<SharedPtr<Texture2D>> fontTextures_;
     ea::vector<float> fontSizes_;
     ImGuiContext* imContext_;
     ea::vector<SharedPtr<Texture2D>> referencedTextures_;
+    ValueCache cache_{context_};
+    /// When set to true, SystemUI will not consume SDL events and they will be passed to to Input and other subsystems.
+    bool passThroughEvents_ = false;
 
     void PlatformInitialize();
     void PlatformShutdown();
     void ReallocateFontTexture();
+    void ClearPerScreenFonts();
+    ImTextureID AllocateFontTexture(ImFontAtlas* atlas);
     void OnRawEvent(VariantMap& args);
     void OnScreenMode(VariantMap& args);
     void OnInputEnd(VariantMap& args);
     void OnRenderEnd();
+    void OnMouseVisibilityChanged(StringHash, VariantMap& args);
 };
 
 /// Convert Color to ImVec4.
@@ -118,6 +125,12 @@ inline IntRect ToIntRect(const ImRect& rect) { return {ToIntVector2(rect.Min), T
 
 }
 
+enum ImGuiItemMouseActivation
+{
+    ImGuiItemMouseActivation_Click,
+    ImGuiItemMouseActivation_Dragging,
+};
+
 namespace ImGui
 {
 
@@ -128,8 +141,8 @@ URHO3D_API bool IsMouseReleased(Urho3D::MouseButton button);
 URHO3D_API bool IsMouseClicked(Urho3D::MouseButton button, bool repeat=false);
 URHO3D_API bool IsItemClicked(Urho3D::MouseButton button);
 URHO3D_API ImVec2 GetMouseDragDelta(Urho3D::MouseButton button, float lock_threshold = -1.0f);
-URHO3D_API bool SetDragDropVariant(const char* type, const Urho3D::Variant& variant, ImGuiCond cond = 0);
-URHO3D_API const Urho3D::Variant& AcceptDragDropVariant(const char* type, ImGuiDragDropFlags flags = 0);
+URHO3D_API bool SetDragDropVariant(const ea::string& types, const Urho3D::Variant& variant, ImGuiCond cond = 0);
+URHO3D_API const Urho3D::Variant& AcceptDragDropVariant(const ea::string& type, ImGuiDragDropFlags flags = 0);
 URHO3D_API void Image(Urho3D::Texture2D* user_texture_id, const ImVec2& size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1), const ImVec4& tint_col = ImVec4(1, 1, 1, 1), const ImVec4& border_col = ImVec4(0, 0, 0, 0));
 /// Render an image which is also an item that can be activated.
 URHO3D_API void ImageItem(Urho3D::Texture2D* user_texture_id, const ImVec2& size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1), const ImVec4& tint_col = ImVec4(1, 1, 1, 1), const ImVec4& border_col = ImVec4(0, 0, 0, 0));
@@ -139,7 +152,7 @@ URHO3D_API bool IsKeyPressed(Urho3D::Key key, bool repeat = true);
 URHO3D_API bool IsKeyReleased(Urho3D::Key key);
 URHO3D_API int GetKeyPressedAmount(Urho3D::Key key, float repeat_delay, float rate);
 /// Activate last item if specified mouse button is pressed and held over it, deactivate when released.
-URHO3D_API bool ItemMouseActivation(Urho3D::MouseButton button);
+URHO3D_API bool ItemMouseActivation(Urho3D::MouseButton button, unsigned flags = ImGuiItemMouseActivation_Click);
 
 }
 
@@ -152,6 +165,6 @@ static inline ImRect& operator+=(ImRect& lhs, const ImRect& rhs) { lhs.Min += rh
 static inline ImRect operator/(const ImRect& lhs, float rhs) { return ImRect(lhs.Min / rhs, lhs.Max / rhs); }
 static inline ImRect& operator/=(ImRect& lhs, float rhs) { lhs.Min /= rhs; lhs.Max /= rhs; return lhs; }
 static inline ImRect& operator*=(ImRect& lhs, float rhs) { lhs.Min *= rhs; lhs.Max *= rhs; return lhs; }
-static inline ImRect ImRound(const ImRect& r) { return ImRect(ImRound(r.Min), ImRound(r.Max)); };
+static inline ImRect ImRound(const ImRect& r) { return ImRect({Urho3D::Round(r.Min.x), Urho3D::Round(r.Min.y)}, {Urho3D::Round(r.Max.x), Urho3D::Round(r.Max.y)}); };
 
 namespace ui = ImGui;

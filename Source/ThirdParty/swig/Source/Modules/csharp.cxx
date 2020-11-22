@@ -61,6 +61,9 @@ class CSHARP:public Language {
   String *module_class_constants_code;
   String *enum_code;
   String *dllimport;		// DllImport attribute name
+#ifndef WITHOUT_RBFX
+  String *dllimport_module;		// Variable used in DllImport attribute
+#endif
   String *namespce;		// Optional namespace name
   String *imclass_imports;	//intermediary class imports from %pragma
   String *module_imports;	//module imports from %pragma
@@ -415,6 +418,14 @@ public:
     if (!dllimport)
       dllimport = Copy(module_class_name);
 
+#ifndef WITHOUT_RBFX
+    dllimport_module = Copy(dllimport);
+    Delete(dllimport);
+    dllimport = NewString("");
+    Printf(dllimport, "global::%s.%s.DllImportModule", namespce, imclass_name);
+#else
+    dllimport_var = Copy(dllimport);
+#endif
     Swig_banner(f_begin);
 
     Printf(f_runtime, "\n\n#ifndef SWIGCSHARP\n#define SWIGCSHARP\n#endif\n\n");
@@ -489,6 +500,9 @@ public:
       // Add the intermediary class methods
       Replaceall(imclass_class_code, "$module", module_class_name);
       Replaceall(imclass_class_code, "$imclassname", imclass_name);
+#ifndef WITHOUT_RBFX
+      Replaceall(imclass_class_code, "$dllimport_module", dllimport_module);
+#endif
       Replaceall(imclass_class_code, "$dllimport", dllimport);
       Printv(f_im, imclass_class_code, NIL);
       Printv(f_im, imclass_cppcasts_code, NIL);
@@ -540,6 +554,10 @@ public:
       Replaceall(module_class_code, "$imclassname", imclass_name);
       Replaceall(module_class_constants_code, "$imclassname", imclass_name);
 
+#ifndef WITHOUT_RBFX
+      Replaceall(module_class_code, "$dllimport_module", dllimport_module);
+      Replaceall(module_class_constants_code, "$dllimport_module", dllimport_module);
+#endif
       Replaceall(module_class_code, "$dllimport", dllimport);
       Replaceall(module_class_constants_code, "$dllimport", dllimport);
 
@@ -639,6 +657,8 @@ public:
     typeid_imcode = NULL;
     Delete(typeid_cppcode);
     typeid_cppcode = NULL;
+    Delete(dllimport_module);
+    dllimport_module = NULL;
 #endif
     Delete(dmethods_seq);
     dmethods_seq = NULL;
@@ -890,7 +910,7 @@ public:
       }
     }
 
-    Printv(imclass_class_code, "\n  [global::System.Runtime.InteropServices.DllImport(\"", dllimport, "\", EntryPoint=\"", wname, "\")]\n", NIL);
+    Printv(imclass_class_code, "\n  [global::System.Runtime.InteropServices.DllImport(", dllimport, ", EntryPoint=\"", wname, "\")]\n", NIL);
 
     if (im_outattributes)
       Printf(imclass_class_code, "  %s\n", im_outattributes);
@@ -1633,6 +1653,9 @@ public:
     String *section = Getattr(n, "section");
     Replaceall(code, "$module", module_class_name);
     Replaceall(code, "$imclassname", imclass_name);
+#ifndef WITHOUT_RBFX
+    Replaceall(code, "$dllimport_module", dllimport_module);
+#endif
     Replaceall(code, "$dllimport", dllimport);
 
     if (!ImportMode && (Cmp(section, "proxycode") == 0)) {
@@ -1796,7 +1819,7 @@ public:
   void upcastsCode(SwigType *smart, String *upcast_method_name, String *c_classname, String *c_baseclass) {
     String *wname = Swig_name_wrapper(upcast_method_name);
 
-    Printv(imclass_cppcasts_code, "\n  [global::System.Runtime.InteropServices.DllImport(\"", dllimport, "\", EntryPoint=\"", wname, "\")]\n", NIL);
+    Printv(imclass_cppcasts_code, "\n  [global::System.Runtime.InteropServices.DllImport(", dllimport, ", EntryPoint=\"", wname, "\")]\n", NIL);
     Printf(imclass_cppcasts_code, "  public static extern global::System.IntPtr %s(global::System.IntPtr jarg1);\n", upcast_method_name);
 
     Replaceall(imclass_cppcasts_code, "$csclassname", proxy_class_name);
@@ -2139,7 +2162,7 @@ public:
       String *typeid_method_name = Swig_name_member(getNSpace(), getClassPrefix(), "SWIGTypeId");
       String *wname = Swig_name_wrapper(typeid_method_name);
 
-      Printv(imclass_cppcasts_code, "\n  [global::System.Runtime.InteropServices.DllImport(\"", dllimport, "\", EntryPoint=\"", wname, "\")]\n", NIL);
+      Printv(imclass_cppcasts_code, "\n  [global::System.Runtime.InteropServices.DllImport(", dllimport, ", EntryPoint=\"", wname, "\")]\n", NIL);
       Printf(imclass_cppcasts_code, "  public static extern global::System.IntPtr %s(global::System.IntPtr jarg1);\n", typeid_method_name);
 
       Replaceall(imclass_cppcasts_code, "$csclassname", proxy_class_name);
@@ -2156,7 +2179,7 @@ public:
       typeid_method_name = Swig_name_member(getNSpace(), getClassPrefix(), "SWIGTypeIdStatic");
       wname = Swig_name_wrapper(typeid_method_name);
 
-      Printv(imclass_cppcasts_code, "\n  [global::System.Runtime.InteropServices.DllImport(\"", dllimport, "\", EntryPoint=\"", wname, "\")]\n", NIL);
+      Printv(imclass_cppcasts_code, "\n  [global::System.Runtime.InteropServices.DllImport(", dllimport, ", EntryPoint=\"", wname, "\")]\n", NIL);
       Printf(imclass_cppcasts_code, "  public static extern global::System.IntPtr %s();\n", typeid_method_name);
 
       Replaceall(imclass_cppcasts_code, "$csclassname", proxy_class_name);
@@ -2331,6 +2354,12 @@ public:
       Replaceall(proxy_class_constants_code, "$imclassname", full_imclass_name);
       Replaceall(interface_class_code, "$imclassname", full_imclass_name);
 
+#ifndef WITHOUT_RBFX
+      Replaceall(proxy_class_def, "$dllimport_module", dllimport_module);
+      Replaceall(proxy_class_code, "$dllimport_module", dllimport_module);
+      Replaceall(proxy_class_constants_code, "$dllimport_module", dllimport_module);
+      Replaceall(interface_class_code, "$dllimport_module", dllimport_module);
+#endif
       Replaceall(proxy_class_def, "$dllimport", dllimport);
       Replaceall(proxy_class_code, "$dllimport", dllimport);
       Replaceall(proxy_class_constants_code, "$dllimport", dllimport);
@@ -3670,6 +3699,9 @@ public:
     Replaceall(swigtype, "$csclassname", classname);
     Replaceall(swigtype, "$module", module_class_name);
     Replaceall(swigtype, "$imclassname", imclass_name);
+#ifndef WITHOUT_RBFX
+    Replaceall(swigtype, "$dllimport_module", dllimport_module);
+#endif
     Replaceall(swigtype, "$dllimport", dllimport);
 
     // For unknown enums
@@ -3882,7 +3914,7 @@ public:
     if (nspace)
       Insert(qualified_classname, 0, NewStringf("%s.", nspace));
 
-    Printv(imclass_class_code, "\n  [global::System.Runtime.InteropServices.DllImport(\"", dllimport, "\", EntryPoint=\"", wname, "\")]\n", NIL);
+    Printv(imclass_class_code, "\n  [global::System.Runtime.InteropServices.DllImport(", dllimport, ", EntryPoint=\"", wname, "\")]\n", NIL);
 // #ifndef WITHOUT_RBFX
 //     Printf(imclass_class_code, "  public static extern void %s(global::System.Runtime.InteropServices.HandleRef jarg1, global::System.IntPtr handle", swig_director_connect);
 //
@@ -4051,10 +4083,21 @@ public:
 	  Printf(director_delegate_definitions, "  %s\n", im_directoroutattributes);
       }
 
+#ifndef WITHOUT_RBFX
+      Printf(callback_def, "#if __IOS__\n");
+      Printf(callback_def, "  [global::ObjCRuntime.MonoPInvokeCallback(typeof(SwigDelegate%s_<?next_method_id?>))]\n", classname);
+      Printf(callback_def, "#endif\n");
+      Printf(callback_def, "  static");
+#endif
       Printf(callback_def, "  private %s SwigDirectorMethod%s(", tm, overloaded_name);
       if (!ignored_method) {
 	const String *csdirectordelegatemodifiers = Getattr(n, "feature:csdirectordelegatemodifiers");
 	String *modifiers = (csdirectordelegatemodifiers ? NewStringf("%s%s", csdirectordelegatemodifiers, Len(csdirectordelegatemodifiers) > 0 ? " " : "") : NewStringf("public "));
+#ifndef WITHOUT_RBFX
+    Printf(director_delegate_definitions, "#if __IOS__\n");
+    Printf(director_delegate_definitions, "  [global::ObjCRuntime.MonoNativeFunctionWrapper]\n");
+    Printf(director_delegate_definitions, "#endif\n");
+#endif
 	Printf(director_delegate_definitions, "  %sdelegate %s", modifiers, tm);
 	Delete(modifiers);
       }
@@ -4303,7 +4346,11 @@ public:
     Append(declaration, ";\n");
 
     /* Finish off the inherited upcall's definition */
-
+#ifndef WITHOUT_RBFX
+    Printf(callback_def, "global::System.IntPtr _this");
+    if (Len(delegate_parms) > 0)
+      Printf(callback_def, ", ");
+#endif
     Printf(callback_def, "%s)", delegate_parms);
     Printf(callback_def, " {\n");
 
@@ -4313,6 +4360,10 @@ public:
 
     if ((tm = Swig_typemap_lookup("csdirectorout", n, "", 0))) {
       substituteClassname(returntype, tm);
+#ifndef WITHOUT_RBFX
+      Replaceall(tm, "$cscall", "$csclassname.wrap(_this, false).$cscall");
+      Replaceall(tm, "$csclassname", classname);
+#endif
       Replaceall(tm, "$cscall", upcall);
       if (!is_void)
 	Insert(tm, 0, "return ");
@@ -4341,8 +4392,11 @@ public:
       if (!is_void)
 	Printf(w->code, "jresult = (%s) ", c_ret_type);
 
+#ifndef WITHOUT_RBFX
+      Printf(w->code, "swig_callback%s((void*)this%s%s);\n", overloaded_name, Len(jupcall_args) ? ", " : "" , jupcall_args);
+#else
       Printf(w->code, "swig_callback%s(%s);\n", overloaded_name, jupcall_args);
-
+#endif
       if (!is_void) {
 	String *jresult_str = NewString("jresult");
 	String *result_str = NewString("c_result");
@@ -4399,6 +4453,13 @@ public:
       Delete(extra_method_name);
     }
 
+#ifndef WITHOUT_RBFX
+    // This stupid goto stuff is to swap "emit the director method" and "Emit the actual upcall through" while not introducing too big
+    // of a change delta.
+    goto emit_upcall;
+emit_director_method:
+#endif
+
     /* emit the director method */
     if (status == SWIG_OK && output_director) {
       if (!is_void) {
@@ -4416,20 +4477,37 @@ public:
       }
     }
 
+#ifndef WITHOUT_RBFX
+    goto director_done;
+emit_upcall:
+#endif
+
     if (!ignored_method) {
       /* Emit the actual upcall through */
       UpcallData *udata = addUpcallMethod(imclass_dmethod, symname, decl, overloaded_name);
       String *methid = Getattr(udata, "class_methodidx");
       Setattr(n, "upcalldata", udata);
+#ifndef WITHOUT_RBFX
+      // All attempts to get method id earlier resulted in broken code. Figuring this mess proved to be too time consuming. Replacing marker
+      // is definitely stupid, but it works.
+      Replaceall(callback_def, "<?next_method_id?>", methid);
+#endif
       /*
       Printf(stdout, "setting upcalldata, nodeType: %s %s::%s %p\n", nodeType(n), classname, Getattr(n, "name"), n);
       */
 
       Printf(director_callback_typedefs, "    typedef %s (SWIGSTDCALL* SWIG_Callback%s_t)(", c_ret_type, methid);
+#ifndef WITHOUT_RBFX
+      Printf(director_callback_typedefs, "void* _this%s", Len(callback_typedef_parms) ? ", " : "");
+#endif
       Printf(director_callback_typedefs, "%s);\n", callback_typedef_parms);
       Printf(director_callbacks, "    SWIG_Callback%s_t swig_callback%s;\n", methid, overloaded_name);
 
+#ifndef WITHOUT_RBFX
+      Printf(director_delegate_definitions, " SwigDelegate%s_%s(global::System.IntPtr _this%s%s);\n", classname, methid, Len(delegate_parms) ? ", " : "", delegate_parms);
+#else
       Printf(director_delegate_definitions, " SwigDelegate%s_%s(%s);\n", classname, methid, delegate_parms);
+#endif
 #ifndef WITHOUT_RBFX
       Printf(director_delegate_instances, "  [global::System.Diagnostics.DebuggerBrowsable(global::System.Diagnostics.DebuggerBrowsableState.Never)]\n");
 #endif
@@ -4446,6 +4524,11 @@ public:
 #endif
       Printf(director_connect_parms, "SwigDirector%s%s delegate%s", classname, methid, methid);
     }
+    
+#ifndef WITHOUT_RBFX
+    goto emit_director_method;
+director_done:
+#endif
 
     Delete(pre_code);
     Delete(post_code);

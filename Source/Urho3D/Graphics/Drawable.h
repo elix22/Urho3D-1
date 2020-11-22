@@ -109,6 +109,10 @@ struct URHO3D_API SourceBatch
     void* instancingData_{};
     /// %Geometry type.
     GeometryType geometryType_{GEOM_STATIC};
+    /// Lightmap UV scale and offset.
+    Vector4* lightmapScaleOffset_{};
+    /// Lightmap texture index.
+    unsigned lightmapIndex_{};
 
     /// Equality comparison operator.
     bool operator==(const SourceBatch& other) const
@@ -148,7 +152,7 @@ public:
     void OnSetEnabled() override;
     /// Process octree raycast. May be called from a worker thread.
     virtual void ProcessRayQuery(const RayOctreeQuery& query, ea::vector<RayQueryResult>& results);
-    /// Update before octree reinsertion. Is called from a worker thread
+    /// Update before octree reinsertion. Is called from a worker thread.
     virtual void Update(const FrameInfo& frame) { }
     /// Calculate distance and prepare batches for rendering. May be called from worker thread(s), possibly re-entrantly.
     virtual void UpdateBatches(const FrameInfo& frame);
@@ -170,73 +174,98 @@ public:
     void DrawDebugGeometry(DebugRenderer* debug, bool depthTest) override;
 
     /// Set draw distance.
+    /// @property
     void SetDrawDistance(float distance);
     /// Set shadow draw distance.
+    /// @property
     void SetShadowDistance(float distance);
     /// Set LOD bias.
+    /// @property
     void SetLodBias(float bias);
     /// Set view mask. Is and'ed with camera's view mask to see if the object should be rendered.
+    /// @property
     void SetViewMask(unsigned mask);
     /// Set light mask. Is and'ed with light's and zone's light mask to see if the object should be lit.
+    /// @property
     void SetLightMask(unsigned mask);
     /// Set shadow mask. Is and'ed with light's light mask and zone's shadow mask to see if the object should be rendered to a shadow map.
+    /// @property
     void SetShadowMask(unsigned mask);
     /// Set zone mask. Is and'ed with zone's zone mask to see if the object should belong to the zone.
+    /// @property
     void SetZoneMask(unsigned mask);
     /// Set maximum number of per-pixel lights. Default 0 is unlimited.
+    /// @property
     void SetMaxLights(unsigned num);
     /// Set shadowcaster flag.
+    /// @property
     void SetCastShadows(bool enable);
     /// Set occlusion flag.
+    /// @property
     void SetOccluder(bool enable);
     /// Set occludee flag.
+    /// @property
     void SetOccludee(bool enable);
     /// Mark for update and octree reinsertion. Update is automatically queued when the drawable's scene node moves or changes scale.
     void MarkForUpdate();
 
     /// Return local space bounding box. May not be applicable or properly updated on all drawables.
+    /// @property
     const BoundingBox& GetBoundingBox() const { return boundingBox_; }
 
     /// Return world-space bounding box.
+    /// @property
     const BoundingBox& GetWorldBoundingBox();
 
     /// Return drawable flags.
     DrawableFlags GetDrawableFlags() const { return drawableFlags_; }
 
     /// Return draw distance.
+    /// @property
     float GetDrawDistance() const { return drawDistance_; }
 
     /// Return shadow draw distance.
+    /// @property
     float GetShadowDistance() const { return shadowDistance_; }
 
     /// Return LOD bias.
+    /// @property
     float GetLodBias() const { return lodBias_; }
 
     /// Return view mask.
+    /// @property
     unsigned GetViewMask() const { return viewMask_; }
 
     /// Return light mask.
+    /// @property
     unsigned GetLightMask() const { return lightMask_; }
 
     /// Return shadow mask.
+    /// @property
     unsigned GetShadowMask() const { return shadowMask_; }
 
     /// Return zone mask.
+    /// @property
     unsigned GetZoneMask() const { return zoneMask_; }
 
     /// Return maximum number of per-pixel lights.
+    /// @property
     unsigned GetMaxLights() const { return maxLights_; }
 
     /// Return shadowcaster flag.
+    /// @property
     bool GetCastShadows() const { return castShadows_; }
 
     /// Return occluder flag.
+    /// @property
     bool IsOccluder() const { return occluder_; }
 
     /// Return occludee flag.
+    /// @property
     bool IsOccludee() const { return occludee_; }
 
     /// Return whether is in view this frame from any viewport camera. Excludes shadow map cameras.
+    /// @property
     bool IsInView() const;
     /// Return whether is in view of a specific camera this frame. Pass in a null camera to allow any camera, including shadow map cameras.
     bool IsInView(Camera* camera) const;
@@ -272,6 +301,7 @@ public:
     Octant* GetOctant() const { return octant_; }
 
     /// Return current zone.
+    /// @property
     Zone* GetZone() const { return zone_; }
 
     /// Return whether current zone is inconclusive or dirty due to the drawable moving.
@@ -306,6 +336,9 @@ public:
 
     /// Return the maximum view-space depth.
     float GetMaxZ() const { return maxZ_; }
+
+    /// Return mutable light probe tetrahedron hint.
+    unsigned& GetMutableLightProbeTetrahedronHint() { return lightProbeTetrahedronHint_; }
 
     /// Add a per-pixel light affecting the object this frame.
     void AddLight(Light* light)
@@ -396,6 +429,8 @@ protected:
     float maxZ_;
     /// LOD bias.
     float lodBias_;
+    /// Light probe tetrahedron hint.
+    unsigned lightProbeTetrahedronHint_{ M_MAX_UNSIGNED };
     /// Base pass flags, bit per batch.
     unsigned basePassFlags_;
     /// Maximum per-pixel lights.
@@ -415,6 +450,6 @@ inline bool CompareDrawables(const Drawable* lhs, const Drawable* rhs)
     return lhs->GetSortValue() < rhs->GetSortValue();
 }
 
-URHO3D_API bool WriteDrawablesToOBJ(ea::vector<Drawable*> drawables, File* outputFile, bool asZUp, bool asRightHanded, bool writeLightmapUV = false);
+URHO3D_API bool WriteDrawablesToOBJ(const ea::vector<Drawable*>& drawables, File* outputFile, bool asZUp, bool asRightHanded, bool writeLightmapUV = false);
 
 }

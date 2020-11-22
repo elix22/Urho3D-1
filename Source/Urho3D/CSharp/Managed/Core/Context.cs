@@ -40,7 +40,7 @@ namespace Urho3DNet
 
         private readonly Dictionary<uint, Type> _factoryTypes = new Dictionary<uint, Type>();
 
-        internal static void SetRuntimeApi(ScriptRuntimeApi impl)
+        public static void SetRuntimeApi(ScriptRuntimeApi impl)
         {
             Script.GetRuntimeApi()?.Dispose();
             Script.SetRuntimeApi(impl);
@@ -54,18 +54,28 @@ namespace Urho3DNet
         // This method may be overriden in partial class in order to attach extra logic to object constructor
         internal void OnSetupInstance()
         {
-            RegisterSubsystem(new Script(this));
+            using (var script = new Script(this))
+                RegisterSubsystem(script);
 
             Urho3DRegisterDirectorFactories(swigCPtr);
 
             // Register factories marked with attributes
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                foreach (var pair in assembly.GetTypesWithAttribute<ObjectFactoryAttribute>())
-                    RegisterFactory(pair.Item1, pair.Item2.Category);
-            }
+                RegisterFactories(assembly);
 
             Instance = this;
+        }
+
+        public void RegisterFactories(Assembly assembly)
+        {
+            foreach (var pair in assembly.GetTypesWithAttribute<ObjectFactoryAttribute>())
+                RegisterFactory(pair.Item1, pair.Item2.Category);
+        }
+
+        public void RemoveFactories(Assembly assembly)
+        {
+            foreach (var pair in assembly.GetTypesWithAttribute<ObjectFactoryAttribute>())
+                RemoveFactory(pair.Item1, pair.Item2.Category);
         }
 
         public void RegisterFactory<T>(string category = "") where T : Object
@@ -109,11 +119,11 @@ namespace Urho3DNet
         #region Interop
 
         [SuppressUnmanagedCodeSecurity]
-        [DllImport("Urho3D")]
+        [DllImport(global::Urho3DNet.Urho3DPINVOKE.DllImportModule)]
         private static extern void Urho3DRegisterDirectorFactories(HandleRef context);
 
         [SuppressUnmanagedCodeSecurity]
-        [DllImport("Urho3D")]
+        [DllImport(global::Urho3DNet.Urho3DPINVOKE.DllImportModule)]
         private static extern void Urho3D_Context_RegisterFactory(HandleRef context,
             [MarshalAs(UnmanagedType.LPStr)]string typeName, uint baseType,
             [MarshalAs(UnmanagedType.LPStr)]string category);

@@ -260,10 +260,15 @@ static const int MAX_EXTRA_INSTANCING_BUFFER_ELEMENTS = 4;
 inline ea::vector<VertexElement> CreateInstancingBufferElements(unsigned numExtraElements)
 {
     static const unsigned NUM_INSTANCEMATRIX_ELEMENTS = 3;
+#if URHO3D_SPHERICAL_HARMONICS
+    static const unsigned NUM_SHADERPARAMETER_ELEMENTS = 7;
+#else
+    static const unsigned NUM_SHADERPARAMETER_ELEMENTS = 1;
+#endif
     static const unsigned FIRST_UNUSED_TEXCOORD = 4;
 
     ea::vector<VertexElement> elements;
-    for (unsigned i = 0; i < NUM_INSTANCEMATRIX_ELEMENTS + numExtraElements; ++i)
+    for (unsigned i = 0; i < NUM_INSTANCEMATRIX_ELEMENTS + NUM_SHADERPARAMETER_ELEMENTS + numExtraElements; ++i)
         elements.push_back(VertexElement(TYPE_VECTOR4, SEM_TEXCOORD, FIRST_UNUSED_TEXCOORD + i, true));
     return elements;
 }
@@ -273,6 +278,11 @@ Renderer::Renderer(Context* context) :
     defaultZone_(context->CreateObject<Zone>())
 {
     SubscribeToEvent(E_SCREENMODE, URHO3D_HANDLER(Renderer, HandleScreenMode));
+
+#if URHO3D_SPHERICAL_HARMONICS
+    sphericalHarmonics_ = true;
+    SetGlobalShaderDefine("SPHERICALHARMONICS", sphericalHarmonics_);
+#endif
 
     // Try to initialize right now, but skip if screen mode is not yet set
     Initialize();
@@ -540,6 +550,24 @@ void Renderer::SetMobileShadowBiasAdd(float add)
 void Renderer::SetMobileNormalOffsetMul(float mul)
 {
     mobileNormalOffsetMul_ = mul;
+}
+
+void Renderer::SetSphericalHarmonics(bool enable)
+{
+    if (sphericalHarmonics_ != enable)
+    {
+        URHO3D_LOGERROR("Spherical Harmonics cannot be enabled or disabled in runtime");
+    }
+}
+
+void Renderer::SetSkinningMode(SkinningMode mode)
+{
+    skinningMode_ = mode;
+}
+
+void Renderer::SetNumSoftwareSkinningBones(unsigned numBones)
+{
+    numSoftwareSkinningBones_ = numBones;
 }
 
 void Renderer::SetOccluderSizeThreshold(float screenSize)
@@ -1536,7 +1564,7 @@ void Renderer::UpdateQueuedViewport(unsigned index)
 
     auto* octree = scene->GetComponent<Octree>();
 
-    // Update octree (perform early update for drawables which need that, and reinsert moved drawables.)
+    // Update octree (perform early update for drawables which need that, and reinsert moved drawables).
     // However, if the same scene is viewed from multiple cameras, update the octree only once
     if (!updatedOctrees_.contains(octree))
     {
@@ -1625,6 +1653,8 @@ void Renderer::Initialize()
 
     graphics_ = graphics;
     graphics_->SetGlobalShaderDefines(globalShaderDefinesString_);
+
+    hardwareSkinningSupported_ = graphics_->GetMaxVertexShaderUniforms() >= 256;
 
     if (!graphics_->GetShadowMapFormat())
         drawShadows_ = false;

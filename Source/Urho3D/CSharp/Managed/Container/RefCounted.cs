@@ -1,14 +1,43 @@
+using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Threading;
+
 namespace Urho3DNet
 {
     public partial class RefCounted
     {
-        internal void ReleaseRefSafe()
+        /// <summary>
+        /// Helper that calls Dispose(true). This method is called from native code when object is about to be destroyed.
+        /// </summary>
+        internal void DisposeInternal()
         {
-            var script = Context.Instance?.GetSubsystem<Script>();
-            if (script != null)
-                script.ReleaseRefOnMainThread(this);
-            else
-                ReleaseRef();
+            Dispose(true);
+        }
+        /// <summary>
+        /// Returns true if native object pointer is null.
+        /// </summary>
+        public bool Expired => swigCPtr.Handle == IntPtr.Zero;
+        /// <summary>
+        /// Returns true if native object pointer is not null.
+        /// </summary>
+        public bool NotExpired => swigCPtr.Handle != IntPtr.Zero;
+        /// <summary>
+        /// Free GC handle saved in a native object instance.
+        /// </summary>
+        internal void FreeGCHandle()
+        {
+            if (Expired)
+                return;
+
+            IntPtr cPtr = GetScriptObject();
+            if (cPtr != IntPtr.Zero)
+            {
+                GCHandle handle = GCHandle.FromIntPtr(cPtr);
+                if (handle.IsAllocated)
+                    handle.Free();
+                ResetScriptObject();
+            }
         }
     }
 }

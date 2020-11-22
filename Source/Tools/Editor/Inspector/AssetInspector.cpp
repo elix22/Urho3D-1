@@ -23,29 +23,36 @@
 #include <Toolbox/SystemUI/Widgets.h>
 
 #include "Editor.h"
-#include "Project.h"
+#include "Pipeline/Pipeline.h"
+#include "Pipeline/Asset.h"
 #include "Inspector/AssetInspector.h"
+#include "Tabs/InspectorTab.h"
 
 namespace Urho3D
 {
 
 AssetInspector::AssetInspector(Context* context)
-    : InspectorProvider(context)
+    : Object(context)
 {
+    auto* editor = GetSubsystem<Editor>();
+    editor->onInspect_.Subscribe(this, &AssetInspector::RenderInspector);
 }
 
-void AssetInspector::RenderInspector(const char* filter)
+void AssetInspector::RenderInspector(InspectArgs& args)
 {
-    if (inspected_.Expired())
+    auto* asset = args.object_.Expired() ? nullptr : args.object_->Cast<Asset>();
+    if (asset == nullptr)
         return;
 
-    auto* project = GetSubsystem<Project>();
-    auto* asset = static_cast<Asset*>(inspected_.Get());
+    args.handledTimes_++;
+    ui::IdScope idScope(asset);
+    auto* pipeline = GetSubsystem<Pipeline>();
     bool tabBarStarted = false;
     bool save = false;
+    bool headerRendered = false;
 
     // Use flavors list from the pipeline because it is sorted. Asset::importers_ is unordered.
-    for (const SharedPtr<Flavor>& flavor : project->GetPipeline()->GetFlavors())
+    for (const SharedPtr<Flavor>& flavor : pipeline->GetFlavors())
     {
         bool tabStarted = false;
         bool tabVisible = false;
@@ -85,10 +92,15 @@ void AssetInspector::RenderInspector(const char* filter)
             {
                 // Defer rendering of tab bar and tabs until we know that we have compatible importers. As a result if
                 // file is not supported by any importer - tab bar with flavors and no content will not be shown.
+                if (!headerRendered)
+                {
+                    ui::TextCentered(Format("Asset: {}", asset->GetName()).c_str());
+                    ui::Separator();
+                    headerRendered = true;
+                }
+
                 if (!tabBarStarted)
                 {
-                    ui::TextUnformatted("Importers");
-                    ui::Separator();
                     ui::BeginTabBar(Format("###{}", (void*)this).c_str(), ImGuiTabBarFlags_None);
                     tabBarStarted = true;
                 }
@@ -103,8 +115,12 @@ void AssetInspector::RenderInspector(const char* filter)
 
                 if (tabVisible)
                 {
-                    RenderAttributes(importer, filter);
-                    save |= importer->IsModified();
+                    if (importer->GetNumAttributes() > 0 &&
+                        ui::CollapsingHeader(importer->GetTypeName().c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+                    {
+                        RenderAttributes(importer, args.filter_, importer);
+                        save |= importer->IsModified();
+                    }
                 }
             }
         }

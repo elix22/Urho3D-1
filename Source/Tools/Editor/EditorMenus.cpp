@@ -26,7 +26,10 @@
 #include <IconFontCppHeaders/IconsFontAwesome5.h>
 #include <nativefiledialog/nfd.h>
 #include <Toolbox/SystemUI/Widgets.h>
+
 #include "Plugins/ModulePlugin.h"
+#include "Pipeline/Flavor.h"
+#include "Pipeline/Pipeline.h"
 #include "Tabs/Scene/SceneTab.h"
 #include "Tabs/PreviewTab.h"
 #include "Editor.h"
@@ -88,7 +91,7 @@ void Editor::RenderMenuBar()
                 {
                     ea::string projectPath = project_->GetProjectPath();
                     CloseProject();
-                    context_->GetFileSystem()->Delete(projectPath + ".ui.ini");
+                    context_->GetSubsystem<FileSystem>()->Delete(projectPath + ".ui.ini");
                     OpenProject(projectPath);
                 }
 
@@ -131,7 +134,7 @@ void Editor::RenderMenuBar()
             {
                 if (ui::MenuItem("Profiler"))
                 {
-                    context_->GetFileSystem()->SystemSpawn(context_->GetFileSystem()->GetProgramDir() + "Profiler"
+                    context_->GetSubsystem<FileSystem>()->SystemSpawn(context_->GetSubsystem<FileSystem>()->GetProgramDir() + "Profiler"
 #if _WIN32
                         ".exe"
 #endif
@@ -165,7 +168,7 @@ void Editor::RenderProjectMenu()
 
     if (ui::BeginMenu(ICON_FA_BOXES " Repackage files"))
     {
-        Pipeline* pipeline = project_->GetPipeline();
+        auto pipeline = GetSubsystem<Pipeline>();
 
         if (ui::MenuItem("All Flavors"))
         {

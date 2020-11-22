@@ -25,7 +25,7 @@
 
 #include <EASTL/hash_set.h>
 #include <Urho3D/Core/Object.h>
-#include <Toolbox/Common/UndoManager.h>
+#include <Toolbox/Common/UndoStack.h>
 
 
 namespace Urho3D
@@ -54,7 +54,7 @@ class SceneClipboard : public Object
     URHO3D_OBJECT(SceneClipboard, Object);
 public:
     ///
-    explicit SceneClipboard(Context* context, Undo::Manager& undo);
+    explicit SceneClipboard(Context* context);
     ///
     void Clear();
     ///
@@ -62,19 +62,13 @@ public:
     ///
     void Copy(Component* component);
     ///
-    void Copy(const ea::vector<Node*>& nodes);
-    ///
-    void Copy(const ea::vector<Component*>& components);
-    ///
-    void Copy(const ea::vector<WeakPtr<Node>>& nodes);
+    void Copy(const ea::hash_set<WeakPtr<Node>>& nodes);
     ///
     void Copy(const ea::hash_set<WeakPtr<Component>>& components);
     ///
     PasteResult Paste(Node* node);
     ///
-    PasteResult Paste(const ea::vector<Node*>& nodes);
-    ///
-    PasteResult Paste(const ea::vector<WeakPtr<Node>>& nodes);
+    PasteResult Paste(const ea::hash_set<WeakPtr<Node>>& nodes);
     ///
     bool HasNodes() const { return !nodes_.empty(); }
     ///
@@ -85,8 +79,6 @@ protected:
     ea::vector<VectorBuffer> nodes_;
     ///
     ea::vector<VectorBuffer> components_;
-    ///
-    Undo::Manager& undo_;
 };
 
 

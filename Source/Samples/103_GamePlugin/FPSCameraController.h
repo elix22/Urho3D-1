@@ -45,14 +45,7 @@ public:
 
     void Update(float timeStep) override
     {
-        Input* input = context_->GetInput();
-        if (input->ShouldIgnoreInput())
-        {
-            // This component takes into account the fact that it will execute in context of editor where scene may
-            // temporarily relieve controls back to the editor.
-            return;
-        }
-
+        Input* input = context_->GetSubsystem<Input>();
         IntVector2 delta = input->GetMouseMove();
 
         auto yaw = GetNode()->GetRotation().EulerAngles().x_;

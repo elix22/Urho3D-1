@@ -114,7 +114,9 @@ URHO3D_API Matrix3x4 ToMatrix3x4(const char* source);
 URHO3D_API Matrix4 ToMatrix4(const ea::string& source);
 /// Parse a Matrix4 from a C string.
 URHO3D_API Matrix4 ToMatrix4(const char* source);
-/// Convert a pointer to string (returns hexadecimal.)
+/// Convert a boolean to string (returns true or false).
+URHO3D_API ea::string ToStringBool(bool value);
+/// Convert a pointer to string (returns hexadecimal).
 URHO3D_API ea::string ToString(void* value);
 /// Convert an unsigned integer to string as hexadecimal.
 URHO3D_API ea::string ToStringHex(unsigned value);
@@ -146,6 +148,8 @@ URHO3D_API unsigned ToUpper(unsigned ch);
 URHO3D_API unsigned ToLower(unsigned ch);
 /// Convert a memory size into a formatted size string, of the style "1.5 Mb".
 URHO3D_API ea::string GetFileSizeString(unsigned long long memorySize);
+/// Encode buffer into base-64 string.
+URHO3D_API ea::string EncodeBase64(const ea::vector<unsigned char>& buffer);
 /// Decode a base64-encoded string into buffer.
 URHO3D_API ea::vector<unsigned char> DecodeBase64(ea::string encodedString);
 /// Parse type from a C string.

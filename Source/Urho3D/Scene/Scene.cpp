@@ -26,6 +26,7 @@
 #include "../Core/CoreEvents.h"
 #include "../Core/Profiler.h"
 #include "../Core/WorkQueue.h"
+#include "../Graphics/Texture2D.h"
 #include "../IO/Archive.h"
 #include "../IO/File.h"
 #include "../IO/Log.h"
@@ -72,7 +73,8 @@ Scene::Scene(Context* context) :
     snapThreshold_(DEFAULT_SNAP_THRESHOLD),
     updateEnabled_(true),
     asyncLoading_(false),
-    threadedUpdate_(false)
+    threadedUpdate_(false),
+    lightmaps_(Texture2D::GetTypeStatic())
 {
     // Assign an ID to self so that nodes can refer to this node as a parent
     SetID(GetFreeNodeID(REPLICATED));
@@ -94,14 +96,6 @@ Scene::~Scene()
         i->second->ResetScene();
     for (auto i = localNodes_.begin(); i != localNodes_.end(); ++i)
         i->second->ResetScene();
-
-    // Validate registry
-    if (registryEnabled_)
-    {
-        assert(reg_.alive() == 1);
-        for (auto& storage : componentIndexes_)
-            assert(storage.empty());
-    }
 }
 
 void Scene::RegisterObject(Context* context)
@@ -120,44 +114,28 @@ void Scene::RegisterObject(Context* context)
     URHO3D_ATTRIBUTE("Next Local Component ID", unsigned, localComponentID_, FIRST_LOCAL_ID, AM_FILE | AM_NOEDIT);
     URHO3D_ATTRIBUTE("Variables", VariantMap, vars_, Variant::emptyVariantMap, AM_FILE); // Network replication of vars uses custom data
     URHO3D_MIXED_ACCESSOR_ATTRIBUTE("Variable Names", GetVarNamesAttr, SetVarNamesAttr, ea::string, EMPTY_STRING, AM_FILE | AM_NOEDIT);
-}
-
-bool Scene::EnableRegistry()
-{
-    if (!registryEnabled_)
-    {
-        const bool hasNodesExceptSelf = replicatedNodes_.size() != 1 || localNodes_.size() != 0;
-        const bool hasComponents = replicatedComponents_.size() != 0 || localComponents_.size() != 0;
-        if (hasNodesExceptSelf || hasComponents)
-        {
-            URHO3D_LOGERROR("Registry may be enabled only for empty Scene");
-            return false;
-        }
-
-        registryEnabled_ = true;
-
-        // Add self to registry
-        const entt::entity entity = reg_.create();
-        SetEntity(entity);
-    }
-    return true;
+    URHO3D_ATTRIBUTE_EX("Lightmaps", ResourceRefList, lightmaps_, MarkLightmapTexturesDirty, ResourceRefList(Texture2D::GetTypeStatic()), AM_DEFAULT);
 }
 
 bool Scene::CreateComponentIndex(StringHash componentType)
 {
-    if (!EnableRegistry())
+    if (!IsEmpty())
+    {
+        URHO3D_LOGERROR("Component Index may be created only for empty Scene");
         return false;
+    }
 
     indexedComponentTypes_.push_back(componentType);
     componentIndexes_.emplace_back();
     return true;
 }
 
-ea::span<Component* const> Scene::GetComponentIndex(StringHash componentType)
+const SceneComponentIndex& Scene::GetComponentIndex(StringHash componentType)
 {
-    if (auto storage = GetComponentIndexStorage(componentType))
-        return { storage->raw(), static_cast<ptrdiff_t>(storage->size()) };
-    return {};
+    static const SceneComponentIndex emptyIndex;
+    if (auto index = GetMutableComponentIndex(componentType))
+        return *index;
+    return emptyIndex;
 }
 
 bool Scene::Serialize(Archive& archive)
@@ -272,6 +250,35 @@ void Scene::AddReplicationState(NodeReplicationState* state)
     for (auto i = replicatedNodes_.begin(); i !=
         replicatedNodes_.end(); ++i)
         state->sceneState_->dirtyNodes_.insert(i->first);
+}
+
+void Scene::ResetLightmaps()
+{
+    lightmaps_.names_.clear();
+    MarkLightmapTexturesDirty();
+}
+
+void Scene::AddLightmap(const ea::string& lightmapTextureName)
+{
+    lightmaps_.names_.push_back(lightmapTextureName);
+    MarkLightmapTexturesDirty();
+}
+
+Texture2D* Scene::GetLightmapTexture(unsigned index)
+{
+    if (lightmapTexturesDirty_)
+    {
+        auto cache = GetSubsystem<ResourceCache>();
+        lightmapTextures_.clear();
+        for (const ea::string& lightmapTextureName : lightmaps_.names_)
+        {
+            SharedPtr<Texture2D> texture{ cache->GetResource<Texture2D>(lightmapTextureName) };
+            lightmapTextures_.push_back(texture);
+        }
+
+        lightmapTexturesDirty_ = false;
+    }
+    return index < lightmapTextures_.size() ? lightmapTextures_[index] : nullptr;
 }
 
 bool Scene::LoadXML(Deserializer& source)
@@ -763,6 +770,13 @@ void Scene::UnregisterAllVars()
     varNames_.clear();
 }
 
+bool Scene::IsEmpty(bool ignoreComponents) const
+{
+    const bool noNodesExceptSelf = replicatedNodes_.size() == 1 && localNodes_.size() == 0;
+    const bool noComponents = replicatedComponents_.size() == 0 && localComponents_.size() == 0;
+    return noNodesExceptSelf && (noComponents || ignoreComponents);
+}
+
 Node* Scene::GetNode(unsigned id) const
 {
     if (IsReplicatedID(id))
@@ -984,13 +998,6 @@ void Scene::NodeAdded(Node* node)
         node->SetID(id);
     }
 
-    // Initialize entity
-    if (registryEnabled_)
-    {
-        const entt::entity entity = reg_.create();
-        node->SetEntity(entity);
-    }
-
     // If node with same ID exists, remove the scene reference from it and overwrite with the new node
     if (IsReplicatedID(id))
     {
@@ -1075,13 +1082,6 @@ void Scene::NodeRemoved(Node* node)
     const ea::vector<SharedPtr<Node> >& children = node->GetChildren();
     for (auto i = children.begin(); i != children.end(); ++i)
         NodeRemoved(*i);
-
-    // Remove node from registry
-    if (registryEnabled_)
-    {
-        const entt::entity entity = node->GetEntity();
-        reg_.destroy(entity);
-    }
 }
 
 void Scene::ComponentAdded(Component* component)
@@ -1123,17 +1123,8 @@ void Scene::ComponentAdded(Component* component)
 
     component->OnSceneSet(this);
 
-    if (registryEnabled_)
-    {
-        if (auto storage = GetComponentIndexStorage(component->GetType()))
-        {
-            const entt::entity entity = component->GetNode()->GetEntity();
-            if (storage->has(entity))
-                storage->get(entity) = component;
-            else
-                storage->construct(entity, component);
-        }
-    }
+    if (auto index = GetMutableComponentIndex(component->GetType()))
+        index->insert(component);
 }
 
 void Scene::ComponentRemoved(Component* component)
@@ -1141,15 +1132,8 @@ void Scene::ComponentRemoved(Component* component)
     if (!component)
         return;
 
-    if (registryEnabled_)
-    {
-        if (auto storage = GetComponentIndexStorage(component->GetType()))
-        {
-            const entt::entity entity = component->GetNode()->GetEntity();
-            if (storage->has(entity))
-                storage->destroy(entity);
-        }
-    }
+    if (auto index = GetMutableComponentIndex(component->GetType()))
+        index->erase(component);
 
     unsigned id = component->GetID();
     if (Scene::IsReplicatedID(id))
@@ -1371,6 +1355,7 @@ void Scene::FinishLoading(Deserializer* source)
 {
     if (source)
     {
+        // TODO: This name is not full file name, it's resource name. Consider changing it.
         fileName_ = source->GetName();
         checksum_ = source->GetChecksum();
     }
@@ -1381,6 +1366,7 @@ void Scene::FinishSaving(Serializer* dest) const
     auto* ptr = dynamic_cast<Deserializer*>(dest);
     if (ptr)
     {
+        // TODO: This name is not full file name, it's resource name. Consider changing it.
         fileName_ = ptr->GetName();
         checksum_ = ptr->GetChecksum();
     }
@@ -1625,8 +1611,11 @@ void Scene::PreloadResourcesJSON(const JSONValue& value)
 #endif
 }
 
-entt::storage<entt::entity, Component*>* Scene::GetComponentIndexStorage(StringHash componentType)
+SceneComponentIndex* Scene::GetMutableComponentIndex(StringHash componentType)
 {
+    if (indexedComponentTypes_.empty())
+        return nullptr;
+
     const unsigned idx = indexedComponentTypes_.index_of(componentType);
     if (idx < componentIndexes_.size())
         return &componentIndexes_[idx];

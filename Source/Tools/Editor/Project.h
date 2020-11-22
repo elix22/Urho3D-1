@@ -24,14 +24,15 @@
 
 
 #include <Urho3D/Core/Object.h>
-#if URHO3D_PLUGINS
-#   include "Plugins/PluginManager.h"
-#endif
-#include "Pipeline/Pipeline.h"
+#include <Urho3D/Core/Timer.h>
 
 
 namespace Urho3D
 {
+
+class UndoStack;
+class Pipeline;
+class PluginManager;
 
 class Project : public Object
 {
@@ -65,8 +66,6 @@ public:
     const ea::string& GetDefaultSceneName() const { return defaultScene_; }
     /// Set resource name of scene that will be executed first by the player.
     void SetDefaultSceneName(const ea::string& defaultScene) { defaultScene_ = defaultScene; }
-    ///
-    Pipeline* GetPipeline() { return pipeline_; }
 
 protected:
     /// Save project when resource is saved.
@@ -79,9 +78,15 @@ protected:
     void OnEndFrame(StringHash, VariantMap&);
     /// Render a project tab in settings window.
     void RenderSettingsUI();
+    /// User executed undo action.
+    void OnUndo();
+    /// User executed redo action.
+    void OnRedo();
 
     /// Directory containing project.
     ea::string projectFileDir_;
+    /// Full path of CoreData resource directory. Can be empty.
+    ea::string coreDataPath_;
     ///
     SharedPtr<Pipeline> pipeline_;
     ///
@@ -100,8 +105,10 @@ protected:
     bool defaultUiPlacement_ = true;
     /// Resource name of scene that will be started by player first.
     ea::string defaultScene_;
-    ///
+    /// Timer for project auto-save.
     Timer saveProjectTimer_;
+    /// Global undo stack.
+    SharedPtr<UndoStack> undo_;
 };
 
 

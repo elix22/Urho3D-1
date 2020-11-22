@@ -49,7 +49,7 @@ URHO3D_EVENT(E_ATTRIBUTEINSPECTVALUEMODIFIED, AttributeInspectorValueModified)
     URHO3D_PARAM(P_ATTRIBUTEINFO, AttributeInfo);                // AttributeInfo pointer
     URHO3D_PARAM(P_OLDVALUE, OldValue);                          // Variant
     URHO3D_PARAM(P_NEWVALUE, NewValue);                          // Variant
-    URHO3D_PARAM(P_MODIFIED, Modified);                          // unsigned
+    URHO3D_PARAM(P_REASON, Reason);                              // unsigned
 }
 
 URHO3D_EVENT(E_ATTRIBUTEINSPECTOATTRIBUTE, AttributeInspectorAttribute)
@@ -59,6 +59,7 @@ URHO3D_EVENT(E_ATTRIBUTEINSPECTOATTRIBUTE, AttributeInspectorAttribute)
     URHO3D_PARAM(P_COLOR, Color);                                // Color
     URHO3D_PARAM(P_HIDDEN, Hidden);                              // Boolean
     URHO3D_PARAM(P_TOOLTIP, Tooltip);                            // String
+    URHO3D_PARAM(P_VALUE_KIND, ValueKind);                       // int
 }
 
 URHO3D_EVENT(E_GIZMONODEMODIFIED, GizmoNodeModified)

@@ -33,7 +33,6 @@
 #include <Urho3D/Resource/ResourceEvents.h>
 
 #include <Toolbox/SystemUI/Widgets.h>
-#include <Toolbox/SystemUI/ResourceBrowser.h>
 
 #include "Editor.h"
 #include "EditorEvents.h"
@@ -41,7 +40,7 @@
 #include "Pipeline/Pipeline.h"
 #include "Pipeline/Asset.h"
 #include "Pipeline/Importers/ModelImporter.h"
-
+#include "Tabs/InspectorTab.h"
 
 namespace Urho3D
 {
@@ -66,7 +65,7 @@ Asset::Asset(Context* context)
                 return;
         }
 
-        auto* fs = context_->GetFileSystem();
+        auto* fs = context_->GetSubsystem<FileSystem>();
         auto* project = GetSubsystem<Project>();
         ea::string newName = to + (isDir ? name_.substr(from.size()) : "");
 
@@ -87,7 +86,9 @@ Asset::Asset(Context* context)
 
     SubscribeToEvent(E_EDITORFLAVORADDED, [this](StringHash, VariantMap& args) { OnFlavorAdded(args); });
     SubscribeToEvent(E_EDITORFLAVORREMOVED, [this](StringHash, VariantMap& args) { OnFlavorRemoved(args); });
-    undo_.Connect(this);
+
+    auto undo = GetSubsystem<UndoStack>();
+    undo->Connect(this);
 }
 
 void Asset::RegisterObject(Context* context)
@@ -133,6 +134,9 @@ void Asset::ClearCache()
 
 bool Asset::Save()
 {
+    if (virtual_)
+        return true;
+
     ea::string assetPath = RemoveTrailingSlash(resourcePath_) + ".asset";
 
     bool isModified = false;
@@ -165,7 +169,7 @@ bool Asset::Save()
     }
     else
     {
-        context_->GetFileSystem()->Delete(assetPath);
+        context_->GetSubsystem<FileSystem>()->Delete(assetPath);
         return true;
     }
 
@@ -178,7 +182,7 @@ bool Asset::Load()
     assert(!name_.empty());
     ea::string assetPath = RemoveTrailingSlash(resourcePath_) + ".asset";
     JSONFile file(context_);
-    if (context_->GetFileSystem()->FileExists(assetPath))
+    if (context_->GetSubsystem<FileSystem>()->FileExists(assetPath))
     {
         if (!file.LoadFile(assetPath))
         {
@@ -251,7 +255,6 @@ void Asset::AddFlavor(Flavor* flavor)
     {
         SharedPtr<AssetImporter> importer(context_->CreateObject(importerType->GetType())->Cast<AssetImporter>());
         importer->Initialize(this, flavor);
-        undo_.Connect(importer);
         importers.emplace_back(importer);
     }
 }
@@ -280,9 +283,8 @@ void Asset::ReimportOutOfDateRecursive() const
     if (!IsMetaAsset())
         return;
 
-    auto* fs = context_->GetFileSystem();
-    auto* project = GetSubsystem<Project>();
-    Pipeline* pipeline = project->GetPipeline();
+    auto fs = context_->GetSubsystem<FileSystem>();
+    auto pipeline = GetSubsystem<Pipeline>();
 
     StringVector files;
     fs->ScanDir(files, GetResourcePath(), "", SCAN_FILES, true);
@@ -313,34 +315,37 @@ void Asset::OnFlavorRemoved(VariantMap& args)
 
 void Asset::Inspect()
 {
-    ea::vector<Object*> safeSenders{this};
-    auto* editor = GetSubsystem<Editor>();
+    if (virtual_)
+        return;
+
+    ResourceContentTypes contentTypes;
+    auto* inspector = GetSubsystem<InspectorTab>();
     auto* pipeline = GetSubsystem<Pipeline>();
     auto* cache = GetSubsystem<ResourceCache>();
-    editor->ClearInspector();
+    auto* undo = GetSubsystem<UndoStack>();
+    inspector->Clear();
     // Asset inspector will show inspectors for importers.
-    editor->Inspect(this);
+    inspector->Inspect(this);
     // Show inspectors for byproducts too.
     for (AssetImporter* importer : GetImporters(pipeline->GetDefaultFlavor()))
     {
-        safeSenders.push_back(importer);
         for (const ea::string& byproduct : importer->GetByproducts())
         {
-            if (StringHash resourceType = GetContentResourceType(context_, byproduct))
+            if (GetContentResourceType(context_, byproduct, contentTypes))
             {
-                Resource* resource = cache->GetResource(resourceType, byproduct);
-                editor->Inspect(resource);
-                undo_.Connect(resource);
+                Resource* resource = cache->GetResource(contentTypes.front(), byproduct);
+                inspector->Inspect(resource);
+                undo->Connect(resource);    // ??
             }
         }
     }
     // Show inspector for raw resource.
-    if (StringHash resourceType = GetContentResourceType(context_, GetName()))
+    if (GetContentResourceType(context_, GetName(), contentTypes))
     {
-        if (Resource* resource = cache->GetResource(resourceType, GetName()))
+        if (Resource* resource = cache->GetResource(contentTypes.front(), GetName()))
         {
-            editor->Inspect(resource);
-            undo_.Connect(resource);
+            inspector->Inspect(resource);
+            undo->Connect(resource);    // ??
         }
     }
 }

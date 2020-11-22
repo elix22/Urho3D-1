@@ -2910,7 +2910,7 @@ C# support is provided by customized SWIG wrapper interface generator.
 * Extensive API coverage estimated at 90%+
 * Support for inheriting native classes and overriding their virtual methods
 * Support for ref parameters
-* Support for native containers (`HashMap<T>`, `Vector<T>`, `PODVector<T>``)
+* Support for native containers (`ea::map<T>`, `ea::unordered_map<T>`, `ea::vector<T>`)
 * Transparently unwrapping `SharedPtr<T>` and `WeakPtr<T>`
 * Serialization and deserialization of managed components
 * Member variable and method renaming to match C# conventions
@@ -2939,37 +2939,39 @@ code as plugins that can be loaded and unloaded.
 
 \section CSharp_Implementation Implementation details
 
-Due to differences between C++ and C# langues generated bindings are inherently unsafe. Wrapper tries to make usage as transparent as possible.
+Due to differences between C++ and C# languages generated bindings are inherently unsafe. Wrapper tries to make usage as transparent as possible.
 
-There are three kinds of wrapped objects:
+There are two kinds of wrapped objects:
 
 1. Objects that inherit from RefCounted.
 2. Objects that do not inherit from RefCounted.
 
-\subsection CSharp_RefCounted_Subclass RefCounted subclasses
+\subsection CSharp_RefCounted_Subclass Using RefCounted objects
 
-These objects wrap native classes and expose their functionality to managed code. You may use these objects just like any other C# object.
-It is allowed to loose all native references or all managed references to such object. When last reference is lost - object will be freed.
-If all references to managed wrapper instance are lost and object is later returned by engine API - it will return same wrapper object instance.
-RefCounted object stores a GC handle to a managed object instance. This handle is used to obtain same managed object instance every
-time object is accessed.
+Memory management of %RefCounted objects is semi-manual in C# code. There are three rules that user must follow in order to achieve deterministic
+object destruction.
 
-RefCounted instances may be in one of following states:
+1. Always call `obj.Dispose()` when `obj` is no longer in use.
+  * Required if object is constructed using \ref Context::CreateObject or `new` keyword.
+  * Failure to dispose of object when required will defer object deallocation to garbage collector.
+  * A good practice is to always call `obj.Dispose()` or use `using` pattern, without being concerned whether it is required or not.
+2. Always call \ref RefCounted::AddRef if you intend to hold object reference for a prolonged period of time.
+  * Optional, if object is constructed using \ref Context::CreateObject or `new` keyword.
+3. Always call \ref RefCounted::ReleaseRef for each corresponding \ref RefCounted::AddRef call, when you are done using the object.
+  * \ref RefCounted::ReleaseRef will immdeiately free an underlying native object when last reference is released, managed object will enter
+    "expired" state (`RefCounted.Expired` will return `true`).
+  * Calls to `obj.Dispose()` are noop after object is freed.
+  * Failure to release a reference when required will result in memory leaks.
 
-1. Object is referenced only by native object(s)
-  * Refs() >= 1
-  * GCHandle to managed object is not allocated
-  * Managed wrapper object does not exist
-2. Object is referenced only by managed object(s)
-  * Refs() == 1
-  * GCHandle of type `GCHandleType.Weak` is allocated
-  * Managed object is allocated and will be allocated untl it is disposed or last reference is lost and object is disposed by finalizer
-3. Object is referenced by managed object(s) and native object(s)
-  * Refs() >= 2
-  * GCHandle of type `GCHandleType.Normal` is allocated
-  * Managed object is allocated and will be allocated until it is disposed or last reference is lost and object is disposed by finalizer
+C# object is a thin wrapper object containing a pointer to a native object implementing core logic. Manual memory management means that C# code
+may hold an expired reference. This happens when engine owned an object, user accessed it, saved reference to an object and engine freed this object.
+For example \ref Scene owns it's \Node instances. If user saved a reference to a particular \ref Node and this node was later removed from the scene -
+saved instance is no longer valid. In order to determine validity of a reference please use `RefCounted.Expired` or `RefCounted.NotExpired` properties.
 
-RefCounted instances migrate between one of these states automatically as user references or unreferences objects.
+Engine guarantees that a wrapper C# object will never be destroyed unless a native instance is also destroyed.
+
+Please implement `protected override void Dispose(bool disposing)` method and implement any logic for releasing resources. Engine guarantees that
+user's implementation of `Dispose(true)` will be called before native object is freed.
 
 \subsection CSharp_Non_RefCounted_Subclasses Other classes
 
@@ -2989,20 +2991,20 @@ retrieve cached wrapper object from the cache.
 
 \section CSharp_Best_Practices Best practices
 
-Object reference counting is atomic, but not thread-safe. Executing RefCounted::ReleaseRef when object has one reference and calling "Dispose()"
+Object reference counting is atomic, but not thread-safe. Executing RefCounted::ReleaseRef when object has one reference and calling `Dispose()`
 method of managed instance on different thread is undefined behavior. Note that "Dispose(false)" may be implicitly called from a finalizer thread
 if all the references to managed object are lost.
 
-Classes that inherit from native classes should override "Dispose(bool)" method and dispose of other native resources class owns. Failure to do so
+Classes that inherit from native classes should override `Dispose(bool)`` method and dispose of other native resources class owns. Failure to do so
 may or may not result in memory leaks. Wrapper does free native resources in object finalizer but managed runtime does not guarantee execution of
 finalizers, nor their execution is deterministic.
 
-It is advised to manually dispose objects by calling their "Dispose()" method. In order to dispose object it must have 1 remaining reference. This
-means that native objects may not keep any references to object that is being disposed. Dalling "Dispose()" on an object with more than 1 reference
+It is advised to manually dispose objects by calling their `Dispose()` method. In order to dispose object it must have 1 remaining reference. This
+means that native objects may not keep any references to object that is being disposed. Calling `Dispose()` on an object with more than 1 reference
 will throw an exception and leave an object in an unknown state, therefore caching of such exceptions is not advised. Instead application should be
 fixed to not throw them.
 
-Calling "Dispose()" on non-owning wrapper instances will dispose of managed wrapper instance only. Native object is not freed and may be accessed
+Calling `Dispose()` on non-owning wrapper instances will dispose of managed wrapper instance only. Native object is not freed and may be accessed
 later.
 
 \section CSharp_Common_Problems Common Problems

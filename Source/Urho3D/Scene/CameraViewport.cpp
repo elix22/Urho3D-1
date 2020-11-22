@@ -50,16 +50,19 @@ CameraViewport::CameraViewport(Context* context)
     , renderPath_(defaultRenderPath)
     , screenRect_{0, 0, 1920, 1080}
 {
-    if (Graphics* graphics = context_->GetGraphics())
+    if (Graphics* graphics = context_->GetSubsystem<Graphics>())
         screenRect_ = {0, 0, graphics->GetWidth(), graphics->GetHeight()};
 }
 
 void CameraViewport::SetNormalizedRect(const Rect& rect)
 {
     rect_ = rect;
-    IntRect screenRect = GetScreenRect();
-    IntRect viewportRect(static_cast<int>(rect.Left() * screenRect.Left()), static_cast<int>(rect.Top() * screenRect.Top()),
-        static_cast<int>(rect.Right() * screenRect.Right()), static_cast<int>(rect.Bottom() * screenRect.Bottom()));
+    IntRect viewportRect(
+        static_cast<int>(screenRect_.Left() + screenRect_.Width() * rect.Left()),
+        static_cast<int>(screenRect_.Top() + screenRect_.Height() * rect.Top()),
+        static_cast<int>(screenRect_.Left() + screenRect_.Width() * rect.Right()),
+        static_cast<int>(screenRect_.Top() + screenRect_.Height() * rect.Bottom())
+    );
     viewport_->SetRect(viewportRect);
 
     using namespace CameraViewportResized;
@@ -160,17 +163,17 @@ void CameraViewport::RebuildAttributes()
     // PostProcess effects are special. One file may contain multiple effects that can be enabled or disabled.
     {
         effects_.clear();
-        for (const auto& dir: context_->GetCache()->GetResourceDirs())
+        for (const auto& dir: context_->GetSubsystem<ResourceCache>()->GetResourceDirs())
         {
             ea::vector<ea::string> effects;
             ea::string resourcePath = "PostProcess/";
             ea::string scanDir = AddTrailingSlash(dir) + resourcePath;
-            context_->GetFileSystem()->ScanDir(effects, scanDir, "*.xml", SCAN_FILES, false);
+            context_->GetSubsystem<FileSystem>()->ScanDir(effects, scanDir, "*.xml", SCAN_FILES, false);
 
             for (const auto& effectFileName: effects)
             {
                 auto effectPath = resourcePath + effectFileName;
-                auto* effect = context_->GetCache()->GetResource<XMLFile>(effectPath);
+                auto* effect = context_->GetSubsystem<ResourceCache>()->GetResource<XMLFile>(effectPath);
 
                 auto root = effect->GetRoot();
                 ea::string tag;
@@ -209,7 +212,7 @@ void CameraViewport::RebuildAttributes()
                 if (!path)
                     return;
                 if (!path->IsAdded(effect.first))
-                    path->Append(context_->GetCache()->GetResource<XMLFile>(effect.second));
+                    path->Append(context_->GetSubsystem<ResourceCache>()->GetResource<XMLFile>(effect.second));
                 path->SetEnabled(effect.first, value.GetBool());
             };
             URHO3D_CUSTOM_ACCESSOR_ATTRIBUTE(effect.first.c_str(), getter, setter, bool, false, AM_DEFAULT);
@@ -226,7 +229,7 @@ RenderPath* CameraViewport::RebuildRenderPath()
 
     SharedPtr<RenderPath> oldRenderPath(viewport_->GetRenderPath());
 
-    if (XMLFile* renderPathFile = context_->GetCache()->GetResource<XMLFile>(renderPath_.name_))
+    if (XMLFile* renderPathFile = context_->GetSubsystem<ResourceCache>()->GetResource<XMLFile>(renderPath_.name_))
     {
         viewport_->SetRenderPath(renderPathFile);
         RenderPath* newRenderPath = viewport_->GetRenderPath();
@@ -236,7 +239,7 @@ RenderPath* CameraViewport::RebuildRenderPath()
             if (oldRenderPath->IsEnabled(effect.first))
             {
                 if (!newRenderPath->IsAdded(effect.first))
-                    newRenderPath->Append(context_->GetCache()->GetResource<XMLFile>(effect.second));
+                    newRenderPath->Append(context_->GetSubsystem<ResourceCache>()->GetResource<XMLFile>(effect.second));
                 newRenderPath->SetEnabled(effect.first, true);
             }
         }
@@ -249,7 +252,7 @@ RenderPath* CameraViewport::RebuildRenderPath()
 
 void CameraViewport::SetRenderPath(const ResourceRef& renderPathResource)
 {
-    if (!viewport_ || !context_->GetGraphics())
+    if (!viewport_ || !context_->GetSubsystem<Graphics>())
         return;
 
     if (!renderPathResource.name_.empty() && renderPathResource.type_ != XMLFile::GetTypeStatic())
@@ -261,7 +264,7 @@ void CameraViewport::SetRenderPath(const ResourceRef& renderPathResource)
     SharedPtr<RenderPath> oldRenderPath(viewport_->GetRenderPath());
 
     const ea::string& renderPathFileName = renderPathResource.name_.empty() ? defaultRenderPath.name_ : renderPathResource.name_;
-    if (XMLFile* renderPathFile = context_->GetCache()->GetResource<XMLFile>(renderPathFileName))
+    if (XMLFile* renderPathFile = context_->GetSubsystem<ResourceCache>()->GetResource<XMLFile>(renderPathFileName))
     {
         if (!viewport_->SetRenderPath(renderPathFile))
         {
@@ -276,7 +279,7 @@ void CameraViewport::SetRenderPath(const ResourceRef& renderPathResource)
             if (oldRenderPath->IsEnabled(effect.first))
             {
                 if (!newRenderPath->IsAdded(effect.first))
-                    newRenderPath->Append(context_->GetCache()->GetResource<XMLFile>(effect.second));
+                    newRenderPath->Append(context_->GetSubsystem<ResourceCache>()->GetResource<XMLFile>(effect.second));
                 newRenderPath->SetEnabled(effect.first, true);
             }
         }

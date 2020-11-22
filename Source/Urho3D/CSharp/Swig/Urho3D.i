@@ -11,6 +11,10 @@
 %include "swiginterface.i"
 %include "attribute.i"
 
+#ifdef __IOS__
+%typemap(csattributes) SWIGTYPE "[global::Foundation.Preserve(AllMembers = true)]"
+#endif
+
 %include "InstanceCache.i"
 
 %apply bool* INOUT                  { bool&, bool* };
@@ -45,9 +49,9 @@
 %}
 
 %apply void* VOID_INT_PTR {
-	void*,
-	signed char*,
-	unsigned char*
+  void*,
+  signed char*,
+  unsigned char*
 }
 
 %typemap(csvarin, excode=SWIGEXCODE2) void* VOID_INT_PTR %{
@@ -61,7 +65,11 @@
 %typemap(csvarout, excode=SWIGEXCODE2) float INOUT[] "get { var ret = $imcall;$excode return ret; }"
 %typemap(ctype)   const char* INPUT[] "char**"
 %typemap(cstype)  const char* INPUT[] "string[]"
+#if URHO3D_NETFX_LEGACY_VERSION
+%typemap(imtype, inattributes="[global::System.Runtime.InteropServices.In, global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPStr)]") const char* INPUT[] "string[]"
+#else
 %typemap(imtype, inattributes="[global::System.Runtime.InteropServices.In, global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPUTF8Str)]") const char* INPUT[] "string[]"
+#endif
 %typemap(csin)    const char* INPUT[] "$csinput"
 %typemap(in)      const char* INPUT[] "$1 = $input;"
 %typemap(freearg) const char* INPUT[] ""
@@ -91,6 +99,13 @@
 #include <SDL/SDL_keycode.h>
 #include <EASTL/unordered_map.h>
 #include <Urho3D/CSharp/Native/SWIGHelpers.h>
+%}
+
+%typemap(check, canthrow=1) SWIGTYPE* self %{
+  if (!$1) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "$1_type is expired.", 0);
+    return $null;
+  }
 %}
 
 %include "Helpers.i"

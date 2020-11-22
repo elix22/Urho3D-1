@@ -7,6 +7,9 @@ uniform float cWindHeightFactor;
 uniform float cWindHeightPivot;
 uniform float cWindPeriod;
 uniform vec2 cWindWorldSpacing;
+#ifdef WINDSTEMAXIS
+    uniform vec3 cWindStemAxis;
+#endif
 
 #ifdef NORMALMAP
     varying vec4 vTexCoord;
@@ -49,7 +52,12 @@ void VS()
     mat4 modelMatrix = iModelMatrix;
     vec3 worldPos = GetWorldPos(modelMatrix);
 
-    float windStrength = max(iPos.y - cWindHeightPivot, 0.0) * cWindHeightFactor;
+    #ifdef WINDSTEMAXIS
+        float stemDistance = dot(iPos.xyz, cWindStemAxis);
+    #else
+        float stemDistance = iPos.y;
+    #endif
+    float windStrength = max(stemDistance - cWindHeightPivot, 0.0) * cWindHeightFactor;
     float windPeriod = cElapsedTime * cWindPeriod + dot(worldPos.xz, cWindWorldSpacing);
     worldPos.x += windStrength * sin(windPeriod);
     worldPos.z -= windStrength * cos(windPeriod);
@@ -62,13 +70,17 @@ void VS()
         vColor = iColor;
     #endif
 
+    #ifdef NOUV
+        vTexCoord.xy = vec2(0.0, 0.0);
+    #else
+        vTexCoord.xy = GetTexCoord(iTexCoord);
+    #endif
+
     #ifdef NORMALMAP
         vec4 tangent = GetWorldTangent(modelMatrix);
         vec3 bitangent = cross(tangent.xyz, vNormal) * tangent.w;
-        vTexCoord = vec4(GetTexCoord(iTexCoord), bitangent.xy);
+        vTexCoord.zw = bitangent.xy;
         vTangent = vec4(tangent.xyz, bitangent.z);
-    #else
-        vTexCoord = GetTexCoord(iTexCoord);
     #endif
 
     #ifdef PERPIXEL

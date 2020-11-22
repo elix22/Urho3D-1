@@ -30,11 +30,14 @@ namespace Urho3D
 {
 
 class Octree;
+class Skybox;
+class Zone;
 
 static const int NUM_OCTANTS = 8;
 static const unsigned ROOT_INDEX = M_MAX_UNSIGNED;
 
-/// %Octree octant
+/// %Octree octant.
+/// @nobind
 class URHO3D_API Octant
 {
 public:
@@ -74,6 +77,7 @@ public:
     }
 
     /// Return world-space bounding box.
+    /// @property
     const BoundingBox& GetWorldBoundingBox() const { return worldBoundingBox_; }
 
     /// Return bounding box used for fitting drawable objects.
@@ -153,11 +157,11 @@ protected:
     Octant* parent_;
     /// Octree root.
     Octree* root_;
-    /// Octant index relative to its siblings or ROOT_INDEX for root octant
+    /// Octant index relative to its siblings or ROOT_INDEX for root octant.
     unsigned index_;
 };
 
-/// %Octree component. Should be added only to the root scene node
+/// %Octree component. Should be added only to the root scene node.
 class URHO3D_API Octree : public Component, public Octant
 {
     URHO3D_OBJECT(Octree, Component);
@@ -183,13 +187,20 @@ public:
     void RemoveManualDrawable(Drawable* drawable);
 
     /// Return drawable objects by a query.
+    /// @nobind
     void GetDrawables(OctreeQuery& query) const;
     /// Return drawable objects by a ray query.
     void Raycast(RayOctreeQuery& query) const;
     /// Return the closest drawable object by a ray query.
     void RaycastSingle(RayOctreeQuery& query) const;
+    /// Return active Zone or default renderer zone if none found.
+    /// Behavior is underfined if there are multiple active zones.
+    Zone* GetZone(unsigned viewMask = DEFAULT_VIEWMASK) const;
+    /// Return active Skybox. Behavior is underfined if there are multiple active skyboxes.
+    Skybox* GetSkybox(unsigned viewMask = DEFAULT_VIEWMASK) const;
 
     /// Return subdivision levels.
+    /// @property
     unsigned GetNumLevels() const { return numLevels_; }
 
     /// Mark drawable object as requiring an update and a reinsertion.

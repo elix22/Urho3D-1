@@ -298,9 +298,11 @@ public:
     }
 
     /// Return length.
+    /// @property
     float Length() const { return sqrtf(x_ * x_ + y_ * y_); }
 
     /// Return squared length.
+    /// @property
     float LengthSquared() const { return x_ * x_ + y_ * y_; }
 
     /// Calculate dot product.
@@ -324,8 +326,11 @@ public:
     /// Test for equality with another vector with epsilon.
     bool Equals(const Vector2& rhs, float eps = M_EPSILON) const { return Urho3D::Equals(x_, rhs.x_, eps) && Urho3D::Equals(y_, rhs.y_, eps); }
 
-    /// Return whether is NaN.
+    /// Return whether any component is NaN.
     bool IsNaN() const { return Urho3D::IsNaN(x_) || Urho3D::IsNaN(y_); }
+
+    /// Return whether any component is Inf.
+    bool IsInf() const { return Urho3D::IsInf(x_) || Urho3D::IsInf(y_); }
 
     /// Return normalized to unit length.
     Vector2 Normalized() const
@@ -360,6 +365,12 @@ public:
         const float newLen = Clamp(len, minLength, maxLength);
         return *this * (newLen / len);
     }
+
+    /// Return orthogonal vector (clockwise).
+    Vector2 GetOrthogonalClockwise() const { return { y_, -x_ }; }
+
+    /// Return orthogonal vector (counter-clockwise).
+    Vector2 GetOrthogonalCounterClockwise() const { return { -y_, x_ }; }
 
     /// Return float data.
     const float* Data() const { return &x_; }
@@ -396,7 +407,7 @@ public:
     static const Vector2 ONE;
 };
 
-/// Multiply Vector2 with a scalar
+/// Multiply Vector2 with a scalar.
 inline Vector2 operator *(float lhs, const Vector2& rhs) { return rhs * lhs; }
 
 /// Multiply IntVector2 with a scalar.
@@ -420,6 +431,9 @@ inline Vector2 VectorRound(const Vector2& vec) { return Vector2(Round(vec.x_), R
 /// Per-component ceil of 2-vector.
 inline Vector2 VectorCeil(const Vector2& vec) { return Vector2(Ceil(vec.x_), Ceil(vec.y_)); }
 
+/// Per-component absolute value of 2-vector.
+inline Vector2 VectorAbs(const Vector2& vec) { return Vector2(Abs(vec.x_), Abs(vec.y_)); }
+
 /// Per-component floor of 2-vector. Returns IntVector2.
 inline IntVector2 VectorFloorToInt(const Vector2& vec) { return IntVector2(FloorToInt(vec.x_), FloorToInt(vec.y_)); }
 
@@ -434,6 +448,9 @@ inline IntVector2 VectorMin(const IntVector2& lhs, const IntVector2& rhs) { retu
 
 /// Per-component max of two 2-vectors.
 inline IntVector2 VectorMax(const IntVector2& lhs, const IntVector2& rhs) { return IntVector2(Max(lhs.x_, rhs.x_), Max(lhs.y_, rhs.y_)); }
+
+/// Per-component absolute value of integer 2-vector.
+inline IntVector2 VectorAbs(const IntVector2& vec) { return IntVector2(Abs(vec.x_), Abs(vec.y_)); }
 
 /// Return a random value from [0, 1) from 2-vector seed.
 /// http://stackoverflow.com/questions/12964279/whats-the-origin-of-this-glsl-rand-one-liner

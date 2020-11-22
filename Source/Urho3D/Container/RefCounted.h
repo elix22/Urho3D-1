@@ -77,30 +77,36 @@ public:
     /// Decrement reference count and delete self if no more references. Can also be called outside of a SharedPtr for traditional reference counting. Returns new reference count value. Operation is atomic.
     int ReleaseRef();
     /// Return reference count.
+    /// @property
     int Refs() const;
     /// Return weak reference count.
+    /// @property
     int WeakRefs() const;
 
     /// Return pointer to the reference count structure.
     RefCount* RefCountPtr() { return refCount_; }
 #if URHO3D_CSHARP
     /// Return true if script runtime object wrapping this native object exists.
-    bool HasScriptObject() const { return scriptObject_ != 0; }
+    bool HasScriptObject() const { return scriptObject_ != nullptr; }
+    /// Return true if script reference is strong.
+    bool IsScriptStrongRef() const { return isScriptStrongRef_; }
 
 protected:
     /// Returns handle to wrapper script object. This is scripting-runtime-dependent.
     void* GetScriptObject() const { return scriptObject_; }
     /// Sets handle to wrapper script object. This is scripting-runtime-dependent.
-    void SetScriptObject(void* handle) { scriptObject_ = handle; }
-    /// Sets handle to wrapper script object and returns previous handle value.
-    void* SwapScriptObject(void* handle);
+    void SetScriptObject(void* handle, bool isStrong);
+    /// Clears script object value. Script object has to be freed externally.
+    void ResetScriptObject();
 #endif
 private:
     /// Pointer to the reference count structure.
     RefCount* refCount_ = nullptr;
 #if URHO3D_CSHARP
     /// A handle to script object that wraps this native instance.
-    void* scriptObject_ = 0;
+    void* scriptObject_ = nullptr;
+    /// GC Handle type (strong vs weak).
+    bool isScriptStrongRef_ = false;
 #endif
 };
 

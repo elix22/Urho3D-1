@@ -25,6 +25,8 @@
 #include "../Container/Ptr.h"
 #include "../Graphics/RenderSurface.h"
 #include "../Graphics/Texture.h"
+#include "../Math/SphericalHarmonics.h"
+#include "../Resource/ImageCube.h"
 
 namespace Urho3D
 {
@@ -71,6 +73,7 @@ public:
     SharedPtr<Image> GetImage(CubeMapFace face) const;
 
     /// Return render surface for one face.
+    /// @property{get_renderSurfaces}
     RenderSurface* GetRenderSurface(CubeMapFace face) const { return renderSurfaces_[face]; }
 
 protected:
@@ -86,9 +89,7 @@ private:
     /// Memory use per face.
     unsigned faceMemoryUse_[MAX_CUBEMAP_FACES]{};
     /// Face image files acquired during BeginLoad.
-    ea::vector<SharedPtr<Image> > loadImages_;
-    /// Parameter file acquired during BeginLoad.
-    SharedPtr<XMLFile> loadParameters_;
+    SharedPtr<ImageCube> loadImageCube_;
 };
 
 }

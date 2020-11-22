@@ -28,6 +28,7 @@ namespace Urho3D
 {
 
 /// Two-dimensional bounding rectangle.
+/// @allfloats
 class URHO3D_API Rect
 {
 public:
@@ -197,12 +198,15 @@ public:
     }
 
     /// Return center.
+    /// @property
     Vector2 Center() const { return (max_ + min_) * 0.5f; }
 
     /// Return size.
+    /// @property
     Vector2 Size() const { return max_ - min_; }
 
     /// Return half-size.
+    /// @property
     Vector2 HalfSize() const { return (max_ - min_) * 0.5f; }
 
     /// Test for equality with another rect with epsilon.
@@ -250,15 +254,19 @@ public:
     Vector2 Max() const { return max_; }
 
     /// Return left coordinate.
+    /// @property
     float Left() const { return min_.x_; }
 
     /// Return top coordinate.
+    /// @property
     float Top() const { return min_.y_; }
 
     /// Return right coordinate.
+    /// @property
     float Right() const { return max_.x_; }
 
     /// Return bottom coordinate.
+    /// @property
     float Bottom() const { return max_.y_; }
 
     /// Minimum vector.
@@ -266,9 +274,9 @@ public:
     /// Maximum vector.
     Vector2 max_;
 
-    /// Rect in the range (-1, -1) - (1, 1)
+    /// Rect in the range (-1, -1) - (1, 1).
     static const Rect FULL;
-    /// Rect in the range (0, 0) - (1, 1)
+    /// Rect in the range (0, 0) - (1, 1).
     static const Rect POSITIVE;
     /// Zero-sized rect.
     static const Rect ZERO;
@@ -403,12 +411,15 @@ public:
     }
 
     /// Return size.
+    /// @property
     IntVector2 Size() const { return IntVector2(Width(), Height()); }
 
     /// Return width.
+    /// @property
     int Width() const { return right_ - left_; }
 
     /// Return height.
+    /// @property
     int Height() const { return bottom_ - top_; }
 
     /// Test whether a point is inside.
@@ -416,6 +427,17 @@ public:
     {
         if (point.x_ < left_ || point.y_ < top_ || point.x_ >= right_ || point.y_ >= bottom_)
             return OUTSIDE;
+        else
+            return INSIDE;
+    }
+
+    /// Test if another rect is inside, outside or intersects.
+    Intersection IsInside(const IntRect& rect) const
+    {
+        if (rect.right_ < left_ || rect.left_ >= right_ || rect.bottom_ < top_ || rect.top_ >= bottom_)
+            return OUTSIDE;
+        else if (rect.left_ < left_ || rect.right_ > right_ || rect.top_ < top_ || rect.bottom_ > bottom_)
+            return INTERSECTS;
         else
             return INSIDE;
     }
@@ -455,6 +477,9 @@ public:
     /// Return bottom coordinate.
     int Bottom() const { return bottom_; }
 
+    /// Return true if specified point is within rectangle bounds.
+    bool Contains(IntVector2 point) const { return left_ <= point.x_ && point.x_ < right_ && top_ <= point.y_ && point.y_ < bottom_; }
+
     /// Left coordinate.
     int left_;
     /// Top coordinate.
@@ -467,5 +492,64 @@ public:
     /// Zero-sized rect.
     static const IntRect ZERO;
 };
+
+/// Iterator that iterates through all elements of IntRect row-by-row.
+class URHO3D_API IntRectIterator
+{
+public:
+    /// Construct valid. Iterators with different rectangles are incompatible.
+    IntRectIterator(const IntRect& rect, const IntVector2& index)
+        : rect_(rect)
+        , index_(index)
+    {
+    }
+
+    /// Pre-increment.
+    IntRectIterator& operator++()
+    {
+        ++index_.x_;
+        if (index_.x_ >= rect_.right_)
+        {
+            ++index_.y_;
+            index_.x_ = rect_.left_;
+
+            if (index_.y_ >= rect_.bottom_)
+                index_.y_ = rect_.bottom_;
+        }
+        return *this;
+    }
+
+    /// Post-increment.
+    IntRectIterator operator++(int)
+    {
+        IntRectIterator tmp(*this);
+        ++(*this);
+        return tmp;
+    }
+
+    /// Compare for equality.
+    bool operator ==(const IntRectIterator& rhs) const { assert(rect_ == rhs.rect_); return index_ == rhs.index_; }
+
+    /// Compare for non-equality.
+    bool operator !=(const IntRectIterator& rhs) const { return !(*this == rhs); }
+
+    /// Dereference.
+    const IntVector2& operator *() const { return index_; }
+
+    /// Dereference.
+    const IntVector2* operator ->() const { return &index_; }
+
+private:
+    /// Iterated rectangle.
+    IntRect rect_;
+    /// Current index within rectangle.
+    IntVector2 index_;
+};
+
+/// Return begin iterator of IntRect.
+inline IntRectIterator begin(const IntRect& rect) { return IntRectIterator(rect, rect.Min()); }
+
+/// Return end iterator of IntRect.
+inline IntRectIterator end(const IntRect& rect) { return IntRectIterator(rect, IntVector2(rect.left_, rect.bottom_)); }
 
 }

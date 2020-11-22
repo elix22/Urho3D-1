@@ -40,6 +40,9 @@
 #if URHO3D_SYSTEMUI
 #   include <Urho3D/SystemUI/SystemUI.h>
 #endif
+#if URHO3D_RMLUI
+#   include <Urho3D/RmlUI/RmlUI.h>
+#endif
 #include "Player.h"
 
 namespace Urho3D
@@ -52,7 +55,7 @@ Player::Player(Context* context)
 
 void Player::Setup()
 {
-    FileSystem* fs = context_->GetFileSystem();
+    FileSystem* fs = context_->GetSubsystem<FileSystem>();
 
 #if MOBILE
     engineParameters_[EP_RESOURCE_PATHS] = "";
@@ -63,7 +66,7 @@ void Player::Setup()
 #if DESKTOP && URHO3D_DEBUG
     // Developer builds. Try loading from filesystem first.
     const ea::string settingsFilePath = "Cache/Settings.json";
-    if (context_->GetFileSystem()->Exists(settingsFilePath))
+    if (context_->GetSubsystem<FileSystem>()->Exists(settingsFilePath))
     {
         JSONFile jsonFile(context_);
         if (jsonFile.LoadFile(settingsFilePath))
@@ -146,7 +149,7 @@ void Player::Setup()
             // Paks are manually added here in order to avoid modifying EP_RESOURCE_PACKAGES value. User may specify this configuration
             // parameter to load any custom paks if desired. Engine will add them later. Besides we already had to to open and parse package
             // in order to find Settings.json. By adding paks now we avoid engine doing all the loading same file twice.
-            context_->GetCache()->AddPackageFile(package);
+            context_->GetSubsystem<ResourceCache>()->AddPackageFile(package);
             for (const auto& pair : settings_.engineParameters_)
                 engineParameters_[pair.first] = pair.second;
         }
@@ -161,14 +164,24 @@ void Player::Start()
 
     // Add resource router that maps cooked resources to their original resource names.
     auto* router = new CacheRouter(context_);
-    for (PackageFile* package : context_->GetCache()->GetPackageFiles())
+    for (PackageFile* package : context_->GetSubsystem<ResourceCache>()->GetPackageFiles())
     {
         if (package->Exists("CacheInfo.json"))
             router->AddPackage(package);
     }
-    context_->GetCache()->AddResourceRouter(router);
+    context_->GetSubsystem<ResourceCache>()->AddResourceRouter(router);
 
     context_->RegisterSubsystem(new SceneManager(context_));
+
+#if URHO3D_RMLUI
+    auto* cache = GetSubsystem<ResourceCache>();
+    auto* ui = GetSubsystem<RmlUI>();
+    ea::vector<ea::string> fonts;
+    cache->Scan(fonts, "Fonts/", "*.ttf", SCAN_FILES, true);
+    cache->Scan(fonts, "Fonts/", "*.otf", SCAN_FILES, true);
+    for (const ea::string& font : fonts)
+        ui->LoadFont(Format("Fonts/{}", font));
+#endif
 
 #if URHO3D_STATIC
     // Static builds require user to manually register plugins by subclassing Player class.
@@ -245,12 +258,12 @@ bool Player::LoadPlugins(const StringVector& plugins)
         loaded = LoadAssembly(pluginFileName);
 #else
         // On desktop we can access file system as usual
-        if (context_->GetFileSystem()->Exists(pluginFileName))
+        if (context_->GetSubsystem<FileSystem>()->Exists(pluginFileName))
             loaded = LoadAssembly(pluginFileName);
         else
         {
-            pluginFileName = context_->GetFileSystem()->GetProgramDir() + pluginFileName;
-            if (context_->GetFileSystem()->Exists(pluginFileName))
+            pluginFileName = context_->GetSubsystem<FileSystem>()->GetProgramDir() + pluginFileName;
+            if (context_->GetSubsystem<FileSystem>()->Exists(pluginFileName))
                 loaded = LoadAssembly(pluginFileName);
         }
 #endif  // MOBILE
@@ -264,13 +277,13 @@ bool Player::LoadPlugins(const StringVector& plugins)
 #if ANDROID
             pluginFileName = ea::string(APK) + "assets/.net/" + pluginFileName;
 #endif
-            if (context_->GetFileSystem()->Exists(pluginFileName))
+            if (context_->GetSubsystem<FileSystem>()->Exists(pluginFileName))
                 loaded = LoadAssembly(pluginFileName);
 #if DESKTOP
             else
             {
-                pluginFileName = context_->GetFileSystem()->GetProgramDir() + pluginFileName;
-                if (context_->GetFileSystem()->Exists(pluginFileName))
+                pluginFileName = context_->GetSubsystem<FileSystem>()->GetProgramDir() + pluginFileName;
+                if (context_->GetSubsystem<FileSystem>()->Exists(pluginFileName))
                     loaded = LoadAssembly(pluginFileName);
             }
 #endif  // DESKTOP

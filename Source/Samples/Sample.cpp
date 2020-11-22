@@ -20,6 +20,10 @@
 // THE SOFTWARE.
 //
 
+#if URHO3D_RMLUI
+#   include <Urho3D/RmlUI/RmlUI.h>
+#endif
+
 #include "Sample.h"
 
 Sample::Sample(Context* context) :
@@ -171,10 +175,10 @@ void Sample::SetWindowTitleAndIcon()
 void Sample::CreateConsoleAndDebugHud()
 {
     // Create console
-    Console* console = context_->GetEngine()->CreateConsole();
+    Console* console = context_->GetSubsystem<Engine>()->CreateConsole();
 
     // Create debug HUD.
-    DebugHud* debugHud = context_->GetEngine()->CreateDebugHud();
+    DebugHud* debugHud = context_->GetSubsystem<Engine>()->CreateDebugHud();
 }
 
 
@@ -192,13 +196,28 @@ void Sample::HandleKeyDown(StringHash /*eventType*/, VariantMap& eventData)
 #if URHO3D_SYSTEMUI
     if (key == KEY_F1 || key == KEY_BACKQUOTE)
     {
+#if URHO3D_RMLUI
+        if (auto* ui = GetSubsystem<RmlUI>())
+        {
+            if (ui->IsInputCaptured())
+                return;
+        }
+#endif
+        if (auto* ui = GetSubsystem<UI>())
+        {
+            if (UIElement* element = ui->GetFocusElement())
+            {
+                if (element->IsEditable())
+                    return;
+            }
+        }
         GetSubsystem<Console>()->Toggle();
         return;
     }
     // Toggle debug HUD with F2
     else if (key == KEY_F2)
     {
-        context_->GetEngine()->CreateDebugHud()->ToggleAll();
+        context_->GetSubsystem<Engine>()->CreateDebugHud()->ToggleAll();
         return;
     }
 #endif

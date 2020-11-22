@@ -66,7 +66,11 @@
 #if URHO3D_URHO2D
 #include "24_Urho2DSprite/Urho2DSprite.h"
 #include "25_Urho2DParticle/Urho2DParticle.h"
+#endif
+#if URHO3D_SYSTEMUI
 #include "26_ConsoleInput/ConsoleInput.h"
+#endif
+#if URHO3D_URHO2D
 #include "27_Urho2DPhysics/Urho2DPhysics.h"
 #include "28_Urho2DPhysicsRope/Urho2DPhysicsRope.h"
 #endif
@@ -111,10 +115,17 @@
 #include "52_NATPunchtrough/NATPunchtrough.h"
 #include "53_LANDiscovery/LANDiscovery.h"
 #endif
+#include "54_WindowSettingsDemo/WindowSettingsDemo.h"
 #if URHO3D_SYSTEMUI
 #include "100_HelloSystemUI/HelloSystemUI.h"
 #endif
 #include "105_Serialization/Serialization.h"
+#if URHO3D_NAVIGATION
+#include "106_BakedLighting/BakedLighting.h"
+#endif
+#if URHO3D_RMLUI
+#include "107_HelloRmlUI/HelloRmlUI.h"
+#endif
 #include "Rotator.h"
 
 #include "SamplesManager.h"
@@ -139,6 +150,7 @@ void SamplesManager::Setup()
     engineParameters_[EP_HEADLESS]     = false;
     engineParameters_[EP_SOUND]        = true;
     engineParameters_[EP_HIGH_DPI]     = false;
+    engineParameters_[EP_RESOURCE_PATHS] = "CoreData;Data";
 #if MOBILE
     engineParameters_[EP_ORIENTATIONS] = "Portrait";
 #endif
@@ -150,8 +162,8 @@ void SamplesManager::Setup()
 
 void SamplesManager::Start()
 {
-    Input* input = context_->GetInput();
-    UI* ui = context_->GetUI();
+    Input* input = context_->GetSubsystem<Input>();
+    UI* ui = context_->GetSubsystem<UI>();
 
     // Register an object factory for our custom Rotator component so that we can create them to scene nodes
     context_->RegisterFactory<Rotator>();
@@ -160,14 +172,14 @@ void SamplesManager::Start()
     input->SetMouseVisible(true);
 
 #if URHO3D_SYSTEMUI
-    context_->GetEngine()->CreateDebugHud()->ToggleAll();
+    context_->GetSubsystem<Engine>()->CreateDebugHud()->ToggleAll();
 #endif
 
     SubscribeToEvent(E_RELEASED, [this](StringHash, VariantMap& args) { OnClickSample(args); });
     SubscribeToEvent(E_KEYUP, [this](StringHash, VariantMap& args) { OnKeyPress(args); });
     SubscribeToEvent(E_BEGINFRAME, [this](StringHash, VariantMap& args) { OnFrameStart(); });
 
-    ui->GetRoot()->SetDefaultStyle(context_->GetCache()->GetResource<XMLFile>("UI/DefaultStyle.xml"));
+    ui->GetRoot()->SetDefaultStyle(context_->GetSubsystem<ResourceCache>()->GetResource<XMLFile>("UI/DefaultStyle.xml"));
 
     auto* layout = ui->GetRoot()->CreateChild<UIElement>();
     listViewHolder_ = layout;
@@ -282,10 +294,17 @@ void SamplesManager::Start()
     RegisterSample<NATPunchtrough>();
     RegisterSample<LANDiscovery>();
 #endif
+    RegisterSample<WindowSettingsDemo>();
 #if URHO3D_SYSTEMUI
     RegisterSample<HelloSystemUi>();
 #endif
     RegisterSample<Serialization>();
+#if URHO3D_NAVIGATION
+    RegisterSample<BakedLighting>();
+#endif
+#if URHO3D_RMLUI
+    RegisterSample<HelloRmlUI>();
+#endif
 
     if (!startSample_.empty())
         StartSample(startSample_);
@@ -308,12 +327,12 @@ void SamplesManager::OnClickSample(VariantMap& args)
 
 void SamplesManager::StartSample(StringHash sampleType)
 {
-    UI* ui = context_->GetUI();
+    UI* ui = context_->GetSubsystem<UI>();
     ui->GetRoot()->RemoveAllChildren();
     ui->SetFocusElement(nullptr);
 
 #if MOBILE
-    Graphics* graphics = context_->GetGraphics();
+    Graphics* graphics = context_->GetSubsystem<Graphics>();
     graphics->SetOrientations("LandscapeLeft LandscapeRight");
     IntVector2 screenSize = graphics->GetSize();
     graphics->SetMode(Max(screenSize.x_, screenSize.y_), Min(screenSize.x_, screenSize.y_));
@@ -343,8 +362,8 @@ void SamplesManager::OnFrameStart()
         isClosing_ = false;
         if (runningSample_.NotNull())
         {
-            Input* input = context_->GetInput();
-            UI* ui = context_->GetUI();
+            Input* input = context_->GetSubsystem<Input>();
+            UI* ui = context_->GetSubsystem<UI>();
             runningSample_->Stop();
             runningSample_ = nullptr;
             input->SetMouseMode(MM_FREE);
@@ -354,7 +373,7 @@ void SamplesManager::OnFrameStart()
             ui->GetRoot()->AddChild(listViewHolder_);
             ui->GetRoot()->AddChild(logoSprite_);
 #if MOBILE
-            Graphics* graphics = context_->GetGraphics();
+            Graphics* graphics = context_->GetSubsystem<Graphics>();
             graphics->SetOrientations("Portrait");
             IntVector2 screenSize = graphics->GetSize();
             graphics->SetMode(Min(screenSize.x_, screenSize.y_), Max(screenSize.x_, screenSize.y_));
@@ -372,7 +391,9 @@ void SamplesManager::OnFrameStart()
                 }
             }
 #endif
-            context_->GetEngine()->Exit();
+#if !defined(__EMSCRIPTEN__)
+            context_->GetSubsystem<Engine>()->Exit();
+#endif
         }
     }
 }
@@ -390,10 +411,10 @@ void SamplesManager::RegisterSample()
     auto* title = button->CreateChild<Text>();
     title->SetAlignment(HA_CENTER, VA_CENTER);
     title->SetText(T::GetTypeNameStatic());
-    title->SetFont(context_->GetCache()->GetResource<Font>("Fonts/Anonymous Pro.ttf"), 30);
+    title->SetFont(context_->GetSubsystem<ResourceCache>()->GetResource<Font>("Fonts/Anonymous Pro.ttf"), 30);
     title->SetStyleAuto();
 
-    context_->GetUI()->GetRoot()->GetChildStaticCast<ListView>("SampleList", true)->AddItem(button);
+    context_->GetSubsystem<UI>()->GetRoot()->GetChildStaticCast<ListView>("SampleList", true)->AddItem(button);
 }
 
 }

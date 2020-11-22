@@ -30,6 +30,9 @@
 #include "../IO/FileSystem.h"
 #include "../IO/IOEvents.h"
 #include "../IO/Log.h"
+#if URHO3D_SYSTEMUI
+#   include "../SystemUI/Console.h"
+#endif
 
 #ifdef __ANDROID__
 #include <SDL/SDL_rwops.h>
@@ -462,6 +465,7 @@ bool FileSystem::CreateDir(const ea::string& pathName)
 
 void FileSystem::SetExecuteConsoleCommands(bool enable)
 {
+#if URHO3D_SYSTEMUI
     if (enable == executeConsoleCommands_)
         return;
 
@@ -470,6 +474,12 @@ void FileSystem::SetExecuteConsoleCommands(bool enable)
         SubscribeToEvent(E_CONSOLECOMMAND, URHO3D_HANDLER(FileSystem, HandleConsoleCommand));
     else
         UnsubscribeFromEvent(E_CONSOLECOMMAND);
+
+    Console* console = GetSubsystem<Console>();
+    console->RefreshInterpreters();
+#else
+    URHO3D_LOGWARNING("Engine was built without console support.");
+#endif
 }
 
 int FileSystem::SystemCommand(const ea::string& commandLine, bool redirectStdOutToLog)
@@ -819,6 +829,15 @@ void FileSystem::ScanDir(ea::vector<ea::string>& result, const ea::string& pathN
     }
 }
 
+void FileSystem::ScanDirAdd(ea::vector<ea::string>& result, const ea::string& pathName, const ea::string& filter, unsigned flags, bool recursive) const
+{
+    if (CheckAccess(pathName))
+    {
+        ea::string initialPath = AddTrailingSlash(pathName);
+        ScanDirInternal(result, initialPath, initialPath, filter, flags, recursive);
+    }
+}
+
 ea::string FileSystem::GetProgramDir() const
 {
 #if defined(__ANDROID__)
@@ -833,18 +852,23 @@ ea::string FileSystem::GetProgramDir() const
     return GetCurrentDir();
 #endif
 }
-#if DESKTOP
+
 ea::string FileSystem::GetProgramFileName() const
 {
+#if DESKTOP
     if (!specifiedExecutableFile.empty())
         return specifiedExecutableFile;
 
     return GetInterpreterFileName();
+#else
+    return "";
+#endif
 }
 
 ea::string FileSystem::GetInterpreterFileName() const
 {
-#if defined(_WIN32)
+#ifndef DESKTOP
+#elif defined(_WIN32)
     wchar_t exeName[MAX_PATH];
     exeName[0] = 0;
     GetModuleFileNameW(nullptr, exeName, MAX_PATH);
@@ -862,11 +886,10 @@ ea::string FileSystem::GetInterpreterFileName() const
     ea::string link(ea::string::CtorSprintf{}, "/proc/%d/exe", pid);
     readlink(link.c_str(), exeName, MAX_PATH);
     return ea::string(exeName);
-#else
-    return ea::string();
 #endif
+    return "";
 }
-#endif
+
 ea::string FileSystem::GetUserDocumentsDir() const
 {
 #if defined(__ANDROID__)
@@ -1053,7 +1076,7 @@ void FileSystem::ScanDirInternal(ea::vector<ea::string>& result, ea::string path
 
 void FileSystem::HandleBeginFrame(StringHash eventType, VariantMap& eventData)
 {
-    /// Go through the execution queue and post + remove completed requests
+    // Go through the execution queue and post + remove completed requests
     for (auto i = asyncExecQueue_.begin(); i != asyncExecQueue_.end();)
     {
         AsyncExecRequest* request = *i;
@@ -1358,7 +1381,7 @@ bool FileSystem::CopyDir(const ea::string& directoryIn, const ea::string& direct
         if (!CreateDirsRecursive(dstPath))
             return false;
 
-        //LOGINFOF("SRC: %s DST: %s", srcFile.CString(), dstFile.CString());
+        //LOGINFOF("SRC: %s DST: %s", srcFile.c_str(), dstFile.c_str());
         if (!Copy(srcFile, dstFile))
             return false;
     }

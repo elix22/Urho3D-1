@@ -31,6 +31,7 @@ namespace Urho3D
 
 class Animation;
 class AnimationState;
+class SoftwareModelAnimator;
 
 /// Animated model component.
 class URHO3D_API AnimatedModel : public StaticModel
@@ -47,6 +48,9 @@ public:
     /// Register object factory. Drawable must be registered first.
     static void RegisterObject(Context* context);
 
+    /// Serialize from/to archive. Return true if successful.
+    bool Serialize(Archive& archive) override;
+
     /// Load from binary data. Return true if successful.
     bool Load(Deserializer& source) override;
     /// Load from XML data. Return true if successful.
@@ -61,7 +65,7 @@ public:
     void Update(const FrameInfo& frame) override;
     /// Calculate distance and prepare batches for rendering. May be called from worker thread(s), possibly re-entrantly.
     void UpdateBatches(const FrameInfo& frame) override;
-    /// Prepare geometry for rendering. Called from a worker thread if possible (no GPU update.)
+    /// Prepare geometry for rendering. Called from a worker thread if possible (no GPU update).
     void UpdateGeometry(const FrameInfo& frame) override;
     /// Return whether a geometry update is necessary, and if it can happen in a worker thread.
     UpdateGeometryType GetUpdateGeometryType() override;
@@ -85,12 +89,15 @@ public:
     /// Remove all animations.
     void RemoveAllAnimationStates();
     /// Set animation LOD bias.
+    /// @property
     void SetAnimationLodBias(float bias);
     /// Set whether to update animation and the bounding box when not visible. Recommended to enable for physically controlled models like ragdolls.
+    /// @property
     void SetUpdateInvisible(bool enable);
     /// Set vertex morph weight by index.
     void SetMorphWeight(unsigned index, float weight);
     /// Set vertex morph weight by name.
+    /// @property{set_morphWeights}
     void SetMorphWeight(const ea::string& name, float weight);
     /// Set vertex morph weight by name hash.
     void SetMorphWeight(StringHash nameHash, float weight);
@@ -100,17 +107,20 @@ public:
     void ApplyAnimation();
 
     /// Return skeleton.
+    /// @property
     Skeleton& GetSkeleton() { return skeleton_; }
 
     /// Return all animation states.
     const ea::vector<SharedPtr<AnimationState> >& GetAnimationStates() const { return animationStates_; }
 
     /// Return number of animation states.
+    /// @property
     unsigned GetNumAnimationStates() const { return animationStates_.size(); }
 
     /// Return animation state by animation pointer.
     AnimationState* GetAnimationState(Animation* animation) const;
     /// Return animation state by animation name.
+    /// @property{get_animationStates}
     AnimationState* GetAnimationState(const ea::string& animationName) const;
     /// Return animation state by animation name hash.
     AnimationState* GetAnimationState(StringHash animationNameHash) const;
@@ -118,23 +128,27 @@ public:
     AnimationState* GetAnimationState(unsigned index) const;
 
     /// Return animation LOD bias.
+    /// @property
     float GetAnimationLodBias() const { return animationLodBias_; }
 
     /// Return whether to update animation when not visible.
+    /// @property
     bool GetUpdateInvisible() const { return updateInvisible_; }
 
     /// Return all vertex morphs.
     const ea::vector<ModelMorph>& GetMorphs() const { return morphs_; }
 
     /// Return all morph vertex buffers.
-    const ea::vector<SharedPtr<VertexBuffer> >& GetMorphVertexBuffers() const { return morphVertexBuffers_; }
+    const ea::vector<SharedPtr<VertexBuffer> >& GetMorphVertexBuffers() const;
 
     /// Return number of vertex morphs.
+    /// @property
     unsigned GetNumMorphs() const { return morphs_.size(); }
 
     /// Return vertex morph weight by index.
     float GetMorphWeight(unsigned index) const;
     /// Return vertex morph weight by name.
+    /// @property{get_morphWeights}
     float GetMorphWeight(const ea::string& name) const;
     /// Return vertex morph weight by name hash.
     float GetMorphWeight(StringHash nameHash) const;
@@ -162,7 +176,7 @@ public:
     /// Return per-geometry bone mappings.
     const ea::vector<ea::vector<unsigned> >& GetGeometryBoneMappings() const { return geometryBoneMappings_; }
 
-    /// Return per-geometry skin matrices. If empty, uses global skinning
+    /// Return per-geometry skin matrices. If empty, uses global skinning.
     const ea::vector<ea::vector<Matrix3x4> >& GetGeometrySkinMatrices() const { return geometrySkinMatrices_; }
 
     /// Recalculate the bone bounding box. Normally called internally, but can also be manually called if up-to-date information before rendering is necessary.
@@ -185,7 +199,7 @@ private:
     void RemoveRootBone();
     /// Mark animation and skinning to require an update.
     void MarkAnimationDirty();
-    /// Mark animation and skinning to require a forced update (blending order changed.)
+    /// Mark animation and skinning to require a forced update (blending order changed).
     void MarkAnimationOrderDirty();
     /// Mark morphs to require an update.
     void MarkMorphsDirty();
@@ -195,24 +209,19 @@ private:
     void SetGeometryBoneMappings();
     /// Clone geometries for vertex morphing.
     void CloneGeometries();
-    /// Copy morph vertices.
-    void CopyMorphVertices(void* destVertexData, void* srcVertexData, unsigned vertexCount, VertexBuffer* destBuffer, VertexBuffer* srcBuffer);
     /// Recalculate animations. Called from Update().
     void UpdateAnimation(const FrameInfo& frame);
     /// Recalculate skinning.
     void UpdateSkinning();
     /// Reapply all vertex morphs.
     void UpdateMorphs();
-    /// Apply a vertex morph.
-    void ApplyMorph
-        (VertexBuffer* buffer, void* destVertexData, unsigned morphRangeStart, const VertexBufferMorph& morph, float weight);
     /// Handle model reload finished.
     void HandleModelReloadFinished(StringHash eventType, VariantMap& eventData);
 
     /// Skeleton.
     Skeleton skeleton_;
-    /// Morph vertex buffers.
-    ea::vector<SharedPtr<VertexBuffer> > morphVertexBuffers_;
+    /// Software model animator.
+    SharedPtr<SoftwareModelAnimator> modelAnimator_;
     /// Vertex morphs.
     ea::vector<ModelMorph> morphs_;
     /// Animation states.
@@ -231,8 +240,6 @@ private:
     mutable VectorBuffer attrBuffer_;
     /// The frame number animation LOD distance was last calculated on.
     unsigned animationLodFrameNumber_;
-    /// Morph vertex element mask.
-    VertexMaskFlags morphElementMask_;
     /// Animation LOD bias.
     float animationLodBias_;
     /// Animation LOD timer.
@@ -251,6 +258,10 @@ private:
     bool skinningDirty_;
     /// Bone bounding box dirty flag.
     bool boneBoundingBoxDirty_;
+    /// Software skinning flag.
+    bool softwareSkinning_{};
+    /// Number of bones used for software skinning.
+    unsigned numSoftwareSkinningBones_{ 4 };
     /// Master model flag.
     bool isMaster_;
     /// Loading flag. During loading bone nodes are not created, as they will be serialized as child nodes.

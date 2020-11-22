@@ -33,13 +33,12 @@
 #include "../Scene/Node.h"
 #include "../Scene/SceneResolver.h"
 
-#include <entt/entity/registry.hpp>
-
 namespace Urho3D
 {
 
 class File;
 class PackageFile;
+class Texture2D;
 
 static const unsigned FIRST_REPLICATED_ID = 0x1;
 static const unsigned LAST_REPLICATED_ID = 0xffffff;
@@ -64,13 +63,13 @@ struct AsyncProgress
     SharedPtr<File> file_;
     /// XML file for XML mode.
     SharedPtr<XMLFile> xmlFile_;
-    /// JSON file for JSON mode
+    /// JSON file for JSON mode.
     SharedPtr<JSONFile> jsonFile_;
 
     /// Current XML element for XML mode.
     XMLElement xmlElement_;
 
-    /// Current JSON child array and for JSON mode
+    /// Current JSON child array and for JSON mode.
     unsigned jsonIndex_;
 
     /// Current load mode.
@@ -87,16 +86,22 @@ struct AsyncProgress
     unsigned totalNodes_;
 };
 
+/// Index of components in the Scene.
+using SceneComponentIndex = ea::hash_set<Component*>;
+
 /// Root scene node, represents the whole scene.
 class URHO3D_API Scene : public Node
 {
     URHO3D_OBJECT(Scene, Node);
 
+public:
+    /// @manualbind
     using Node::GetComponent;
+    /// @manualbind
     using Node::SaveXML;
+    /// @manualbind
     using Node::SaveJSON;
 
-public:
     /// Construct.
     explicit Scene(Context* context);
     /// Destruct.
@@ -104,18 +109,14 @@ public:
     /// Register object factory. Node must be registered first.
     static void RegisterObject(Context* context);
 
-    /// Enable registry. Scene must be empty.
-    bool EnableRegistry();
     /// Create component index. Scene must be empty.
     bool CreateComponentIndex(StringHash componentType);
     /// Create component index for template type. Scene must be empty.
     template <class T> void CreateComponentIndex() { CreateComponentIndex(T::GetTypeStatic()); }
-    /// Return registry.
-    entt::registry& GetRegistry() { return reg_; }
     /// Return component index. Iterable. Invalidated when indexed component is added or removed!
-    ea::span<Component* const> GetComponentIndex(StringHash componentType);
+    const SceneComponentIndex& GetComponentIndex(StringHash componentType);
     /// Return component index for template type. Invalidated when indexed component is added or removed!
-    template <class T> ea::span<Component* const> GetComponentIndex() { return GetComponentIndex(T::GetTypeStatic()); }
+    template <class T> const SceneComponentIndex& GetComponentIndex() { return GetComponentIndex(T::GetTypeStatic()); }
 
     /// Serialize from/to archive. Return true if successful.
     bool Serialize(Archive& archive) override;
@@ -132,6 +133,15 @@ public:
     void MarkNetworkUpdate() override;
     /// Add a replication state that is tracking this scene.
     void AddReplicationState(NodeReplicationState* state) override;
+
+    /// Return number of lightmaps.
+    unsigned GetNumLightmaps() const { return lightmaps_.names_.size(); }
+    /// Reset lightmaps.
+    void ResetLightmaps();
+    /// Add lightmap texture.
+    void AddLightmap(const ea::string& lightmapTextureName);
+    /// Return lightmap texture.
+    Texture2D* GetLightmapTexture(unsigned index);
 
     /// Load from an XML file. Return true if successful.
     bool LoadXML(Deserializer& source);
@@ -165,28 +175,39 @@ public:
     /// Clear scene completely of either replicated, local or all nodes and components.
     void Clear(bool clearReplicated = true, bool clearLocal = true);
     /// Enable or disable scene update.
+    /// @property
     void SetUpdateEnabled(bool enable);
-    /// Set update time scale. 1.0 = real time (default.)
+    /// Set update time scale. 1.0 = real time (default).
+    /// @property
     void SetTimeScale(float scale);
     /// Set elapsed time in seconds. This can be used to prevent inaccuracy in the timer if the scene runs for a long time.
+    /// @property
     void SetElapsedTime(float time);
     /// Set network client motion smoothing constant.
+    /// @property
     void SetSmoothingConstant(float constant);
     /// Set network client motion smoothing snap threshold.
+    /// @property
     void SetSnapThreshold(float threshold);
     /// Set maximum milliseconds per frame to spend on async scene loading.
+    /// @property
     void SetAsyncLoadingMs(int ms);
     /// Add a required package file for networking. To be called on the server.
     void AddRequiredPackageFile(PackageFile* package);
     /// Clear required package files.
     void ClearRequiredPackageFiles();
-    /// Register a node user variable hash reverse mapping (for editing.)
+    /// Register a node user variable hash reverse mapping (for editing).
     void RegisterVar(const ea::string& name);
     /// Unregister a node user variable hash reverse mapping.
     void UnregisterVar(const ea::string& name);
     /// Clear all registered node user variable hash reverse mappings.
     void UnregisterAllVars();
 
+    /// Set source file name.
+    void SetFileName(const ea::string_view fileName) { fileName_ = fileName; }
+
+    /// Return whether the Scene is empty.
+    bool IsEmpty(bool ignoreComponents = false) const;
     /// Return node from the whole scene by ID, or null if not found.
     Node* GetNode(unsigned id) const;
     /// Return component from the whole scene by ID, or null if not found.
@@ -195,39 +216,51 @@ public:
     bool GetNodesWithTag(ea::vector<Node*>& dest, const ea::string& tag)  const;
 
     /// Return whether updates are enabled.
+    /// @property
     bool IsUpdateEnabled() const { return updateEnabled_; }
 
     /// Return whether an asynchronous loading operation is in progress.
+    /// @property
     bool IsAsyncLoading() const { return asyncLoading_; }
 
     /// Return asynchronous loading progress between 0.0 and 1.0, or 1.0 if not in progress.
+    /// @property
     float GetAsyncProgress() const;
 
     /// Return the load mode of the current asynchronous loading operation.
+    /// @property
     LoadMode GetAsyncLoadMode() const { return asyncProgress_.mode_; }
 
     /// Return source file name.
+    /// @property
     const ea::string& GetFileName() const { return fileName_; }
 
     /// Return source file checksum.
+    /// @property
     unsigned GetChecksum() const { return checksum_; }
 
     /// Return update time scale.
+    /// @property
     float GetTimeScale() const { return timeScale_; }
 
     /// Return elapsed time in seconds.
+    /// @property
     float GetElapsedTime() const { return elapsedTime_; }
 
     /// Return motion smoothing constant.
+    /// @property
     float GetSmoothingConstant() const { return smoothingConstant_; }
 
     /// Return motion smoothing snap threshold.
+    /// @property
     float GetSnapThreshold() const { return snapThreshold_; }
 
     /// Return maximum milliseconds per frame to spend on async loading.
+    /// @property
     int GetAsyncLoadingMs() const { return asyncLoadingMs_; }
 
     /// Return required package files.
+    /// @property
     const ea::vector<SharedPtr<PackageFile> >& GetRequiredPackageFiles() const { return requiredPackageFiles_; }
 
     /// Return a node user variable name, or empty if not registered.
@@ -300,16 +333,14 @@ private:
     /// Preload resources from a JSON scene or object prefab file.
     void PreloadResourcesJSON(const JSONValue& value);
     /// Return component index storage for given type.
-    entt::storage<entt::entity, Component*>* GetComponentIndexStorage(StringHash componentType);
+    SceneComponentIndex* GetMutableComponentIndex(StringHash componentType);
+    /// Mark lightmap textures dirty.
+    void MarkLightmapTexturesDirty() { lightmapTexturesDirty_ = true; }
 
-    /// Whether the registry is active.
-    bool registryEnabled_{ false };
-    /// Registry.
-    entt::registry reg_;
     /// Types of components that should be indexed.
     ea::vector<StringHash> indexedComponentTypes_;
     /// Indexes of components.
-    ea::vector<entt::storage<entt::entity, Component*>> componentIndexes_;
+    ea::vector<SceneComponentIndex> componentIndexes_;
 
     /// Replicated scene nodes by ID.
     ea::unordered_map<unsigned, Node*> replicatedNodes_;
@@ -367,6 +398,13 @@ private:
     bool asyncLoading_;
     /// Threaded update flag.
     bool threadedUpdate_;
+
+    /// Lightmap textures names.
+    ResourceRefList lightmaps_;
+    /// Whether the lightmap textures are dirty.
+    bool lightmapTexturesDirty_{ false };
+    /// Loaded lightmap textures.
+    ea::vector<SharedPtr<Texture2D>> lightmapTextures_;
 };
 
 /// Register Scene library objects.
